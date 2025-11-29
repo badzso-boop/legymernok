@@ -1,0 +1,2 @@
+CREATE DATABASE legymernok;
+CREATE DATABASE gitea;

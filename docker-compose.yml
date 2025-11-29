@@ -1,0 +1,97 @@
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database Service (PostgreSQL)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: legymernok-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # Inicializáló scriptek (létrehozza a 'legymernok' és 'gitea' DB-ket)
+      - ./postgres-init:/docker-entrypoint-initdb.d
+      # Perzisztens adattárolás
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - legymernok-net
+
+  # ---------------------------------------------------------------------------
+  # Gitea Service (Saját Git Szerver)
+  # ---------------------------------------------------------------------------
+  gitea:
+    image: gitea/gitea:latest
+    container_name: legymernok-gitea
+    restart: always
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=postgres:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=postgres
+      - GITEA__database__PASSWD=postgres
+    ports:
+      - "3001:3000" # Web UI: http://localhost:3001
+      - "2222:22"   # SSH port
+    volumes:
+      - gitea_data:/data
+    depends_on:
+      - postgres
+    networks:
+      - legymernok-net
+
+  # ---------------------------------------------------------------------------
+  # Backend Service (Spring Boot)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: legymernok-backend
+    restart: always
+    environment:
+      # Kapcsolódás a fenti 'postgres' service-hez
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/legymernok
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Automatikus séma frissítés (fejlesztéshez)
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - legymernok-net
+
+  # ---------------------------------------------------------------------------
+  # Frontend Service (React + Vite + Nginx)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: legymernok-frontend
+    restart: always
+    ports:
+      - "3000:80" # Web UI: http://localhost:3000
+    depends_on:
+      - backend
+    networks:
+      - legymernok-net
+
+# -----------------------------------------------------------------------------
+# Volumes and Networks
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  gitea_data:
+
+networks:
+  legymernok-net:
+    driver: bridge
