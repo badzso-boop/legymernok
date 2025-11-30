@@ -39,6 +39,7 @@ CREATE TABLE missions (
     description_markdown TEXT, -- A küldetés leírása, ami a frontend-en megjelenik
     mission_type mission_type_enum NOT NULL,
     difficulty difficulty_enum NOT NULL,
+    template_repository_url VARCHAR(512) NOT NULL,
     order_in_system SMALLINT NOT NULL, -- Meghatározza a küldetések sorrendjét
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
