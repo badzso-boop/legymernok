@@ -23,13 +23,16 @@ public class MissionController {
         return new ResponseEntity<>(missionService.createMission(request), HttpStatus.CREATED);
     }
 
-    @GetMapping
-    public ResponseEntity<List<MissionResponse>> getAllMissions() {
-        return ResponseEntity.ok(missionService.getAllMissions());
-    }
-
     @GetMapping("/{id}")
     public ResponseEntity<MissionResponse> getMissionById(@PathVariable UUID id) {
         return ResponseEntity.ok(missionService.getMissionById(id));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<MissionResponse>> getAllMissions(@RequestParam(required = false) UUID starSystemId) {
+        if (starSystemId != null) {
+            return ResponseEntity.ok(missionService.getMissionsByStarSystem(starSystemId));
+        }
+        return ResponseEntity.ok(missionService.getAllMissions());
     }
 }

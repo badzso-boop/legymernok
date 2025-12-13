@@ -51,8 +51,6 @@ public class Cadet implements UserDetails {
     @UpdateTimestamp
     private Instant updatedAt;
 
-    // --- UserDetails Metódusok ---
-
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));

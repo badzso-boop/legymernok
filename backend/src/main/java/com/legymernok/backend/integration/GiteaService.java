@@ -5,9 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.http.MediaType;
 
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class GiteaService {
@@ -82,33 +80,113 @@ public class GiteaService {
     }
 
     /**
-     * Létrehoz (vagy felülír) egy fájlt a repository-ban.
+     *Létrehoz vagy felülír egy fájlt a repository-ban.
+     *Kezeli a "file already exists" esetet (pl. README.md) update hívással.
      *
      * @param repoName A repository neve (ahová a fájlt tesszük).
      * @param filePath A fájl útvonala a repón belül (pl. "src/Main.java").
      * @param content  A fájl szöveges tartalma.
      */
     public void createFile(String repoName, String filePath, String content) {
-        // Gitea admin username-re szükségünk van az URL összerakásához
-        // Ezt vagy paraméterként kapjuk, vagy mezőként tároljuk.
-        // A konstruktorban már megkaptuk a `adminUsername`-t, de lokális változó volt.
-        // JAVASLAT: Tedd a `adminUsername`-t osztályszintű mezővé (lásd lentebb)!
-
         String encodedContent = Base64.getEncoder().encodeToString(content.getBytes());
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("content", encodedContent);
-        requestBody.put("message", "Initial commit for " + filePath); // Commit üzenet
+        requestBody.put("message", "Commit for " + filePath);
 
-        // Mivel auto_init=true-val hoztuk létre, a default branch 'main' vagy 'master' lesz.
-        // Ha nem adjuk meg a branch-et, a defaultra megy.
+        try {
+            restClient.post()
+                    .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName,
+                            filePath)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (org.springframework.web.client.HttpClientErrorException.UnprocessableEntity e) {
+            updateFile(repoName, filePath, requestBody);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // Egyéb hiba esetén dobjuk tovább (pl. 404, 401)
+            // Ha a 422 nem UnprocessableEntity-ként jön, hanem sima ClientError-ként, itt is elkaphatjuk
+            if (e.getStatusCode().value() == 422) {
+                updateFile(repoName, filePath, requestBody);
+            } else {
+                throw e;
+            }
+        }
+    }
 
-        // API hívás: POST /repos/{owner}/{repo}/contents/{filepath}
-        restClient.post()
+    /**
+     * Segédmetódus egy fájl tartalmának felülírására egy Gitea repository-ban.
+     * Az update művelethez szükséges a fájl aktuális SHA hash-e.
+     */
+    private void updateFile(String repoName, String filePath, Map<String, Object> requestBody) {
+        Map fileInfo = restClient.get()
                 .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName, filePath)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
+                        .retrieve()
+                        .body(Map.class);
+
+        if (fileInfo != null && fileInfo.containsKey("sha")) {
+            String sha = (String) fileInfo.get("sha");
+            requestBody.put("sha", sha);
+            requestBody.put("message", "Update " + filePath);
+
+            restClient.put()
+                    .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName,
+                            filePath)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+        } else {
+            throw new RuntimeException("Failed to retrieve SHA for existing file: " + filePath);
+        }
+    }
+
+    /**
+     * Töröl egy repository-t.
+     * FIGYELEM: Ez egy destruktív művelet, visszafordíthatatlan!
+     *
+     * @param repoName A törlendő repository neve.
+     */
+    public void deleteRepository(String repoName) {
+        restClient.delete()
+                .uri("/repos/{owner}/{repo}", adminUsername, repoName)
                 .retrieve()
-                .toBodilessEntity(); // Nem érdekel a válasz body, csak hogy sikeres (201) legyen
+                .toBodilessEntity(); // Nem érdekel a válasz body, csak a státusz (204 No Content)
+    }
+
+    /**
+     * Lekérdez egy adott repository-t név alapján az admin felhasználó alatt.
+     *
+     * @param repoName A lekérdezendő repository neve.
+     * @return Optional<Map<String, Object>> - A repository adatai, ha létezik.
+     */
+    public Optional<Map<String, Object>> getRepository(String repoName) {
+        try {
+            // API hívás: GET /repos/{owner}/{repo}
+            Map<String, Object> response = restClient.get()
+                    .uri("/repos/{owner}/{repo}", adminUsername, repoName)
+                    .retrieve()
+                    .body(Map.class);
+            return Optional.ofNullable(response);
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Lekérdezi az admin felhasználó összes repository-ját.
+     *
+     * @return List<Map<String, Object>> - Az összes repository listája.
+     */
+    public List<Map<String, Object>> getAllUserRepositories() {
+        // API hívás: GET /user/repos
+        // Figyelem: A Gitea API alapértelmezetten lapozza az eredményeket.
+        // Itt most csak az első oldalt kérjük le, de élesben kezelni kell a lapozást!
+        List<Map<String, Object>> response = restClient.get()
+                .uri("/user/repos")
+                .retrieve()
+                .body(List.class);
+        return response;
     }
 }
