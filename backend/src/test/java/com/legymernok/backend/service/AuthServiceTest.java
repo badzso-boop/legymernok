@@ -1,12 +1,13 @@
 package com.legymernok.backend.service;
 
-import com.legymernok.backend.dto.LoginRequest;
-import com.legymernok.backend.dto.LoginResponse;
+import com.legymernok.backend.dto.user.LoginRequest;
+import com.legymernok.backend.dto.user.LoginResponse;
 import com.legymernok.backend.exception.BadCredentialsException;
 import com.legymernok.backend.exception.UserNotFoundException;
-import com.legymernok.backend.model.Cadet;
-import com.legymernok.backend.repository.CadetRepository;
+import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.security.JwtService;
+import com.legymernok.backend.service.user.AuthService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

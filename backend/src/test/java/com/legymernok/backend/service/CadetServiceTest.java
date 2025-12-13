@@ -1,20 +1,19 @@
 package com.legymernok.backend.service;
 
-import com.legymernok.backend.dto.CadetResponse;
-import com.legymernok.backend.dto.CreateCadetRequest;
+import com.legymernok.backend.dto.cadet.CadetResponse;
+import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.UserAlreadyExistsException;
 import com.legymernok.backend.integration.GiteaService;
-import com.legymernok.backend.model.Cadet;
-import com.legymernok.backend.model.CadetRole;
-import com.legymernok.backend.repository.CadetRepository;
+import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.cadet.CadetRole;
+import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.service.cadet.CadetService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
