@@ -2,8 +2,11 @@ package com.legymernok.backend.service.cadet;
 
 import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
+import com.legymernok.backend.exception.UserNotFoundException;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.cadet.CadetRole;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.exception.UserAlreadyExistsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,6 +24,7 @@ import java.util.stream.Collectors;
 public class CadetService {
 
     private final CadetRepository cadetRepository;
+    private final CadetMissionRepository cadetMissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final GiteaService giteaService;
 
@@ -61,8 +65,24 @@ public class CadetService {
     @Transactional(readOnly = true)
     public CadetResponse getCadetById(UUID id) {
         Cadet cadet = cadetRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Cadet not found"));
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
         return mapToResponse(cadet);
+    }
+
+    @Transactional
+    public void deleteCadet(UUID id) {
+        Cadet cadet = cadetRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+
+        try {
+            giteaService.deleteGiteaUser(cadet.getUsername());
+        } catch (Exception e) {
+            System.err.println("Gitea user deletion failed for " + cadet.getUsername() + ": " + e.getMessage());
+        }
+
+        cadetMissionRepository.deleteAllByCadetId(id);
+
+        cadetRepository.delete(cadet);
     }
 
     private CadetResponse mapToResponse(Cadet cadet) {

@@ -32,4 +32,11 @@ public class CadetController {
     public ResponseEntity<CadetResponse> getCadetById(@PathVariable UUID id) {
         return ResponseEntity.ok(cadetService.getCadetById(id));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCadet(@PathVariable UUID id) {
+        // TODO: A jövőben itt ellenőrizni kell, hogy a hívó user ADMIN jogokkal rendelkezik-e!
+        cadetService.deleteCadet(id);
+        return ResponseEntity.noContent().build();
+    }
 }

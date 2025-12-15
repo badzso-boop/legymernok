@@ -30,14 +30,23 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users").permitAll()
                 // A többi API végpontot egyelőre mindenki elérheti (debuggoláshoz)
                 // Később ezt szigorítani fogjuk!
-                .requestMatchers("/api/users/**", "/api/star-systems/**", "/api/missions/**").permitAll()
+                .requestMatchers(
+                        "/api/users/**",
+                        "/api/star-systems/**",
+                        "/api/missions/**"
+                ).permitAll()
+                .requestMatchers(
+                        "/v3/api-docs/**",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             // JWT-vel stateless a session
             // Itt kötjük be a JWT filtert a UsernamePasswordAuthenticationFilter ELÉ!
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-            
+
         return http.build();
     }
 

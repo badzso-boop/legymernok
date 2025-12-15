@@ -1,4 +1,4 @@
-package com.legymernok.backend.service;
+package com.legymernok.backend.service.users;
 
 import com.legymernok.backend.dto.user.LoginRequest;
 import com.legymernok.backend.dto.user.LoginResponse;

@@ -143,16 +143,27 @@ public class GiteaService {
     }
 
     /**
-     * Töröl egy repository-t.
-     * FIGYELEM: Ez egy destruktív művelet, visszafordíthatatlan!
-     *
+     * Töröl egy felhasználót a Gitea-ból.
+     * FIGYELEM: Ez véglegesen törli a felhasználót és az általa birtokolt összes repository-t is!
+     * @param username A törlendő felhasználó Gitea login neve.
+     */
+    public void deleteGiteaUser(String username) {
+        restClient.delete()
+                .uri("/admin/users/{username}", username)
+                .retrieve()
+                .toBodilessEntity(); // A 204 No Content választ várjuk
+    }
+
+    /**
+     * Töröl egy repository-t a Gitea-ból.
+     * @param ownerUsername A repository tulajdonosának Gitea login neve.
      * @param repoName A törlendő repository neve.
      */
-    public void deleteRepository(String repoName) {
+    public void deleteRepository(String ownerUsername, String repoName) {
         restClient.delete()
-                .uri("/repos/{owner}/{repo}", adminUsername, repoName)
+                .uri("/repos/{owner}/{repo}", ownerUsername, repoName)
                 .retrieve()
-                .toBodilessEntity(); // Nem érdekel a válasz body, csak a státusz (204 No Content)
+                .toBodilessEntity();
     }
 
     /**
