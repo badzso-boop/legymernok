@@ -4,7 +4,47 @@ Ez a dokumentum a LégyMérnök.hu projekt fejlesztésének történetét örök
 
 ---
 
-## 🚀 Bejegyzés #7: A Térkép Aktiválása (Swagger UI)
+## 🚀 Bejegyzés #10: A Nagy Klónozás (Start Mission Protocol)
+**Stardate:** 2025.12.16
+**Status:** Küldetés Indítva
+
+A kadétok felkészültek. Kidolgoztuk a protokollt, amivel egyetlen gombnyomásra átadjuk nekik a tudást. A "Start Mission" parancs kiadásakor a rendszer a háttérben azonnal reagál: az Adminisztrátori Tudástárból (Template Repo) kivonatolja a publikus adatokat, és egy védett, privát csatornán átmásolja a kadét személyes munkaállomására (Student Repo). A rendszer intelligens ("Smart Copy"), így a titkos megoldókulcsok az oktatóknál maradnak. A kadétok azonnal írási jogot kapnak a saját repójukhoz.
+
+*   **Technikai részletek:**
+    *   `POST /api/missions/{id}/start` végpont implementálása.
+    *   `CadetMission` entitás és kapcsolótábla létrehozása (User <-> Mission).
+    *   Logika: Template tartalom olvasása -> Új repo létrehozása -> Fájlok másolása -> Collaborator hozzáadása.
+
+---
+
+## 🔐 Bejegyzés #9: Galaktikus Hierarchia (Dinamikus RBAC)
+**Stardate:** 2025.12.16
+**Status:** Jogosultsági Mátrix Élesítve
+
+A parancsnoki lánc túl merev volt. Lecseréltük az egyszerű rangokat egy dinamikus jogosultsági mátrixra. Mostantól nem csak 'Kadét' vagy 'Admin' létezik, hanem finomhangolt engedélyek (Permissions) határozzák meg, ki melyik zsilipet nyithatja ki. Az adatbázisban rögzítettük a szerepkörök és jogok bonyolult hálózatát, a rendszer induláskor automatikusan kalibrálja az alapvető hozzáféréseket a Parancsnokság, az Oktatók és a Kadétok számára.
+
+*   **Technikai részletek:**
+    *   Dinamikus Role-Based Access Control (RBAC) implementálása.
+    *   `Role` és `Permission` entitások és kapcsolótáblák létrehozása.
+    *   `DataInitializer` a kezdő jogosultságkészlet feltöltéséhez.
+    *   `Cadet` entitás frissítése: több szerepkör támogatása és dinamikus Authority generálás.
+
+---
+
+## 🛠️ Bejegyzés #8: A Kódraktár Teljes Kontrollja (GiteaService 2.0)
+**Stardate:** 2025.12.16
+**Status:** Eszköztár Bővítve
+
+A mérnökcsapat jelentette: a Gitea kommunikációs modulunk elérte a maximális kapacitását. Mostantól nem csak felhasználókat tudunk létrehozni, hanem a teljes infrastruktúrát menedzseljük. Képesek vagyunk tárolókat (Repository) létrehozni, fájlokat feltölteni, tartalmat olvasni, és szükség esetén mindent nyomtalanul eltüntetni (Delete User & Repo). A kaszkádolt törlési mechanizmus gondoskodik róla, hogy ha egy kadét elhagyja a fedélzetet, a digitális lábnyoma is törlődjön.
+
+*   **Technikai részletek:**
+    *   `GiteaService` bővítése: `deleteGiteaUser`, `deleteRepository`, `getRepoContents`, `getFileContent`, `addCollaborator`.
+    *   `CadetService` bővítése: `deleteCadet` (kaszkádolt törlés: DB + Gitea).
+    *   Repository kezelés automatizálása.
+
+---
+
+## 🗺️ Bejegyzés #7: A Térkép Aktiválása (Swagger UI)
 **Stardate:** 2025.12.15
 **Status:** Sikeres Küldetés
 
@@ -44,7 +84,7 @@ A hajó biztonsága elsődleges. Beüzemeltük a **Spring Security** védelmi re
 
 ---
 
-## 📦 Bejegyzés #4: A Kódraktár (Gitea) Integrációja
+## 📦 Bejegyzés #4: A Kódraktár Integrációja
 **Stardate:** 2025.11.30
 **Status:** Kapcsolat Stabil
 
