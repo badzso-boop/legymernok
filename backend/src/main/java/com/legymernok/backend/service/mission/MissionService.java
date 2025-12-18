@@ -94,7 +94,7 @@ public class MissionService {
     private boolean isAdmin() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return false;
-        return auth.getAuthorities().contains(new SimpleGrantedAuthority("ADMIN"));
+        return auth.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"));
     }
 
     private MissionResponse mapToResponse(Mission mission) {

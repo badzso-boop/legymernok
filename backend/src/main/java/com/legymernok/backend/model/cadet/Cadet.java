@@ -1,5 +1,7 @@
 package com.legymernok.backend.model.cadet;
 
+import com.legymernok.backend.model.auth.Permission;
+import com.legymernok.backend.model.auth.Role;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,10 +13,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.time.Instant;
-import java.util.UUID;
 
 @Data
 @Builder
@@ -37,9 +37,13 @@ public class Cadet implements UserDetails {
     @Column(nullable = false)
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private CadetRole role;
+    @ManyToMany(fetch = FetchType.EAGER) // Login miatt EAGER
+    @JoinTable(
+            name = "cadet_roles",
+            joinColumns = @JoinColumn(name = "cadet_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<Role> roles = new HashSet<>();
 
     private String avatarUrl;
 
@@ -53,7 +57,14 @@ public class Cadet implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.name()));
+        Set<SimpleGrantedAuthority> authorities = new HashSet<>();
+        for (Role role : roles) {
+            authorities.add(new SimpleGrantedAuthority(role.getName()));
+            for (Permission permission : role.getPermissions()) {
+                authorities.add(new SimpleGrantedAuthority(permission.getName()));
+            }
+        }
+        return authorities;
     }
 
     @Override

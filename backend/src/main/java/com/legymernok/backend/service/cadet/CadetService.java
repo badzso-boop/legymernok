@@ -4,9 +4,10 @@ import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.UserNotFoundException;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
+import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
-import com.legymernok.backend.model.cadet.CadetRole;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
+import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.exception.UserAlreadyExistsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,7 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,6 +30,7 @@ public class CadetService {
     private final CadetMissionRepository cadetMissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final GiteaService giteaService;
+    private final RoleRepository roleRepository;
 
     @Transactional
     public CadetResponse createCadet(CreateCadetRequest request) {
@@ -43,12 +47,18 @@ public class CadetService {
             request.getPassword()
         );
 
+        Role cadetRole = roleRepository.findByName("ROLE_CADET")
+                .orElseThrow(() -> new RuntimeException("Default role ROLE_CADET not found. Databasnot initialized?"));
+
+        Set<Role> roles = new HashSet<>();
+        roles.add(cadetRole);
+
         Cadet cadet = Cadet.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .roles(roles)
                 .giteaUserId(giteaId)
-                .role(CadetRole.CADET)
                 .build();
 
         Cadet savedCadet = cadetRepository.save(cadet);
@@ -90,7 +100,7 @@ public class CadetService {
                 .id(cadet.getId())
                 .username(cadet.getUsername())
                 .email(cadet.getEmail())
-                .role(cadet.getRole())
+                .roles(cadet.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .giteaUserId(cadet.getGiteaUserId())
                 .createdAt(cadet.getCreatedAt())
                 .build();

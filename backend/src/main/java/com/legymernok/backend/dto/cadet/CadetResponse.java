@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -13,7 +14,7 @@ public class CadetResponse {
     private UUID id;
     private String username;
     private String email;
-    private CadetRole role;
+    private Set<String> roles;
     private Long giteaUserId;
     private Instant createdAt;
 }

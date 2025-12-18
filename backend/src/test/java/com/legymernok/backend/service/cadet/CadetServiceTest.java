@@ -5,8 +5,10 @@ import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.UserAlreadyExistsException;
 import com.legymernok.backend.exception.UserNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.cadet.CadetRole;
+import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,9 @@ class CadetServiceTest {
     private CadetMissionRepository cadetMissionRepository;
 
     @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -48,6 +53,9 @@ class CadetServiceTest {
         request.setUsername("luke");
         request.setEmail("luke@rebel.com");
         request.setPassword("force");
+
+        Role cadetRole = Role.builder().name("ROLE_CADET").build();
+        when(roleRepository.findByName("ROLE_CADET")).thenReturn(Optional.of(cadetRole));
 
         when(cadetRepository.existsByUsername("luke")).thenReturn(false);
         when(cadetRepository.existsByEmail("luke@rebel.com")).thenReturn(false);
@@ -68,7 +76,7 @@ class CadetServiceTest {
         // Assert
         assertNotNull(response);
         assertEquals("luke", response.getUsername());
-        assertEquals(CadetRole.CADET, response.getRole());
+        assertTrue(response.getRoles().contains("ROLE_CADET"));
         assertEquals(42L, response.getGiteaUserId());
 
         verify(giteaService, times(1)).createGiteaUser("luke", "luke@rebel.com", "force");

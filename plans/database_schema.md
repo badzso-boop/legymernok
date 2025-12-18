@@ -18,6 +18,30 @@ CREATE TABLE cadets (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ CREATE TABLE permissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL UNIQUE, -- pl. 'mission:create'
+    description VARCHAR(255) -- Emberi leírás
+);
+
+CREATE TABLE roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(50) NOT NULL UNIQUE, -- pl. 'ROLE_ADMIN'
+    description VARCHAR(255)
+);
+
+CREATE TABLE roles_permissions (
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
+    PRIMARY KEY (role_id, permission_id)
+);
+
+ CREATE TABLE cadet_roles (
+    cadet_id UUID REFERENCES cadets(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (cadet_id, role_id)
+);
+
 -- Csillagrendszerek (kurzusok)
 CREATE TABLE star_systems (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
