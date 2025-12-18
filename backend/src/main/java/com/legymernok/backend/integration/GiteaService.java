@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.http.MediaType;
+import org.springframework.core.ParameterizedTypeReference;
 
 import java.util.*;
 
@@ -200,4 +201,68 @@ public class GiteaService {
                 .body(List.class);
         return response;
     }
+
+
+    @lombok.Data
+    public static class GiteaContent {
+        private String name;
+        private String path;
+        private String type; // "file" vagy "dir"
+        private String content; // Base64
+        private String download_url;
+    }
+
+    /**
+     * Lekéri egy mappa tartalmát (fájllista).
+     */
+    public List<GiteaContent> getRepoContents(String repoName, String path) {
+        String uriPath = (path == null || path.isEmpty()) ? "" : "/" + path;
+        try {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}/contents{path}", adminUsername, repoName, uriPath)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<GiteaContent>>() {});
+        } catch (Exception e) {
+            return List.of(); // Ha üres vagy hiba van
+        }
+    }
+
+    /**
+     * Lekéri egy fájl tartalmát (Stringként, decode-olva).
+     */
+    public String getFileContent(String repoName, String filePath) {
+        try {
+            GiteaContent content = restClient.get()
+                    .uri("/repos/{owner}/{repo}/contents/{path}", adminUsername, repoName, filePath)
+                            .retrieve()
+                            .body(GiteaContent.class);
+
+            if (content != null && content.getContent() != null) {
+                // A Gitea Base64-e néha tartalmaz sortörést, ki kell venni
+                byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll(
+                        "\\n", ""));
+                return new String(decodedBytes);
+            }
+        } catch (Exception e) {
+            // Logolhatnánk
+        }
+        return "";
+    }
+
+    /**
+     * Hozzáad egy felhasználót (collaborator) egy repóhoz.
+     */
+    public void addCollaborator(String repoName, String username, String permission) {
+        Map<String, String> body = new HashMap<>();
+        body.put("permission", permission); // "read", "write", "admin"
+
+        restClient.put()
+                .uri("/repos/{owner}/{repo}/collaborators/{collaborator}", adminUsername, repoName,
+                        username)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
 }

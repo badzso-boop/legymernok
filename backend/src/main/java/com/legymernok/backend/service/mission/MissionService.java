@@ -3,8 +3,13 @@ package com.legymernok.backend.service.mission;
 import com.legymernok.backend.dto.mission.CreateMissionRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
+import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
+import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
+import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import org.springframework.security.core.Authentication;
@@ -17,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,6 +32,8 @@ public class MissionService {
 
     private final MissionRepository missionRepository;
     private final StarSystemRepository starSystemRepository;
+    private final CadetMissionRepository cadetMissionRepository;
+    private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
 
     @Transactional
@@ -67,6 +75,68 @@ public class MissionService {
 
         Mission savedMission = missionRepository.save(mission);
         return mapToResponse(savedMission);
+    }
+
+    @Transactional
+    public String startMission(UUID missionId, String username) {
+        // 1. Adatok és User lekérése
+        Mission mission = missionRepository.findById(missionId).orElseThrow(() -> new RuntimeException("Mission not found"));
+
+        Cadet cadet = cadetRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+
+        // 2. Ellenőrzés: Már elkezdte?
+        Optional<CadetMission> existing = cadetMissionRepository.findByCadetIdAndMissionId(cadet.getId(), mission.getId());
+        if (existing.isPresent()) {
+            return existing.get().getRepositoryUrl();
+        }
+
+        // 3. Template Repo nevének kinyerése az URL-ből
+        // Feltételezzük: http://localhost:3001/admin/repo-name.git
+        String templateRepoUrl = mission.getTemplateRepositoryUrl();
+        // Egyszerűsített logika: az utolsó "/" utáni rész a név (.git nélkül)
+        String templateRepoName = templateRepoUrl.substring(templateRepoUrl.lastIndexOf('/') + 1);
+        if (templateRepoName.endsWith(".git")) {
+            templateRepoName = templateRepoName.substring(0, templateRepoName.length() - 4);
+        }
+
+        // 4. Új Diák Repo Létrehozása (pl. cadet-username-mission-name)
+        // Egyedivé tesszük timestamp-pel vagy UUID-vel, ha kell, de a username+mission elég lehet
+        String userRepoName = "cadet-" + cadet.getUsername() + "-" + templateRepoName;
+
+        // Ha véletlenül már létezne ilyen nevű repo (de nincs DB bejegyzés), akkor kezelni kéne,
+        // de most feltételezzük, hogy a Gitea dob egy hibát vagy létrehozza.
+        // A createRepository visszadja az URL-t.
+        String userRepoUrl = giteaService.createRepository(userRepoName);
+
+        // 5. Jogosultság adása a diáknak
+        giteaService.addCollaborator(userRepoName, cadet.getUsername(), "write");
+
+        // 6. Fájlok átmásolása (SMART COPY)
+        // Lekérjük a template repo gyökerét
+        List<GiteaService.GiteaContent> files = giteaService.getRepoContents(templateRepoName, "");
+
+        for (GiteaService.GiteaContent file : files) {
+            // Itt szűrhetünk: pl. ".solution"-t kihagyjuk
+            if ("file".equals(file.getType())) {
+                String content = giteaService.getFileContent(templateRepoName, file.getPath());
+                giteaService.createFile(userRepoName, file.getName(), content);
+            }
+            // TODO: Mappák rekurzív másolása (ha a feladat mappákból áll)
+            // Most az MVP-ben csak a gyökérfájlokat másoljuk.
+        }
+
+        // 7. Mentés az adatbázisba
+        CadetMission cadetMission = CadetMission.builder()
+                .cadet(cadet)
+                .mission(mission)
+                .status(MissionStatus.IN_PROGRESS)
+                .repositoryUrl(userRepoUrl)
+                .startedAt(Instant.now())
+                .build();
+
+        cadetMissionRepository.save(cadetMission);
+
+        return userRepoUrl;
     }
 
     @Transactional(readOnly = true)

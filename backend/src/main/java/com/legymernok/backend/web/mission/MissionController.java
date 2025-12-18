@@ -6,6 +6,7 @@ import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,5 +35,14 @@ public class MissionController {
             return ResponseEntity.ok(missionService.getMissionsByStarSystem(starSystemId));
         }
         return ResponseEntity.ok(missionService.getAllMissions());
+    }
+
+    @PostMapping("/{id}/start")
+    public ResponseEntity<String> startMission(@PathVariable UUID id) {
+        // A bejelentkezett user nevét a SecurityContext-ből szedjük ki
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        String repoUrl = missionService.startMission(id, username);
+        return ResponseEntity.ok(repoUrl);
     }
 }
