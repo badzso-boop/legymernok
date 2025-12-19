@@ -17,4 +17,5 @@ public class CadetResponse {
     private Set<String> roles;
     private Long giteaUserId;
     private Instant createdAt;
+    private Instant updatedAt;
 }

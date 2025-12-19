@@ -40,7 +40,7 @@ const MainLayout: React.FC = () => {
                             <>
                                 {hasRole('ROLE_ADMIN') && (
                                     <Button color="secondary" variant="outlined" onClick={() => navigate('/admin')}>
-                                    {t('admin')} Dashboard
+                                    {t('adminDashboard')}
                                     </Button>
                                 )}
                                 <Button color="inherit" onClick={logout}>Logout</Button>
