@@ -1,35 +1,75 @@
-# Project: LégyMérnök.hu (Be an Engineer.hu)
+# LegyMernok.hu Project Context
 
-## Directory Overview
+## Project Overview
+**LegyMernok.hu** is a gamified educational platform designed to teach engineering skills (software development, electronics) through a space-themed narrative. The system manages student code submissions and task templates using a self-hosted Gitea instance.
 
-This directory contains the planning and design documents for **LégyMérnök.hu**, a comprehensive, project-based online learning platform. The goal is to teach engineering disciplines, starting with software engineering, through an engaging, space-themed narrative.
+### key Technologies
+- **Backend:** Java 17, Spring Boot 3.x (Web, Data JPA, Security), Maven.
+- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS, Material UI.
+- **Database:** PostgreSQL 16.
+- **Version Control System (Internal):** Gitea (Self-hosted).
+- **Infrastructure:** Docker & Docker Compose.
 
-The project is currently in the **planning phase**. There is no source code yet. The documents outline the architecture, user experience, database schema, and core functionalities.
+## Architecture
+The project follows a monorepo structure with services containerized via Docker.
+- **Frontend:** Runs on port `3000` (host).
+- **Backend:** Runs on port `8080` (host), communicates with Gitea and Postgres on the internal Docker network (`legymernok-net`).
+- **Gitea:** Runs on port `3001` (host web UI), internal port `3000`.
+- **Postgres:** Runs on port `5432`.
 
-## Key Files
+## Building and Running
 
-This directory serves as the blueprint for the project. The main artifacts are:
+### Full Stack (Docker)
+To start the entire environment (Database, Gitea, Backend, Frontend):
+```bash
+docker compose up --build
+```
+*Note: Ensure ports 3000, 3001, 8080, and 5432 are free.*
 
-1.  **`terv.md` (Development Plan):**
-    *   **Purpose:** The master plan for the project.
-    *   **Content:** Defines the project's goals, the full technology stack (Java/Spring Boot backend, React frontend, PostgreSQL database, Docker for containerization), and a detailed, milestone-based development roadmap. It also outlines the CI/CD strategy using GitHub Actions.
+### Backend (Local Development)
+Located in `backend/`.
+```bash
+# Build
+./mvnw clean install
 
-2.  **`ux_ui_terv.md` (UX/UI Plan):**
-    *   **Purpose:** Describes the user experience and interface design.
-    *   **Content:** Establishes the core "space travel" narrative. Users are "cadets," courses are "star systems," and lessons are "missions." It details the wireframes for key screens like the "Cockpit" (Dashboard), "Star Map" (Course list), and the three-panel "Simulator" (Workspace for coding).
+# Run
+./mvnw spring-boot:run
 
-3.  **`database_schema.md` (Database Schema):**
-    *   **Purpose:** Contains the SQL schema for the PostgreSQL database.
-    *   **Content:** Provides `CREATE TABLE` statements for the main entities, including `cadets`, `star_systems`, `missions`, and `mission_tests`. The structure is designed to support the Git-based architecture for storing user code.
+# Test
+./mvnw test
+```
 
-4.  **`code_storage.md` (Code Storage Architecture):**
-    *   **Purpose:** Details the implementation plan for handling user-generated code.
-    *   **Content:** Specifies a sophisticated architecture using a self-hosted **Gitea** (a lightweight Git server) instance. It explains the workflow from user registration (creating a parallel Gitea user) to starting a mission (creating a dedicated, private Git repository) and testing the code (cloning the repo into a secure Docker sandbox).
+### Frontend (Local Development)
+Located in `frontend/`.
+```bash
+# Install dependencies
+npm install
 
-## Usage and Next Steps
+# Start development server
+npm run dev
+```
 
-These documents are the foundational guide for building the application. The next logical step, as outlined in `terv.md` under **"Mérföldkő 0: Alapok és Infrastruktúra,"** is to begin the actual development by:
+## Development Conventions
 
-1.  Initializing a Git monorepo with `backend` and `frontend` directories.
-2.  Creating the initial `docker-compose.yml` file that includes services for the backend, frontend, database, and the **Gitea** server as specified in `code_storage.md`.
-3.  Scaffolding the "Hello World" applications for the Spring Boot backend and React frontend.
+### Backend
+- **Structure:** Standard Spring Boot layered architecture (`Controller` -> `Service` -> `Repository` -> `Model`).
+- **DTOs:** Use Data Transfer Objects (DTOs) for all API requests and responses (e.g., `CreateGiteaUserRequest`).
+- **Gitea Integration:** The `GiteaService` handles all interactions with the Gitea API (user creation, repo management).
+- **Security:** Stateless JWT authentication.
+
+### Frontend
+- **Framework:** React with Functional Components and Hooks.
+- **Styling:** Tailwind CSS and Material UI.
+- **State Management:** React Query (TanStack Query) for API data.
+
+### Infrastructure & Networking
+- **Internal Network:** Services communicate via the `legymernok-net` Docker network.
+- **Hostnames:**
+    - Use `gitea:3000` for backend-to-gitea communication within Docker.
+    - Use `localhost:3001` for host-to-gitea communication (e.g., browser, manual curl).
+
+## Current Context & Troubleshooting
+- **User Preference:** The user prefers to edit files and run commands manually. Provide code snippets and instructions rather than applying changes directly unless asked.
+- **Active Issue:** Troubleshooting Gitea user creation (`PasswordIsRequired` 400 Bad Request) in `GiteaService`.
+    - **Status:** `curl` from within the backend container works, but the Java `RestClient` implementation fails.
+    - **Workaround:** Using `ProcessBuilder` to call `curl` from Java is a temporary solution to bypass potential serialization/client issues.

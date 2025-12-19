@@ -25,12 +25,14 @@ services:
   # Gitea Service (Saját Git Szerver)
   # ---------------------------------------------------------------------------
   gitea:
-    image: gitea/gitea:latest
+    image: gitea/gitea:1.25.0
     container_name: legymernok-gitea
     restart: always
     environment:
       - USER_UID=1000
       - USER_GID=1000
+
+      # DATABASE
       - GITEA__database__DB_TYPE=postgres
       - GITEA__database__HOST=postgres:5432
       - GITEA__database__NAME=gitea
