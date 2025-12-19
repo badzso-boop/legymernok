@@ -11,9 +11,7 @@ import React, { useEffect, useState } from 'react';
        Avatar,
        Divider,
        CircularProgress,
-       Alert,
-       Breadcrumbs,
-       Link
+       Alert
    } from '@mui/material';
    import {
        ArrowBack as ArrowBackIcon,
@@ -80,7 +78,7 @@ import React, { useEffect, useState } from 'react';
                <Paper sx={{ p: 4, elevation: 3 }}>
                    <Grid container spacing={4}>
                        {/* Profil kép szekció */}
-                       <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                       <Grid size={{ xs: 12, md: 4 }} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                            <Avatar
                                src={user.avatarUrl || undefined}
                                sx={{ width: 150, height: 150, mb: 2, bgcolor: 'primary.main' }}
@@ -95,12 +93,12 @@ import React, { useEffect, useState } from 'react';
                        </Grid>
 
                        {/* Adatok szekció */}
-                       <Grid item xs={12} md={8}>
+                       <Grid size={{ xs: 12, md: 8 }}>
                            <Typography variant="h6" gutterBottom>Alapadatok</Typography>
                            <Divider sx={{ mb: 3 }} />
 
                            <Grid container spacing={2}>
-                               <Grid item xs={12} sm={6}>
+                               <Grid size={{ xs: 12, md: 6 }}>
                                    <TextField
                                        fullWidth
                                        label="Felhasználónév"
@@ -108,7 +106,7 @@ import React, { useEffect, useState } from 'react';
                                        disabled // Egyelőre ne lehessen módosítani
                                    />
                                </Grid>
-                               <Grid item xs={12} sm={6}>
+                               <Grid size={{ xs: 12, md: 6 }}>
                                    <TextField
                                        fullWidth
                                        label="Email cím"
@@ -116,7 +114,7 @@ import React, { useEffect, useState } from 'react';
                                        // Itt majd lehet onChange
                                    />
                                </Grid>
-                               <Grid item xs={12}>
+                               <Grid size={{ xs: 12 }}>
                                    <TextField
                                        fullWidth
                                        label="Teljes név"

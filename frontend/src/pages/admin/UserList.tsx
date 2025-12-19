@@ -156,9 +156,9 @@ import React, { useEffect, useState } from 'react';
                                            {user.roles.map((role, index) => (
                                                <Chip
                                                    key={index} // Mivel string, használhatjuk az index vagy magát a stringet key-nek
-                                                   label={role.replace('ROLE_', '')}
+                                                   label={role.toString().replace('ROLE_', '')}
                                                    size="small"
-                                                   color={role === 'ROLE_ADMIN' ? 'secondary' : 'default'}
+                                                   color={role.toString() === 'ROLE_ADMIN' ? 'secondary' : 'default'}
                                                    variant="outlined"
                                                />
                                            ))}

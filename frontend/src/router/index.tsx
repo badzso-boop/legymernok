@@ -7,10 +7,11 @@ import RegisterPage from '../pages/auth/RegisterPage';
 import UserList from '../pages/admin/UserList';
 import UserEdit from '../pages/admin/UserEdit';
 import { useAuth } from '../context/AuthContext';
+import type { JSX } from 'react';
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    const { isAuthenticated, hasRole, user } = useAuth();
+    const { hasRole } = useAuth();
 
     const token = localStorage.getItem('token');
 
