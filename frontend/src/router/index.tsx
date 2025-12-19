@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { CircularProgress } from '@mui/material';
 import MainLayout from '../layouts/MainLayout';
 import AdminLayout from '../layouts/AdminLayout';
 import LandingPage from '../pages/LandingPage';
@@ -11,7 +12,11 @@ import type { JSX } from 'react';
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    const { hasRole } = useAuth();
+    const { hasRole, isLoading } = useAuth();
+
+    if (isLoading) {
+        return <CircularProgress size={80} thickness={2} sx={{ color: 'primary.main' }} />;
+    }
 
     const token = localStorage.getItem('token');
 

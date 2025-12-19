@@ -30,6 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user: null,
         token: null,
         isAuthenticated: false,
+        isLoading: true,
     });
 
     // Induláskor megnézzük, van-e elmentett token
@@ -42,6 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     token: storedToken,
                     user: user,
                     isAuthenticated: true,
+                    isLoading: false,
                 });
             } else {
                 localStorage.removeItem('token'); // Lejárt
@@ -56,6 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             token: data.token,
             user: user,
             isAuthenticated: true,
+            isLoading: false,
         });
     };
 
@@ -65,6 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             token: null,
             user: null,
             isAuthenticated: false,
+            isLoading: false,
         });
     };
 
