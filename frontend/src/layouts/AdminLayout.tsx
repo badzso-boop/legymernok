@@ -101,10 +101,7 @@ const AdminLayout: React.FC = () => {
                     </ListItem>
 
                     <ListItem disablePadding>
-                        <ListItemButton onClick={() => {
-                            const nextLang = i18n.language === 'hu' ? 'en' : 'hu';
-                            i18n.changeLanguage(nextLang);
-                        }}>
+                        <ListItemButton onClick={toggleLanguage}>
                             <ListItemIcon>
                                 <LanguageIcon />
                             </ListItemIcon>
