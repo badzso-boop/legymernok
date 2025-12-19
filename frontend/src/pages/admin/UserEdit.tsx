@@ -19,6 +19,7 @@ import React, { useEffect, useState } from 'react';
        Person as PersonIcon
    } from '@mui/icons-material';
    import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
    const API_URL = 'http://localhost:8080/api';
 
@@ -31,6 +32,7 @@ import React, { useEffect, useState } from 'react';
    }
 
    const UserEdit: React.FC = () => {
+       const { t } = useTranslation();
        const { id } = useParams<{ id: string }>();
        const navigate = useNavigate();
        const [user, setUser] = useState<UserResponse | null>(null);
@@ -48,7 +50,7 @@ import React, { useEffect, useState } from 'react';
                    setUser(response.data);
                    setError(null);
                } catch (err) {
-                   setError('Nem sikerült betölteni a felhasználó adatait.');
+                   setError(t('errorFetchUserDetails'));
                    console.error(err);
                } finally {
                    setLoading(false);
@@ -58,10 +60,9 @@ import React, { useEffect, useState } from 'react';
            if (id) fetchUser();
        }, [id]);
 
-       if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><
-   CircularProgress /></Box>;
+       if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
        if (error) return <Alert severity="error">{error}</Alert>;
-       if (!user) return <Alert severity="warning">Felhasználó nem található.</Alert>;
+       if (!user) return <Alert severity="warning">{t('userNotFound')}</Alert>;
 
        return (
            <Box>
@@ -71,7 +72,7 @@ import React, { useEffect, useState } from 'react';
                        <ArrowBackIcon />
                    </IconButton>
                    <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                       Felhasználó szerkesztése
+                        {t('editUser')}
                    </Typography>
                </Box>
 
@@ -88,20 +89,20 @@ import React, { useEffect, useState } from 'react';
                            <Typography variant="h6">{user.username}</Typography>
                            <Typography color="text.secondary" gutterBottom>{user.email}</Typography>
                            <Button variant="outlined" size="small" sx={{ mt: 2 }}>
-                               Kép módosítása
+                                {t('changePicture')}
                            </Button>
                        </Grid>
 
                        {/* Adatok szekció */}
                        <Grid size={{ xs: 12, md: 8 }}>
-                           <Typography variant="h6" gutterBottom>Alapadatok</Typography>
+                           <Typography variant="h6" gutterBottom>{t('basicInfo')}</Typography>
                            <Divider sx={{ mb: 3 }} />
 
                            <Grid container spacing={2}>
                                <Grid size={{ xs: 12, md: 6 }}>
                                    <TextField
                                        fullWidth
-                                       label="Felhasználónév"
+                                       label={t('username')}
                                        value={user.username}
                                        disabled // Egyelőre ne lehessen módosítani
                                    />
@@ -109,7 +110,7 @@ import React, { useEffect, useState } from 'react';
                                <Grid size={{ xs: 12, md: 6 }}>
                                    <TextField
                                        fullWidth
-                                       label="Email cím"
+                                       label={t('email')}
                                        value={user.email}
                                        // Itt majd lehet onChange
                                    />
@@ -117,7 +118,7 @@ import React, { useEffect, useState } from 'react';
                                <Grid size={{ xs: 12 }}>
                                    <TextField
                                        fullWidth
-                                       label="Teljes név"
+                                       label={t('fullName')}
                                        value=""
                                        placeholder="Nincs megadva"
                                        helperText="Backend fejlesztés alatt"
@@ -125,7 +126,7 @@ import React, { useEffect, useState } from 'react';
                                </Grid>
                            </Grid>
 
-                           <Typography variant="h6" sx={{ mt: 4, mb: 1 }} gutterBottom>Szerepkörök</Typography>
+                           <Typography variant="h6" sx={{ mt: 4, mb: 1 }} gutterBottom>{t('roles')}</Typography>
                            <Divider sx={{ mb: 2 }} />
 
                            <Box sx={{ display: 'flex', gap: 1, mb: 4 }}>
@@ -139,7 +140,7 @@ import React, { useEffect, useState } from 'react';
 
                            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                                <Button variant="outlined" onClick={() => navigate('/admin/users')}>
-                                   Mégse
+                                   {t('cancel')}
                                </Button>
                                <Button
                                    variant="contained"
@@ -147,7 +148,7 @@ import React, { useEffect, useState } from 'react';
                                    startIcon={<SaveIcon />}
                                    onClick={() => alert('Backend PUT endpoint hiányzik!')}
                                >
-                                   Mentés
+                                   {t('save')}
                                </Button>
                            </Box>
                        </Grid>

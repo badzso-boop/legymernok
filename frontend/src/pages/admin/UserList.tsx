@@ -23,6 +23,7 @@ import React, { useEffect, useState } from 'react';
        Person as PersonIcon
    } from '@mui/icons-material';
    import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
    // API alap URL (a .env fájlból vagy fixen, ha nincs)
    const API_URL = 'http://localhost:8080/api';
@@ -43,6 +44,7 @@ import React, { useEffect, useState } from 'react';
    }
 
    const UserList: React.FC = () => {
+        const { t } = useTranslation();
        const [users, setUsers] = useState<UserResponse[]>([]);
        const [loading, setLoading] = useState(true);
        const [error, setError] = useState<string | null>(null);
@@ -113,7 +115,7 @@ import React, { useEffect, useState } from 'react';
        return (
            <Box>
                <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold' }}>
-                   Felhasználók kezelése
+                   {t('manageUsers')}
                </Typography>
 
                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -122,12 +124,12 @@ import React, { useEffect, useState } from 'react';
                    <Table sx={{ minWidth: 650 }}>
                        <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.05)' }}>
                            <TableRow>
-                               <TableCell>Felhasználó</TableCell>
+                               <TableCell>{t('user')}</TableCell>
                                <TableCell>Email</TableCell>
-                               <TableCell>Regisztrált</TableCell>
-                               <TableCell>Utolsó módosítás</TableCell>
-                               <TableCell>Role-ok</TableCell>
-                               <TableCell align="right">Műveletek</TableCell>
+                               <TableCell>{t('registered')}</TableCell>
+                               <TableCell>{t('lastModified')}</TableCell>
+                               <TableCell>{t('roles')}</TableCell>
+                               <TableCell align="right">{t('actions')}</TableCell>
                            </TableRow>
                        </TableHead>
                        <TableBody>
@@ -143,7 +145,7 @@ import React, { useEffect, useState } from 'react';
                                                    {user.username}
                                                </Typography>
                                                <Typography variant="caption" color="text.secondary">
-                                                   Nincs megadva név
+                                                   {t('noNameProvided')}
                                                </Typography>
                                            </Box>
                                        </Box>
@@ -166,7 +168,7 @@ import React, { useEffect, useState } from 'react';
                                    </TableCell>
                                    <TableCell align="right">
                                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1}}>
-                                           <Tooltip title="Szerkesztés">
+                                           <Tooltip title={t('edit')}>
                                                <IconButton
                                                    color="primary"
                                                    onClick={() => navigate(`/admin/users/${user.id}`)}
@@ -174,7 +176,7 @@ import React, { useEffect, useState } from 'react';
                                                    <EditIcon />
                                                </IconButton>
                                            </Tooltip>
-                                           <Tooltip title="Törlés">
+                                           <Tooltip title={t('delete')}>
                                                <IconButton
                                                    color="error"
                                                    onClick={() => handleDelete(user.id, user.username)}

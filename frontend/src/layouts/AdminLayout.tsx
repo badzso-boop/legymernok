@@ -13,7 +13,7 @@ import {
     Toolbar,
     IconButton,
     Avatar,
-    Divider
+    Divider,
 } from '@mui/material';
 import {
     People as PeopleIcon,
@@ -22,21 +22,24 @@ import {
     Security as SecurityIcon,
     VpnKey as PermissionIcon,
     Menu as MenuIcon,
-    ArrowBack as ArrowBackIcon
+    ArrowBack as ArrowBackIcon,
+    Language as LanguageIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const drawerWidth = 240;
 
 const menuItems = [
-    { text: 'Felhasználók', icon: <PeopleIcon />, path: '/admin/users' },
-    { text: 'Kurzusok', icon: <SchoolIcon />, path: '/admin/courses' },
-    { text: 'Feladatok', icon: <AssignmentIcon />, path: '/admin/missions' },
-    { text: 'Role-ok', icon: <SecurityIcon />, path: '/admin/roles' },
-    { text: 'Permission-ök', icon: <PermissionIcon />, path: '/admin/permissions' },
+    { text: 'users', icon: <PeopleIcon />, path: '/admin/users' },
+    { text: 'courses', icon: <SchoolIcon />, path: '/admin/courses' },
+    { text: 'missions', icon: <AssignmentIcon />, path: '/admin/missions' },
+    { text: 'roles', icon: <SecurityIcon />, path: '/admin/roles' },
+    { text: 'permissions', icon: <PermissionIcon />, path: '/admin/permissions' },
 ];
 
 const AdminLayout: React.FC = () => {
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
@@ -46,11 +49,16 @@ const AdminLayout: React.FC = () => {
         setMobileOpen(!mobileOpen);
     };
 
+    // Nyelvváltó függvény
+    const toggleLanguage = () => {
+        i18n.changeLanguage(i18n.language === 'hu' ? 'en' : 'hu');
+    };
+
     const drawerContent = (
         <div>
             <Toolbar sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', px: 2 }}>
                 <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    ADMIN PANEL
+                    {t('adminPanel')}
                 </Typography>
             </Toolbar>
             <Divider />
@@ -60,7 +68,7 @@ const AdminLayout: React.FC = () => {
                 <Avatar sx={{ bgcolor: 'secondary.main' }}>{user?.username.charAt(0).toUpperCase()}</Avatar>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{user?.username}</Typography>
-                    <Typography variant="caption" color="text.secondary">Adminisztrátor</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('administrator')}</Typography>
                 </Box>
             </Box>
             <Divider />
@@ -75,20 +83,36 @@ const AdminLayout: React.FC = () => {
                             <ListItemIcon sx={{ color: location.pathname.startsWith(item.path) ? 'primary.main' : 'inherit' }}>
                                 {item.icon}
                             </ListItemIcon>
-                            <ListItemText primary={item.text} />
+                            <ListItemText primary={t(item.text)} />
                         </ListItemButton>
                     </ListItem>
                 ))}
             </List>
             <Divider />
-            <List>
-                <ListItem disablePadding>
-                    <ListItemButton onClick={() => navigate('/')}>
-                        <ListItemIcon><ArrowBackIcon /></ListItemIcon>
-                        <ListItemText primary="Vissza a főoldalra" />
-                    </ListItemButton>
-                </ListItem>
-            </List>
+            <Box sx={{ p: 2 }}>
+                <List disablePadding>
+                    <ListItem disablePadding>
+                        <ListItemButton onClick={() => navigate('/')}>
+                            <ListItemIcon>
+                                <ArrowBackIcon />
+                            </ListItemIcon>
+                            <ListItemText primary={t('backToHome')} />
+                        </ListItemButton>
+                    </ListItem>
+
+                    <ListItem disablePadding>
+                        <ListItemButton onClick={() => {
+                            const nextLang = i18n.language === 'hu' ? 'en' : 'hu';
+                            i18n.changeLanguage(nextLang);
+                        }}>
+                            <ListItemIcon>
+                                <LanguageIcon />
+                            </ListItemIcon>
+                            <ListItemText primary={i18n.language.toUpperCase()} />
+                        </ListItemButton>
+                    </ListItem>
+                </List>
+            </Box>
         </div>
     );
 
@@ -114,7 +138,7 @@ const AdminLayout: React.FC = () => {
                         <MenuIcon />
                     </IconButton>
                     <Typography variant="h6" noWrap component="div">
-                        Admin Dashboard
+                        {t('adminPanel')}
                     </Typography>
                 </Toolbar>
             </AppBar>
