@@ -73,6 +73,7 @@ public class AuthService {
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
                 .roles(roles)
                 .giteaUserId(giteaId)
                 .createdAt(Instant.now())

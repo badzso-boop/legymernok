@@ -47,7 +47,7 @@ public class CadetService {
             request.getPassword()
         );
 
-        Role cadetRole = roleRepository.findByName("ROLE_CADET")
+        Role cadetRole = roleRepository.findByName(request.getRole())
                 .orElseThrow(() -> new RuntimeException("Default role ROLE_CADET not found. Databasnot initialized?"));
 
         Set<Role> roles = new HashSet<>();
@@ -57,6 +57,7 @@ public class CadetService {
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
                 .roles(roles)
                 .giteaUserId(giteaId)
                 .build();
@@ -95,14 +96,61 @@ public class CadetService {
         cadetRepository.delete(cadet);
     }
 
+    @Transactional
+    public CadetResponse updateCadet(UUID id, CreateCadetRequest request) {
+        Cadet cadetToUpdate = cadetRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+
+        // Email frissítése, ha meg van adva és nem egyezik a régivel
+        if (request.getEmail() != null && !request.getEmail().equals(cadetToUpdate.getEmail())) {
+            // Ellenőrizzük, hogy az új email cím foglalt-e már
+            if (cadetRepository.existsByEmail(request.getEmail())) {
+                throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' already exists");
+            }
+            cadetToUpdate.setEmail(request.getEmail());
+            // TODO: Gitea email frissítése, ha a GiteaService támogatja
+        }
+
+        // Jelszó frissítése, csak ha megadtak újat
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            cadetToUpdate.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            // TODO: Gitea jelszó frissítése, ha a GiteaService támogatja
+        }
+
+        // Szerepkör frissítése, csak ha tényleg változott
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            // Lekérdezzük a felhasználó jelenlegi (első) szerepkörének nevét
+            String currentRoleName = cadetToUpdate.getRoles().stream()
+                    .map(Role::getName)
+                    .findFirst()
+                    .orElse(null);
+
+            // Csak akkor módosítunk, ha a kérésben lévő szerepkör eltér a jelenlegitől
+            if (!request.getRole().equals(currentRoleName)) {
+                Role newRole = roleRepository.findByName(request.getRole())
+                        .orElseThrow(() -> new RuntimeException("Role '" + request.getRole() + "' not found."));
+
+                cadetToUpdate.getRoles().clear();
+                cadetToUpdate.getRoles().add(newRole);
+            }
+        }
+
+        cadetToUpdate.setFullName(request.getFullName());
+
+        Cadet updatedCadet = cadetRepository.save(cadetToUpdate);
+        return mapToResponse(updatedCadet);
+    }
+
     private CadetResponse mapToResponse(Cadet cadet) {
         return CadetResponse.builder()
                 .id(cadet.getId())
                 .username(cadet.getUsername())
                 .email(cadet.getEmail())
+                .fullName(cadet.getFullName())
                 .roles(cadet.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .giteaUserId(cadet.getGiteaUserId())
                 .createdAt(cadet.getCreatedAt())
+                .updatedAt(cadet.getUpdatedAt())
                 .build();
     }
 }

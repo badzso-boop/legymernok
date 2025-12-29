@@ -1,9 +1,12 @@
 package com.legymernok.backend.service.starsystem;
 
+import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,7 @@ import java.util.stream.Collectors;
 public class StarSystemService {
 
     private final StarSystemRepository starSystemRepository;
+    private final MissionService missionService;
 
     @Transactional
     public StarSystemResponse createStarSystem(CreateStarSystemRequest request) {
@@ -52,6 +56,56 @@ public class StarSystemService {
         return mapToResponse(starSystem);
     }
 
+    @Transactional
+    public void deleteStarSystem(UUID id) {
+        // Ellenőrizzük, hogy létezik-e az entitás, mielőtt törölnénk
+        if (!starSystemRepository.existsById(id)) {
+            throw new RuntimeException("StarSystem not found with ID: " + id);
+        }
+        starSystemRepository.deleteById(id);
+    }
+
+    @Transactional
+    public StarSystemResponse updateStarSystem(UUID id, CreateStarSystemRequest request) {
+        StarSystem starSystemToUpdate = starSystemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("StarSystem not found with ID: " + id));
+
+        // Név egyediségének ellenőrzése, de csak ha a név változik
+        if (!starSystemToUpdate.getName().equals(request.getName()) &&
+                starSystemRepository.findByName(request.getName()).isPresent()) {
+            throw new RuntimeException("StarSystem with name '" + request.getName() + "' already exists.");
+        }
+
+        starSystemToUpdate.setName(request.getName());
+        starSystemToUpdate.setDescription(request.getDescription());
+        starSystemToUpdate.setIconUrl(request.getIconUrl());
+        starSystemToUpdate.setUpdatedAt(Instant.now());
+
+        StarSystem updatedStarSystem = starSystemRepository.save(starSystemToUpdate);
+        return mapToResponse(updatedStarSystem);
+    }
+
+    @Transactional(readOnly = true)
+    public StarSystemWithMissionResponse getStarSystemWithMissions(UUID id) {
+        // 1. Csillagrendszer lekérdezése
+        StarSystem starSystem = starSystemRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("StarSystem not found with ID: " + id));
+
+        // 2. Küldetések lekérdezése a MissionService segítségével
+        List<MissionResponse> missions = missionService.getMissionsByStarSystem(id);
+
+        // 3. A komplex válasz DTO összeállítása
+        return StarSystemWithMissionResponse.builder()
+                .id(starSystem.getId())
+                .name(starSystem.getName())
+                .description(starSystem.getDescription())
+                .iconUrl(starSystem.getIconUrl())
+                .createdAt(starSystem.getCreatedAt())
+                .updatedAt(starSystem.getUpdatedAt())
+                .missions(missions)
+                .build();
+    }
+
     // Segédmetódus a StarSystem entitás Response DTO-vá alakításához
     private StarSystemResponse mapToResponse(StarSystem starSystem) {
         return StarSystemResponse.builder()
@@ -60,6 +114,7 @@ public class StarSystemService {
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
                 .createdAt(starSystem.getCreatedAt())
+                .updatedAt(starSystem.getUpdatedAt())
                 .build();
     }
 }
