@@ -174,4 +174,23 @@ public class StarSystemServiceTest {
 
         assertEquals(2, responses.size());
     }
+
+    @Test
+    void updateStarSystem_NameConflict_ThrowsException() {
+        // Arrange
+        CreateStarSystemRequest request = new CreateStarSystemRequest();
+        request.setName("ExistingName");
+
+        // Egy másik létező rendszer szimulálása ugyanazzal a névvel
+        StarSystem existingOther = StarSystem.builder().id(UUID.randomUUID()).name("ExistingName"
+        ).build();
+
+        when(starSystemRepository.findById(starSystemId)).thenReturn(Optional.of(testStarSystem));
+        when(starSystemRepository.findByName("ExistingName"
+        )).thenReturn(Optional.of(existingOther));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> starSystemService.updateStarSystem(starSystemId, request));
+        verify(starSystemRepository, never()).save(any());
+    }
 }
