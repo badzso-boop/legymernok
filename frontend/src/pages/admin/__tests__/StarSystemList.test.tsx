@@ -11,7 +11,14 @@ const mockedAxios = axios as any;
 // i18next mockolása
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    // Mivel a komponens paraméteres fordítást használ a törlésnél (t("deleteStarSystemConfirm", { name })),
+    // a mocknak kezelnie kell a második paramétert is, különben "[object Object]" lesz a szövegben.
+    t: (key: string, options?: any) => {
+      if (key === "deleteStarSystemConfirm" && options?.name) {
+        return `deleteStarSystemConfirm ${options.name}`;
+      }
+      return key;
+    },
   }),
 }));
 
@@ -82,15 +89,16 @@ describe("StarSystemList Component", () => {
       expect(screen.getByText("Alderaan")).toBeInTheDocument();
     });
 
-    // Keressük meg a törlés gombot. Mivel több gomb is lehet, specifikusabban kellene,
-    // de itt csak egy sor van. A tooltip segít azonosítani.
-    const deleteButton = screen.getByLabelText("Törlés"); // Tooltip címe alapján, vagy icon gomb
-
-    // Ha a tooltip nem működik így testing-library-vel közvetlenül, akkor a testid lenne a legjobb,
-    // de most az implementáció alapján próbálkozunk.
-    // A DeleteIcon-t tartalmazó gombot keressük.
+    // JAVÍTVA: A fordítási kulcsot keressük ("delete")
+    const deleteButton = screen.getByLabelText("delete");
 
     fireEvent.click(deleteButton);
+
+    // Ellenőrizzük, hogy a confirm meghívódott-e (opcionális, de jó teszt)
+    // A mockolt 't' függvényünk miatt a szöveg ez lesz: "deleteStarSystemConfirm Alderaan"
+    expect(window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("deleteStarSystemConfirm")
+    );
 
     await waitFor(() => {
       expect(mockedAxios.delete).toHaveBeenCalledWith(

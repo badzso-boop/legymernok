@@ -65,9 +65,9 @@ describe("StarSystemEdit Component", () => {
       </MemoryRouter>
     );
 
-    const nameInput = screen.getByLabelText("Név");
-    const descInput = screen.getByLabelText("Leírás");
-    const saveButton = screen.getByText("Mentés");
+    const nameInput = screen.getByLabelText("name");
+    const descInput = screen.getByLabelText("description");
+    const saveButton = screen.getByText("save");
 
     fireEvent.change(nameInput, { target: { value: "Naboo" } });
     fireEvent.change(descInput, { target: { value: "Beautiful planet" } });
