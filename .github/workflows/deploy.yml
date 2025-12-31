@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -14,18 +14,20 @@ jobs:
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
-        
+
       - name: Copy Changelog 📜
         run: cp CHANGELOG.md frontend/src/pages/changelog/CHANGELOG.md
 
       - name: Setup Node.js ⚙️
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
 
       - name: Install and Build 🔧
+        env:
+          GITHUB_PAGES: "true"
         run: |
           cd frontend
           npm ci

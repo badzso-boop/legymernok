@@ -3,15 +3,14 @@ import react from "@vitejs/plugin-react-swc";
 import { resolve } from "path";
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => {
-  // Megnézzük, hogy build (élesítés) vagy dev (fejlesztés) módban vagyunk-e
-  const isProd = command === "build";
+export default defineConfig(() => {
+  const isGithubPages = process.env.GITHUB_PAGES === "true";
 
   return {
     plugins: [react()],
     // GitHub Pages-hez csak build esetén kell a '/legymernok/' base path.
     // Fejlesztés közben (dev) '/' marad, így nem törik el a localhost:5173.
-    base: isProd ? "/legymernok/" : "/",
+    base: isGithubPages ? "/legymernok/" : "/",
     server: {
       watch: {
         usePolling: true, // Ez kell a WSL/Docker fájlfigyeléshez
