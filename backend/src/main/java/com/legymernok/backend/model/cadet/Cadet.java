@@ -37,6 +37,8 @@ public class Cadet implements UserDetails {
     @Column(nullable = false)
     private String passwordHash;
 
+    private String fullName;
+
     @ManyToMany(fetch = FetchType.EAGER) // Login miatt EAGER
     @JoinTable(
             name = "cadet_roles",

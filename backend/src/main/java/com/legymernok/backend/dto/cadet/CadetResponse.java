@@ -14,6 +14,7 @@ public class CadetResponse {
     private UUID id;
     private String username;
     private String email;
+    private String fullName;
     private Set<String> roles;
     private Long giteaUserId;
     private Instant createdAt;

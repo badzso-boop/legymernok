@@ -29,6 +29,7 @@ public class GiteaService {
         this.restClient = RestClient.builder()
                 .baseUrl(apiUrl)
                 .defaultHeader("Authorization", "token " + adminToken)
+                //.defaultHeaders(headers -> headers.setBasicAuth(adminUsername, adminPassword))
                 .build();
     }
 

@@ -33,6 +33,11 @@ public class CadetController {
         return ResponseEntity.ok(cadetService.getCadetById(id));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<CadetResponse> updateCadet(@PathVariable UUID id, @RequestBody CreateCadetRequest request) {
+        return ResponseEntity.ok(cadetService.updateCadet(id, request));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCadet(@PathVariable UUID id) {
         // TODO: A jövőben itt ellenőrizni kell, hogy a hívó user ADMIN jogokkal rendelkezik-e!

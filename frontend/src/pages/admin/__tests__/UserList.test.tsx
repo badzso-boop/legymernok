@@ -1,41 +1,78 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect } from 'vitest';
-import UserList from '../UserList';
-import axios from 'axios';
-import { BrowserRouter } from 'react-router-dom';
+import { render, screen, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import UserList from "../cadets/UserList";
+import axios from "axios";
+import { MemoryRouter } from "react-router-dom";
 
 // Axios Mockolása
-vi.mock('axios');
+vi.mock("axios");
 const mockedAxios = axios as any;
 
-describe('UserList Component', () => {
-    it('fetches and displays users', async () => {
-        // 1. Mock adatok beállítása
-        const mockUsers = [
-            { id: "1", username: "teszt_user", email: "test@example.com", roles: ["ROLE_CADET"], createdAt: "2023-01-01" }
-        ];
+// AuthContext Mockolása
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({
+    hasRole: () => true, // Mindig van joga a tesztben
+    isLoading: false,
+  }),
+}));
 
-        // Megmondjuk az axiosnak, hogy mit adjon vissza a .get() hívásra
-        mockedAxios.get.mockResolvedValue({ data: mockUsers });
+// AuthContext Mockolása
+vi.mock("../../../context/AuthContext", () => ({
+  useAuth: () => ({
+    hasRole: () => true, // Az admin felület teszteléséhez feltételezzük, hogy van joga
+    isLoading: false,
+  }),
+}));
 
-        // 2. Renderelés (Routerbe csomagolva a useNavigate miatt)
-        render(
-            <BrowserRouter>
-                <UserList />
-            </BrowserRouter>
-        );
+// i18n Mockolása
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}));
 
-        // 4. Ellenőrzés: Megjelent-e a user a képernyőn?
-        // A waitFor megvárja, amíg az aszinkron műveletek lefutnak és a DOM frissül
-        await waitFor(() => {
-            expect(screen.getByText('teszt_user')).toBeInTheDocument();
-            expect(screen.getByText('test@example.com')).toBeInTheDocument();
-        });
+describe("UserList Component", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-        // 5. Ellenőrzés: Tényleg meghívta az API-t?
-        expect(mockedAxios.get).toHaveBeenCalledWith(
-            expect.stringContaining('/users'),
-            expect.any(Object) // Headers object
-        );
+  it("fetches and displays users", async () => {
+    // 1. Mock adatok beállítása
+    const mockUsers = [
+      {
+        id: "1",
+        username: "teszt_user",
+        email: "test@example.com",
+        roles: ["ROLE_CADET"],
+        createdAt: "2023-01-01T10:00:00Z",
+        updatedAt: "2023-01-01T10:00:00Z",
+      },
+    ];
+
+    // Megmondjuk az axiosnak, hogy mit adjon vissza a .get() hívásra
+    mockedAxios.get.mockResolvedValue({ data: mockUsers });
+
+    // 2. Renderelés (MemoryRouter-t használunk a tesztkörnyezetben)
+    render(
+      <MemoryRouter>
+        <UserList />
+      </MemoryRouter>
+    );
+
+    // 3. Ellenőrzés: Megjelent-e a user a képernyőn?
+    await waitFor(() => {
+      expect(screen.getByText("teszt_user")).toBeInTheDocument();
+      expect(screen.getByText("test@example.com")).toBeInTheDocument();
     });
+
+    // 4. Ellenőrzés: Tényleg meghívta az API-t a megfelelő headerrel?
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining("/users"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: expect.stringContaining("Bearer"),
+        }),
+      })
+    );
+  });
 });
