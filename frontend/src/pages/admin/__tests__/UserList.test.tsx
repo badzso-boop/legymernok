@@ -11,7 +11,7 @@ const mockedAxios = axios as any;
 // AuthContext Mockolása
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
-    hasRole: (role: string) => true, // Mindig van joga a tesztben
+    hasRole: () => true, // Mindig van joga a tesztben
     isLoading: false,
   }),
 }));
@@ -19,7 +19,7 @@ vi.mock("../../../context/AuthContext", () => ({
 // AuthContext Mockolása
 vi.mock("../../../context/AuthContext", () => ({
   useAuth: () => ({
-    hasRole: (role: string) => true, // Az admin felület teszteléséhez feltételezzük, hogy van joga
+    hasRole: () => true, // Az admin felület teszteléséhez feltételezzük, hogy van joga
     isLoading: false,
   }),
 }));
