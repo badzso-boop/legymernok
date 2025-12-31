@@ -19,7 +19,7 @@ describe("Admin Star System Management (Mocked Backend)", () => {
   });
 
   it("should list star systems", () => {
-    cy.visit("/admin/star-systems", {
+    cy.visit("/#/admin/star-systems", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },
@@ -36,7 +36,7 @@ describe("Admin Star System Management (Mocked Backend)", () => {
       body: { id: "new-1", name: "Dagobah" },
     }).as("createSystem");
 
-    cy.visit("/admin/star-systems/new", {
+    cy.visit("/#/admin/star-systems/new", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },
@@ -73,7 +73,7 @@ describe("Admin Star System Management (Mocked Backend)", () => {
       body: {},
     }).as("updateSystem");
 
-    cy.visit("/admin/star-systems/system-1", {
+    cy.visit("/#/admin/star-systems/system-1", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },

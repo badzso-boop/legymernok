@@ -25,7 +25,7 @@ describe("Admin User List (Mocked Backend)", () => {
 
     // 2. Látogatás úgy, hogy ELŐTTE beállítjuk a tokent
     // Az onBeforeLoad garantálja, hogy a token ott legyen, mielőtt a React elindul
-    cy.visit("/admin/users", {
+    cy.visit("/#/admin/users", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },
@@ -46,7 +46,7 @@ describe("Admin User List (Mocked Backend)", () => {
     // 1. Token generálása CSAK CADET joggal
     const token = createMockJwt(["ROLE_CADET"]);
 
-    cy.visit("/admin/users", {
+    cy.visit("/#/admin/users", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },
