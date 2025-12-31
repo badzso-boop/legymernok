@@ -53,6 +53,6 @@ describe("Admin User List (Mocked Backend)", () => {
     });
 
     // 2. Ellenőrzés: Visszadobott a főoldalra?
-    cy.url().should("eq", Cypress.config().baseUrl + "/");
+    cy.url().should("eq", Cypress.config().baseUrl + "/#/");
   });
 });
