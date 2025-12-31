@@ -44,7 +44,7 @@ const StarSystemList: React.FC = () => {
       setStarSystems(response.data);
       setError(null);
     } catch (err: any) {
-      setError("Nem sikerült betölteni a csillagrendszereket.");
+      setError(t("errorFetchStarSystems"));
       console.error(err);
     } finally {
       setLoading(false);
@@ -56,11 +56,7 @@ const StarSystemList: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: string, name: string) => {
-    if (
-      window.confirm(
-        `Biztosan törölni szeretnéd a(z) "${name}" csillagrendszert?`
-      )
-    ) {
+    if (window.confirm(t("deleteStarSystemConfirm", { name: name }))) {
       try {
         const token = localStorage.getItem("token");
         await axios.delete(`${API_URL}/star-systems/${id}`, {
@@ -68,7 +64,7 @@ const StarSystemList: React.FC = () => {
         });
         setStarSystems(starSystems.filter((system) => system.id !== id));
       } catch (err) {
-        alert("Hiba történt a törlés során.");
+        alert(t("errorDelete"));
       }
     }
   };
@@ -102,14 +98,14 @@ const StarSystemList: React.FC = () => {
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-          Csillagrendszerek
+          {t("starSystems")}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => navigate("/admin/star-systems/new")}
         >
-          Új rendszer
+          {t("newStarSystem")}
         </Button>
       </Box>
 
@@ -123,17 +119,17 @@ const StarSystemList: React.FC = () => {
         <Table sx={{ minWidth: 650 }}>
           <TableHead sx={{ bgcolor: "rgba(255,255,255,0.05)" }}>
             <TableRow>
-              <TableCell>Név</TableCell>
-              <TableCell>Leírás</TableCell>
+              <TableCell>{t("name")}</TableCell>
+              <TableCell>{t("description")}</TableCell>
               {/*
                 // IDE JÖNNE A KÜLDETÉSEK SZÁMA OSZLOP, HA A BACKEND TÁMOGATNÁ
                 // Ehhez a `GET /api/star-systems` végpontnak vissza kellene adnia
                 // egy `missionCount` mezőt minden csillagrendszernél.
                 <TableCell align="center">Küldetések</TableCell>
               */}
-              <TableCell>Létrehozva</TableCell>
-              <TableCell>Módosítva</TableCell>
-              <TableCell align="right">Műveletek</TableCell>
+              <TableCell>{t("createdAt")}</TableCell>
+              <TableCell>{t("updatedAt")}</TableCell>
+              <TableCell align="right">{t("actions")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -153,7 +149,7 @@ const StarSystemList: React.FC = () => {
                   <Box
                     sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}
                   >
-                    <Tooltip title="Szerkesztés">
+                    <Tooltip title={t("edit")}>
                       <IconButton
                         color="primary"
                         onClick={() =>
@@ -163,7 +159,7 @@ const StarSystemList: React.FC = () => {
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Törlés">
+                    <Tooltip title={t("delete")}>
                       <IconButton
                         color="error"
                         onClick={() => handleDelete(system.id, system.name)}

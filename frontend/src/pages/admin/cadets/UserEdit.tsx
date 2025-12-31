@@ -74,7 +74,7 @@ const UserEdit: React.FC = () => {
         role: "ROLE_CADET",
       });
     }
-  }, [id, isNew, t]);
+  }, [id, isNew]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>

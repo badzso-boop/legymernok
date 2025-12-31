@@ -53,7 +53,7 @@ const StarSystemEdit: React.FC = () => {
           );
           setStarSystem(response.data);
         } catch (err) {
-          setError("Nem sikerült betölteni a csillagrendszer adatait.");
+          setError(t("errorFetchStarSystemDetails"));
         } finally {
           setLoading(false);
         }
@@ -88,7 +88,7 @@ const StarSystemEdit: React.FC = () => {
       }
       navigate("/admin/star-systems");
     } catch (err) {
-      setError("Hiba történt mentés közben.");
+      setError(t("errorSave"));
     } finally {
       setSaving(false);
     }
@@ -104,7 +104,7 @@ const StarSystemEdit: React.FC = () => {
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 4, fontWeight: "bold" }}>
-        {isNew ? "Új csillagrendszer" : "Csillagrendszer szerkesztése"}
+        {isNew ? t("newStarSystemTitle") : t("editStarSystemTitle")}
       </Typography>
 
       {error && (
@@ -118,7 +118,7 @@ const StarSystemEdit: React.FC = () => {
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
-              label="Név"
+              label={t("name")}
               name="name"
               value={starSystem.name || ""}
               onChange={handleChange}
@@ -128,7 +128,7 @@ const StarSystemEdit: React.FC = () => {
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
-              label="Leírás"
+              label={t("description")}
               name="description"
               value={starSystem.description || ""}
               onChange={handleChange}
@@ -140,7 +140,7 @@ const StarSystemEdit: React.FC = () => {
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
-              label="Ikon URL"
+              label={t("iconUrl")}
               name="iconUrl"
               value={starSystem.iconUrl || ""}
               onChange={handleChange}
@@ -154,14 +154,14 @@ const StarSystemEdit: React.FC = () => {
                 color="secondary"
                 onClick={() => navigate("/admin/star-systems")}
               >
-                Mégse
+                {t("cancel")}
               </Button>
               <Button
                 variant="contained"
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? <CircularProgress size={24} /> : "Mentés"}
+                {saving ? <CircularProgress size={24} /> : t("save")}
               </Button>
             </Box>
           </Grid>
@@ -171,7 +171,7 @@ const StarSystemEdit: React.FC = () => {
       {!isNew && starSystem.missions && (
         <Box mt={5}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: "bold" }}>
-            Küldetések ebben a rendszerben
+            {t("missionsInSystem")}
           </Typography>
           <Paper>
             <List>
@@ -181,7 +181,7 @@ const StarSystemEdit: React.FC = () => {
                     <ListItem>
                       <ListItemText
                         primary={mission.name}
-                        secondary={`Nehézség: ${mission.difficulty}`}
+                        secondary={`${t("difficulty")}: ${mission.difficulty}`}
                       />
                     </ListItem>
                     {index < starSystem.missions!.length - 1 && <Divider />}
@@ -189,7 +189,7 @@ const StarSystemEdit: React.FC = () => {
                 ))
               ) : (
                 <ListItem>
-                  <ListItemText primary="Nincsenek küldetések ebben a rendszerben." />
+                  <ListItemText primary={t("noMissionsInSystem")} />
                 </ListItem>
               )}
             </List>
