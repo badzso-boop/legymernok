@@ -58,7 +58,7 @@ class CadetServiceTest {
     void setUp() {
         cadetId = UUID.randomUUID();
         defaultCadetRole = Role.builder().id(UUID.randomUUID()).name("ROLE_CADET").build();
-        Set<Role> roles = new HashSet<>();
+        Set<Role> roles = spy(new HashSet<>());
         roles.add(defaultCadetRole);
 
         testCadet = spy(Cadet.builder() // 'spy' használata a setter hívások ellenőrzéséhez
@@ -81,6 +81,7 @@ class CadetServiceTest {
         request.setUsername("luke");
         request.setEmail("luke@rebel.com");
         request.setPassword("force");
+        request.setRole("ROLE_CADET");
 
         Role cadetRole = Role.builder().name("ROLE_CADET").build();
         when(roleRepository.findByName("ROLE_CADET")).thenReturn(Optional.of(cadetRole));
