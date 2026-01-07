@@ -1,11 +1,15 @@
 # LegyMernok.hu Project Context
 
 ## Project Overview
-**LegyMernok.hu** is a gamified educational platform designed to teach engineering skills (software development, electronics) through a space-themed narrative. The system manages student code submissions and task templates using a self-hosted Gitea instance.
+**LegyMernok.hu** is a gamified educational platform designed to teach engineering skills (software development, electronics) through a space-themed narrative. 
+**NEW DIRECTION (2026):** The project is pivoting to a **Mobile-First PWA (Progressive Web App)** approach.
+- **Core Loop:** Users control a 2D robot via a "Command Deck" (no typing needed) to solve logic puzzles.
+- **Social:** Squad-based gameplay (co-op missions).
+- **Under the Hood:** The frontend generates commands, the backend translates them to actual code (Java/Python) and commits them to a hidden **Gitea** repository to maintain a real engineering portfolio for the student.
 
 ### key Technologies
 - **Backend:** Java 17, Spring Boot 3.x (Web, Data JPA, Security), Maven.
-- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS, Material UI.
+- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS, Material UI (Transitioning to PWA).
 - **Database:** PostgreSQL 16.
 - **Version Control System (Internal):** Gitea (Self-hosted).
 - **Infrastructure:** Docker & Docker Compose.
