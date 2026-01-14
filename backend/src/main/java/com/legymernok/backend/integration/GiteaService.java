@@ -25,11 +25,21 @@ public class GiteaService {
         this.adminUsername = adminUsername;
         this.adminToken = adminToken;
 
+        String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
+
+        // DEBUG LOG - Ezt később kivesszük
+        System.out.println("--- GITEA SERVICE INIT ---");
+        System.out.println("URL: " + apiUrl);
+        System.out.println("User: " + adminUsername);
+        System.out.println("Token (first 5 chars): " + (adminToken != null && adminToken.length() > 5 ? adminToken.substring(0, 5) : "null"));
+        // ------------------------------------
+
         // Basic Auth beállítása az adminnak
         this.restClient = RestClient.builder()
                 .baseUrl(apiUrl)
-                .defaultHeader("Authorization", "token " + adminToken)
+                //.defaultHeader("Authorization", "token " + adminToken)
                 //.defaultHeaders(headers -> headers.setBasicAuth(adminUsername, adminPassword))
+                .defaultHeader("Authorization", basicAuth)
                 .build();
     }
 

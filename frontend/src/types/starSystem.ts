@@ -10,6 +10,7 @@ export interface MissionResponse {
   id: string;
   name: string;
   descriptionMarkdown: string;
+  orderInSystem: number;
   difficulty: string;
 }
 

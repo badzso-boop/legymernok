@@ -12,6 +12,7 @@ import StarSystemList from "../pages/admin/star-system/StarSystemList";
 import { useAuth } from "../context/AuthContext";
 import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
+import MissionEdit from "../pages/admin/missions/MissionEdit";
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -116,6 +117,14 @@ export const router = createHashRouter([
       {
         path: "missions",
         element: <div>Feladatok fejlesztés alatt...</div>,
+      },
+      {
+        path: "missions/new",
+        element: <MissionEdit />,
+      },
+      {
+        path: "missions/:id",
+        element: <MissionEdit />,
       },
       {
         path: "roles",
