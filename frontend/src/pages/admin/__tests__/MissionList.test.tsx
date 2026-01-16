@@ -74,9 +74,28 @@ describe("MissionList Component", () => {
     // Mock window.confirm
     vi.spyOn(window, "confirm").mockImplementation(() => true);
 
+    const mockMissions = [
+      {
+        id: "1",
+        name: "Alpha Mission",
+        starSystemId: "s1",
+        orderInSystem: 1,
+        difficulty: "EASY",
+        missionType: "CODING",
+      },
+    ];
+    const mockSystems = [{ id: "s1", name: "Solar System" }];
+
+    // Mockoljuk a GET hívásokat szekvenciálisan
+    mockedAxios.get
+      // 1. betöltés: Van adat
+      .mockResolvedValueOnce({ data: mockMissions }) // missions
+      .mockResolvedValueOnce({ data: mockSystems }) // systems
+      // 2. betöltés (törlés után): Üres
+      .mockResolvedValueOnce({ data: [] }) // missions (üres)
+      .mockResolvedValueOnce({ data: mockSystems }); // systems
+
     mockedAxios.delete.mockResolvedValue({});
-    // Az újra lekérést is mockolni kell
-    mockedAxios.get.mockResolvedValue({ data: [] });
 
     render(
       <MemoryRouter>
