@@ -42,6 +42,12 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteMission(@PathVariable UUID id) {
+        missionService.deleteMission(id);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
     @PostMapping("/{id}/start")
     public ResponseEntity<String> startMission(@PathVariable UUID id) {
         // A bejelentkezett user nevét a SecurityContext-ből szedjük ki

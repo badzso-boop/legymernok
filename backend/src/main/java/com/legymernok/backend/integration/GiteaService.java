@@ -182,6 +182,13 @@ public class GiteaService {
     }
 
     /**
+     * Töröl egy repót, ami az admin felhasználóhoz tartozik.
+     */
+    public void deleteAdminRepository(String repoName) {
+        deleteRepository(this.adminUsername, repoName);
+    }
+
+    /**
      * Lekérdez egy adott repository-t név alapján az admin felhasználó alatt.
      *
      * @param repoName A lekérdezendő repository neve.

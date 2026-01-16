@@ -47,6 +47,7 @@ public class MissionService {
 
         if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(),request.getOrderInSystem())) {
             missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+            missionRepository.flush();
         }
 
         // 1. Repo nevének generálása (egyedinek kell lennie Giteán belül)
@@ -171,10 +172,51 @@ public class MissionService {
         return missionRepository.findMaxOrderInSystem(starSystemId) + 1;
     }
 
+    @Transactional
+    public void deleteMission(UUID id) {
+        Mission mission = missionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Mission not found with ID: " + id));
+
+        UUID starSystemId = mission.getStarSystem().getId();
+        Integer deletedOrder = mission.getOrderInSystem();
+        String repoUrl = mission.getTemplateRepositoryUrl();
+
+        // 1. Gitea Repo törlése (Best Effort - ha nem sikerül, nem állítjuk meg a folyamatot, csak logolunk)
+        try {
+            // URL-ből név kinyerése: http://gitea:3000/legymernok_admin/repo-name.git -> repo-name
+            // Feltételezzük, hogy a saját adminunk a tulajdonos
+            String repoName = extractRepoNameFromUrl(repoUrl);
+            if (repoName != null) {
+                giteaService.deleteAdminRepository(repoName);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to delete Gitea repo: " + e.getMessage());
+            // Nem dobunk hibát, hogy a DB törlés attól még végbemenjen
+        }
+
+        // 2. DB törlés
+        missionRepository.delete(mission);
+
+        // 3. Smart Delete: Sorszámok rendezése (hézag megszüntetése)
+        missionRepository.shiftOrdersDown(starSystemId, deletedOrder);
+        missionRepository.flush();
+    }
+
     private boolean isAdmin() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return false;
         return auth.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
+
+    private String extractRepoNameFromUrl(String url) {
+        if (url == null || url.isEmpty()) return null;
+        // Utolsó "/" utáni rész
+        String lastPart = url.substring(url.lastIndexOf('/') + 1);
+        // ".git" levágása
+        if (lastPart.endsWith(".git")) {
+            return lastPart.substring(0, lastPart.length() - 4);
+        }
+        return lastPart;
     }
 
     private MissionResponse mapToResponse(Mission mission) {

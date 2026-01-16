@@ -21,9 +21,13 @@ public interface MissionRepository extends JpaRepository<Mission, UUID> {
 
     boolean existsByStarSystemIdAndOrderInSystem(UUID starSystemId, Integer orderInSystem);
 
-    @Modifying
-    @Query("UPDATE Mission m SET m.orderInSystem = m.orderInSystem + 1 WHERE m.starSystem.id = :starSystemId AND m.orderInSystem >= :startOrder")
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Mission m SET m.orderInSystem = m.orderInSystem + 1 WHERE m.starSystem = (SELECT s FROM StarSystem s WHERE s.id = :starSystemId) AND m.orderInSystem >= :startOrder")
     void shiftOrdersUp(@Param("starSystemId") UUID starSystemId, @Param("startOrder") Integer startOrder);
+
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Mission m SET m.orderInSystem = m.orderInSystem - 1 WHERE m.starSystem.id = :starSystemId AND m.orderInSystem > :deletedOrder")
+    void shiftOrdersDown(@Param("starSystemId") UUID starSystemId, @Param("deletedOrder") Integer deletedOrder);
 
 
 }
