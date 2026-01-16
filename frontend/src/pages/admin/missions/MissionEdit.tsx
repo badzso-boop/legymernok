@@ -23,13 +23,16 @@ import {
   RocketLaunch as MissionIcon,
 } from "@mui/icons-material";
 import axios from "axios";
+import type { StarSystemResponse } from "../../../types/starSystem";
+import { useTranslation } from "react-i18next";
 
-const API_URL = "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const DIFFICULTIES = ["EASY", "MEDIUM", "HARD", "EXPERT"];
 const MISSION_TYPES = ["CODING", "CIRCUIT_SIMULATION"];
 
 const MissionEdit: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -39,6 +42,7 @@ const MissionEdit: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
   const starSystemIdFromQuery = queryParams.get("starSystemId");
 
+  const [starSystems, setStarSystems] = useState<StarSystemResponse[]>([]);
   const [mission, setMission] = useState({
     name: "",
     descriptionMarkdown: "",
@@ -48,29 +52,76 @@ const MissionEdit: React.FC = () => {
     starSystemId: starSystemIdFromQuery || "",
   });
 
+  const [minOrder, setMinOrder] = useState(1);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isNew) {
-      const fetchMission = async () => {
-        try {
-          setLoading(true);
-          const token = localStorage.getItem("token");
+    const fetchContext = async () => {
+      const token = localStorage.getItem("token");
+
+      try {
+        setLoading(true);
+
+        const systemsRes = await axios.get<StarSystemResponse[]>(
+          `${API_URL}/star-systems`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        setStarSystems(systemsRes.data);
+        if (!isNew) {
+          // 1. Szerkesztés: A küldetést kérjük le változatlanul
           const response = await axios.get(`${API_URL}/missions/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           setMission(response.data);
-        } catch (err) {
-          setError("Nem sikerült betölteni a küldetés adatait.");
-        } finally {
-          setLoading(false);
+        } else if (starSystemIdFromQuery) {
+          // 2. Új Létrehozás: Csak a KÖVETKEZŐ sorszámot kérjük le
+          const response = await axios.get<number>(
+            `${API_URL}/missions/next-order`,
+            {
+              params: { starSystemId: starSystemIdFromQuery },
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          setMinOrder(response.data);
+          setMission((prev) => ({
+            ...prev,
+            orderInSystem: response.data, // A backend már a (max + 1)-et adja
+            starSystemId: starSystemIdFromQuery,
+          }));
         }
-      };
-      fetchMission();
+      } catch (err) {
+        setError(t("errorFetchMissionDetails"));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContext();
+  }, [id, isNew, starSystemIdFromQuery]);
+
+  const handleSystemChange = async (e: SelectChangeEvent<string>) => {
+    const newSystemId = e.target.value;
+    const token = localStorage.getItem("token");
+
+    // Beállítjuk az ID-t
+    setMission((prev) => ({ ...prev, starSystemId: newSystemId }));
+
+    // Lekérjük az új rendszerhez tartozó következő sorszámot
+    try {
+      const res = await axios.get<number>(`${API_URL}/missions/next-order`, {
+        params: { starSystemId: newSystemId },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMission((prev) => ({ ...prev, orderInSystem: res.data }));
+    } catch (err) {
+      console.error(t("errorOrderTaken", { order: mission.orderInSystem }));
     }
-  }, [id, isNew]);
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -108,7 +159,7 @@ const MissionEdit: React.FC = () => {
       // Visszanavigálunk a csillagrendszer szerkesztőhöz
       navigate(`/admin/star-systems/${mission.starSystemId}`);
     } catch (err: any) {
-      setError(err.response?.data?.message || "Hiba történt mentés közben.");
+      setError(err.response?.data?.message || t("errorSaveMission"));
     } finally {
       setSaving(false);
     }
@@ -128,7 +179,7 @@ const MissionEdit: React.FC = () => {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-          {isNew ? "Új küldetés létrehozása" : "Küldetés szerkesztése"}
+          {isNew ? t("newMission") : t("editMission")}
         </Typography>
       </Box>
 
@@ -156,8 +207,28 @@ const MissionEdit: React.FC = () => {
             >
               <MissionIcon sx={{ fontSize: 60, color: "white" }} />
             </Box>
+            <Grid size={{ xs: 12 }}>
+              <FormControl
+                fullWidth
+                disabled={!isNew && !starSystemIdFromQuery}
+              >
+                <InputLabel>{t("starSystem")}</InputLabel>
+                <Select
+                  name="starSystemId"
+                  value={mission.starSystemId}
+                  label="Csillagrendszer"
+                  onChange={handleSystemChange}
+                >
+                  {starSystems.map((sys) => (
+                    <MenuItem key={sys.id} value={sys.id}>
+                      {sys.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
             <Typography variant="h6">
-              {mission.name || "Névtelen küldetés"}
+              {mission.name || t("unnamedMission")}
             </Typography>
             <Typography color="text.secondary">
               ID: {mission.starSystemId}
@@ -166,7 +237,7 @@ const MissionEdit: React.FC = () => {
 
           <Grid size={{ xs: 12, md: 8 }}>
             <Typography variant="h6" gutterBottom>
-              Alapadatok
+              {t("basicInfo")}
             </Typography>
             <Divider sx={{ mb: 3 }} />
 
@@ -174,7 +245,7 @@ const MissionEdit: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <TextField
                   name="name"
-                  label="Küldetés neve"
+                  label={t("missionName")}
                   fullWidth
                   value={mission.name}
                   onChange={handleChange}
@@ -185,19 +256,19 @@ const MissionEdit: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <TextField
                   name="descriptionMarkdown"
-                  label="Leírás (Markdown)"
+                  label={t("descriptionMarkdown")}
                   fullWidth
                   multiline
                   rows={6}
                   value={mission.descriptionMarkdown}
                   onChange={handleChange}
-                  placeholder="Itt add meg a küldetés részletes leírását..."
+                  placeholder={t("missionDescriptionPlaceholder")}
                 />
               </Grid>
 
               <Grid size={{ xs: 12, md: 4 }}>
                 <FormControl fullWidth>
-                  <InputLabel>Nehézség</InputLabel>
+                  <InputLabel>{t("difficulty")}</InputLabel>
                   <Select
                     name="difficulty"
                     value={mission.difficulty}
@@ -215,7 +286,7 @@ const MissionEdit: React.FC = () => {
 
               <Grid size={{ xs: 12, md: 4 }}>
                 <FormControl fullWidth>
-                  <InputLabel>Típus</InputLabel>
+                  <InputLabel>{t("missionType")}</InputLabel>
                   <Select
                     name="missionType"
                     value={mission.missionType}
@@ -234,10 +305,11 @@ const MissionEdit: React.FC = () => {
               <Grid size={{ xs: 12, md: 4 }}>
                 <TextField
                   name="orderInSystem"
-                  label="Sorrend a rendszerben"
+                  label={t("orderInSystem")}
                   type="number"
                   fullWidth
                   value={mission.orderInSystem}
+                  inputProps={{ min: 1 }}
                   onChange={handleChange}
                 />
               </Grid>
@@ -257,7 +329,7 @@ const MissionEdit: React.FC = () => {
                   navigate(`/admin/star-systems/${mission.starSystemId}`)
                 }
               >
-                Mégse
+                {t("cancel")}
               </Button>
               <Button
                 variant="contained"
@@ -266,7 +338,13 @@ const MissionEdit: React.FC = () => {
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? <CircularProgress size={24} /> : "Mentés"}
+                {saving ? (
+                  <CircularProgress size={24} />
+                ) : isNew ? (
+                  t("create")
+                ) : (
+                  t("save")
+                )}
               </Button>
             </Box>
           </Grid>

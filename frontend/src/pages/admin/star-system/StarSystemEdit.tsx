@@ -169,32 +169,28 @@ const StarSystemEdit: React.FC = () => {
         </Grid>
       </Paper>
 
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 2,
-        }}
-      >
-        <Typography variant="h5" sx={{ fontWeight: "bold" }}>
-          {t("missionsInSystem")}
-        </Typography>
-        <Button
-          variant="contained"
-          color="secondary"
-          startIcon={<AddIcon />}
-          onClick={() => navigate(`/admin/missions/new?starSystemId=${id}`)}
-        >
-          Új küldetés
-        </Button>
-      </Box>
-
       {!isNew && starSystem.missions && (
         <Box mt={5}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: "bold" }}>
-            {t("missionsInSystem")}
-          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: "bold" }}>
+              {t("missionsInSystem")}
+            </Typography>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={() => navigate(`/admin/missions/new?starSystemId=${id}`)}
+            >
+              Új küldetés
+            </Button>
+          </Box>
           <Paper>
             <List>
               {starSystem.missions.length > 0 ? (

@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
 import MissionEdit from "../pages/admin/missions/MissionEdit";
+import MissionList from "../pages/admin/missions/MissionList";
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -116,7 +117,7 @@ export const router = createHashRouter([
       },
       {
         path: "missions",
-        element: <div>Feladatok fejlesztés alatt...</div>,
+        element: <MissionList />,
       },
       {
         path: "missions/new",
