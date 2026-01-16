@@ -41,6 +41,14 @@ public class MissionService {
         StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
                 .orElseThrow(() -> new RuntimeException("StarSystem not found with ID: " + request.getStarSystemId()));
 
+        if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(),request.getName())) {
+            throw new RuntimeException("Mission with this name already exists in the Star System.");
+        }
+
+        if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(),request.getOrderInSystem())) {
+            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+        }
+
         // 1. Repo nevének generálása (egyedinek kell lennie Giteán belül)
         // Pl. "mission-template-[starSystemName]-[missionName]" (kicsit megtisztítva)
         String safeMissionName = request.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
@@ -58,8 +66,6 @@ public class MissionService {
                 giteaService.createFile(repoName, fileName, content);
             }
         }
-
-        // TODO: További validáció, pl. egy StarSystemen belül unique legyen a név, vagy a sorrend
 
         Mission mission = Mission.builder()
                 .starSystem(starSystem)
