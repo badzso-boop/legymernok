@@ -52,7 +52,6 @@ const MissionEdit: React.FC = () => {
     starSystemId: starSystemIdFromQuery || "",
   });
 
-  const [minOrder, setMinOrder] = useState(1);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +86,6 @@ const MissionEdit: React.FC = () => {
             }
           );
 
-          setMinOrder(response.data);
           setMission((prev) => ({
             ...prev,
             orderInSystem: response.data, // A backend már a (max + 1)-et adja

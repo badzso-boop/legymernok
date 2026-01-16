@@ -154,6 +154,7 @@ const MissionList: React.FC = () => {
             color="error"
             onClick={() => handleDelete(params.row.id)}
             style={{ minWidth: "30px", padding: "5px" }}
+            data-testid={`delete-mission-${params.row.id}`}
           >
             <DeleteIcon fontSize="small" />
           </Button>
