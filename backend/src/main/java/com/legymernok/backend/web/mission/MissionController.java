@@ -37,6 +37,11 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getAllMissions());
     }
 
+    @GetMapping("/next-order")
+    public ResponseEntity<Integer> getNextOrder(@RequestParam UUID starSystemId) {
+        return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
+    }
+
     @PostMapping("/{id}/start")
     public ResponseEntity<String> startMission(@PathVariable UUID id) {
         // A bejelentkezett user nevét a SecurityContext-ből szedjük ki

@@ -161,6 +161,10 @@ public class MissionService {
                 .collect(Collectors.toList());
     }
 
+    public Integer getNextOrderForStarSystem(UUID starSystemId) {
+        return missionRepository.findMaxOrderInSystem(starSystemId) + 1;
+    }
+
     private boolean isAdmin() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return false;

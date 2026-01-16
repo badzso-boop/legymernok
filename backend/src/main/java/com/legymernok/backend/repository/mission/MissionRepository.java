@@ -2,6 +2,8 @@ package com.legymernok.backend.repository.mission;
 
 import com.legymernok.backend.model.mission.Mission;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -10,4 +12,7 @@ import java.util.UUID;
 @Repository
 public interface MissionRepository extends JpaRepository<Mission, UUID> {
     List<Mission> findAllByStarSystemIdOrderByOrderInSystemAsc(UUID starSystemId);
+    
+    @Query("SELECT COALESCE(MAX(m.orderInSystem), 0) FROM Mission m WHERE m.starSystem.id = :starSystemId")
+    Integer findMaxOrderInSystem(@Param("starSystemId") UUID starSystemId);
 }
