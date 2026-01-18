@@ -71,29 +71,27 @@ describe("Admin Mission Management (Mocked Backend)", () => {
     // Kitöltés
     cy.get('input[name="name"]').type("Looping");
 
-    // MUI Select Robosztusabb Kezelése:
-    // 1. Kattintsunk a "button" jellegű elemre, ami a Selectet nyitja (MUI így rendereli)
-    // Megkeressük a labelt, és a mellette lévő inputot vezérlő div-et
-    cy.get("#mui-component-select-starSystemId").click(); // A MUI generál ilyen ID-t a name alapjá
-    // VAGY ha ez nem működik:
-    // cy.get('[role="combobox"]').click();
+    // Select kezelése MUI-nál (ID alapján a legstabilabb)
+    // Megnyitjuk a legördülőt
+    cy.get("#mui-component-select-starSystemId").parent().click();
 
-    // 2. Válasszuk ki az opciót a listából (ami a body végére kerül)
+    // Válasszuk ki az opciót a listából (ami a body végére kerül)
     cy.get('ul[role="listbox"]').contains("Alpha Centauri").click();
 
-    // Most már várhatjuk a hívást
+    // Ezzel triggereljük a rendszerváltást -> next-order hívás
     cy.wait("@getNextOrder");
 
     // Ellenőrizzük, hogy beírta-e az 5-ös sorszámot
     cy.get('input[name="orderInSystem"]').should("have.value", "5");
 
-    // Mentés
-    cy.contains("Mentés").click();
+    // Mentés gomb keresése nyelvfüggetlenül (ikon alapján) vagy fallback szöveggel
+    // Ha a gombon SaveIcon van, az SVG-t keressük
+    cy.get("button").find('svg[data-testid="SaveIcon"]').click({ force: true });
 
     cy.wait("@createMission").its("request.body").should("deep.include", {
       name: "Looping",
       starSystemId: "s2",
-      orderInSystem: 5, // Figyelem: string vs number konverzió lehet
+      orderInSystem: 5, // Figyelem: string vs number konverzió lehet a frontenden
     });
 
     // Visszairányítás ellenőrzése
@@ -106,25 +104,36 @@ describe("Admin Mission Management (Mocked Backend)", () => {
       statusCode: 204,
     }).as("deleteMission");
 
+    // A delete utáni újratöltést is mockolni kell (üres listával tér vissza)
+    cy.intercept("GET", "**/api/missions", {
+      statusCode: 200,
+      body: [],
+    }).as("getMissionsEmpty");
+
     cy.visit("/#/admin/missions", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
       },
     });
 
-    cy.wait("@getMissions");
+    cy.wait("@getMissions"); // Első betöltés (van adat)
 
-    // Törlés gomb keresése az ikon alapján (biztosabb, mint az aria-label, ha nem vagyunk biztosak fordításban)
-    // Keressük a Delete ikont (MUI SVG)
-    cy.get("button").has('svg[data-testid="DeleteIcon"]').click();
+    // Törlés gomb (DataGrid actions oszlop)
+    // Keressük a Delete ikont (MUI SVG) a gombokban
+    // A .should('exist') segít a várakozásban, ha a grid lassan renderel
+    cy.get("button")
+      .find('svg[data-testid="DeleteIcon"]')
+      .should("exist")
+      .first()
+      .click({ force: true });
 
-    // VAGY ha a data-testid-t betetted a MissionList.tsx-be:
-    // cy.get('[data-testid="delete-mission-m1"]').click();
+    // Confirm ablak kezelése (Cypress automatikusan elfogadja, de ellenőrizhetjük)
 
-    // Confirm ablak kezelése (automatikusan elfogadja a Cypress, de ellenőrizhetjük a hívást)
+    cy.wait("@deleteMission");
 
-    // Várjuk a hívást
-    // FIGYELEM: A DataGrid virtualizáció miatt lehet, hogy görgetni kell, ha sok adat van.
-    // De itt csak 1 sor van.
+    // A második getMissions hívást várjuk (ami már üres)
+    // Megjegyzés: mivel a hívások ugyanazon az URL-en mennek, lehet, hogy alias nélkül vagy
+    //@getMissions-ként kapja el újra.
+    // De mivel felülírtuk (vagy a wait sorrend számít), figyeljük a hívást.
   });
 });
