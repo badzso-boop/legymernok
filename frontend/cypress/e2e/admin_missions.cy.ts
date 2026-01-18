@@ -71,11 +71,17 @@ describe("Admin Mission Management (Mocked Backend)", () => {
     // Kitöltés
     cy.get('input[name="name"]').type("Looping");
 
-    // Select kezelése MUI-nál trükkös (hidden input vagy click)
-    // Megkeressük a "Csillagrendszer" labelt, és utána a comboboxot
-    cy.contains("Csillagrendszer").parent().click();
-    cy.contains("Alpha Centauri").click();
-    // Ezzel triggereljük a rendszerváltást -> next-order hívás
+    // MUI Select Robosztusabb Kezelése:
+    // 1. Kattintsunk a "button" jellegű elemre, ami a Selectet nyitja (MUI így rendereli)
+    // Megkeressük a labelt, és a mellette lévő inputot vezérlő div-et
+    cy.get("#mui-component-select-starSystemId").click(); // A MUI generál ilyen ID-t a name alapjá
+    // VAGY ha ez nem működik:
+    // cy.get('[role="combobox"]').click();
+
+    // 2. Válasszuk ki az opciót a listából (ami a body végére kerül)
+    cy.get('ul[role="listbox"]').contains("Alpha Centauri").click();
+
+    // Most már várhatjuk a hívást
     cy.wait("@getNextOrder");
 
     // Ellenőrizzük, hogy beírta-e az 5-ös sorszámot
@@ -106,11 +112,14 @@ describe("Admin Mission Management (Mocked Backend)", () => {
       },
     });
 
-    // Törlés gomb (DataGrid actions oszlop)
-    // A DataGrid cellái között keressük a gombot.
-    // A teszthez érdemes lenne data-testid-t adni a gomboknak, de most próbáljuk ikon alapján.
-    cy.get('button[aria-label="Törlés"]').first().click(); // Ha van aria-label, vagy:
-    // cy.get('.MuiDataGrid-cell').find('button').last().click();
+    cy.wait("@getMissions");
+
+    // Törlés gomb keresése az ikon alapján (biztosabb, mint az aria-label, ha nem vagyunk biztosak fordításban)
+    // Keressük a Delete ikont (MUI SVG)
+    cy.get("button").has('svg[data-testid="DeleteIcon"]').click();
+
+    // VAGY ha a data-testid-t betetted a MissionList.tsx-be:
+    // cy.get('[data-testid="delete-mission-m1"]').click();
 
     // Confirm ablak kezelése (automatikusan elfogadja a Cypress, de ellenőrizhetjük a hívást)
 
