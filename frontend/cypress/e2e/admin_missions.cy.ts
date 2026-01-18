@@ -99,16 +99,20 @@ describe("Admin Mission Management (Mocked Backend)", () => {
   });
 
   it("should delete a mission", () => {
-    // Mock: Delete
-    cy.intercept("DELETE", "**/api/missions/m1", {
-      statusCode: 204,
-    }).as("deleteMission");
-
-    // A delete utáni újratöltést is mockolni kell (üres listával tér vissza)
+    // 1. KEZDETI ÁLLAPOT: VAN ADAT
     cy.intercept("GET", "**/api/missions", {
       statusCode: 200,
-      body: [],
-    }).as("getMissionsEmpty");
+      body: [
+        {
+          id: "m1",
+          name: "First Steps",
+          starSystemId: "s1",
+          orderInSystem: 1,
+          difficulty: "EASY",
+          missionType: "CODING",
+        },
+      ],
+    }).as("getMissionsWithData");
 
     cy.visit("/#/admin/missions", {
       onBeforeLoad(win) {
@@ -116,24 +120,34 @@ describe("Admin Mission Management (Mocked Backend)", () => {
       },
     });
 
-    cy.wait("@getMissions"); // Első betöltés (van adat)
+    cy.wait("@getMissionsWithData");
+    cy.contains("First Steps").should("be.visible");
 
-    // Törlés gomb (DataGrid actions oszlop)
-    // Keressük a Delete ikont (MUI SVG) a gombokban
-    // A .should('exist') segít a várakozásban, ha a grid lassan renderel
+    // 2. MOCKOLJUK A TÖRLÉST
+    cy.intercept("DELETE", "**/api/missions/m1", { statusCode: 204 }).as(
+      "deleteMission"
+    );
+
+    // 3. MOST FELÜLÍRJUK A GET VÁLASZT ÜRESRE!
+    // Mielőtt rákattintanánk, megmondjuk a Cypressnek, hogy a KÖVETKEZŐ hívás már üres legyen.
+    cy.intercept("GET", "**/api/missions", { statusCode: 200, body: [] }).as(
+      "getMissionsEmpty"
+    );
+
+    // Törlés gomb megnyomása (ez fogja kiváltani a DELETE-et, majd az új GET-et)
     cy.get("button")
       .find('svg[data-testid="DeleteIcon"]')
       .should("exist")
       .first()
       .click({ force: true });
 
-    // Confirm ablak kezelése (Cypress automatikusan elfogadja, de ellenőrizhetjük)
-
+    // Várunk a DELETE-re
     cy.wait("@deleteMission");
 
-    // A második getMissions hívást várjuk (ami már üres)
-    // Megjegyzés: mivel a hívások ugyanazon az URL-en mennek, lehet, hogy alias nélkül vagy
-    //@getMissions-ként kapja el újra.
-    // De mivel felülírtuk (vagy a wait sorrend számít), figyeljük a hívást.
+    // Várunk az új GET-re (ami már az üres választ adja)
+    cy.wait("@getMissionsEmpty");
+
+    // Ellenőrzés
+    cy.contains("First Steps").should("not.exist");
   });
 });
