@@ -4,6 +4,24 @@ Ez a dokumentum a LégyMérnök.hu projekt fejlesztésének történetét örök
 
 ---
 
+## 🏛️ Bejegyzés #12: A Galaktikus Szenátus Felépítése (RBAC & Permissions)
+**Stardate:** 2026.01.20
+**Status:** Jogosultsági Rendszer Aktiválva
+
+A mai napon befejeztük a biztonsági protokollok legmagasabb szintjének implementálását. A rendszer most már nem csak egyszerű parancsnokokat és kadétokat ismer, hanem egy teljeskörű, finomhangolt jogosultsági rendszert (Role-Based Access Control). Minden zsilip, minden konzol és minden adatbázis-hozzáférés mostantól szigorúan ellenőrzött Engedélyekhez (Permissions) kötött. Sőt, kifejlesztettünk egy azonnali neurális kapcsolatot (Stateful Auth Check), így ha a Szenátus (Admin) visszavon egy jogot, az a másodperc töredéke alatt érvénybe lép, nem kell megvárni a műszakváltást (Logout).
+
+A Küldetés-tervező modul is intelligensebb lett: a rendszer automatikusan rendezi a sorokat (Smart Insert/Delete), így sosem marad üres hely a küldetések láncolatában.
+
+*   **Technikai részletek:**
+    *   **RBAC Core:** `RoleService`, `RoleController` és DTO-k implementálása.
+    *   **Permission Logic:** `@EnableMethodSecurity` és `@PreAuthorize` annotációk minden végponton.
+    *   **Immediate Auth:** `JwtAuthenticationFilter` átírása DB-alapú ellenőrzésre (`UserDetailsService`), plusz `/api/auth/me` végpont a frontend szinkronizációhoz.
+    *   **Mission Logic:** Smart Insert (eltolás) és Smart Delete (visszahúzás) a `MissionService`-ben.
+    *   **Frontend:** `MissionList` és `MissionEdit` (DataGrid, Form validáció).
+    *   **Testing:** Teljes backend lefedettség (`RoleServiceTest`, `MissionServiceTest`), és javított E2E tesztek (`admin_missions.cy.ts`).
+
+---
+
 ## 🎨 Bejegyzés #11: A Műszerfal Újrafényezése és a Védelmi Rendszerek Kalibrálása (Admin UI & Testing)
 **Stardate:** 2025.12.31
 **Status:** Műveleti Terület Biztosítva
