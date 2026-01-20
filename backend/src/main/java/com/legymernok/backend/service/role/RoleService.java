@@ -1,4 +1,4 @@
-package com.legymernok.backend.service.Role;
+package com.legymernok.backend.service.role;
 
 import com.legymernok.backend.dto.Permission.PermissionResponse;
 import com.legymernok.backend.dto.Roles.CreateRoleRequest;

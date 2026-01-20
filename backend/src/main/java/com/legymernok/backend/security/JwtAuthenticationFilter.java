@@ -11,6 +11,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(
@@ -41,44 +43,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7);
-        username = jwtService.extractUsername(jwt);
+        try {
+            username = jwtService.extractUsername(jwt);
+        } catch (Exception e) {
+            // Ha a token hibás vagy lejárt, nem állítunk be semmit
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            // 1. Kinyerjük a szerepköröket (roles) a tokenből
-            List<String> roles = jwtService.extractClaim(jwt, claims -> claims.get("roles",
-                    List.class));
+            // 1. BETÖLTJÜK A USERT AZ ADATBÁZISBÓL (Így azonnal frissülnek a jogok!)
+            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            // 2. Ha nincsenek role-ok a tokenben, akkor üres listát adunk
-            if (roles == null) {
-                roles = List.of();
-            }
-
-            // 3. Átalakítjuk GrantedAuthority listává
-            var authorities = roles.stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .collect(Collectors.toList());
-
-            // 4. Építünk egy ideiglenes UserDetails objektumot (csak a memóriában)
-            // Itt használjuk a Spring Security beépített 'User' osztályát
-            UserDetails userDetails = User.builder()
-                    .username(username)
-                    .password("") // Jelszó nem kell, mert már autentikálva van a token által
-                    .authorities(authorities)
-                    .build();
-
-            // 5. Validáljuk a tokent (lejárat, aláírás)
-            // Azt is ellenőrizzük, hogy a tokenben lévő user egyezik-e a userDetails-el
+            // 2. VALIDÁLJUK A TOKENT (Lejárat, aláírás)
             if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken = new
-                        UsernamePasswordAuthenticationToken(
+
+                // 3. LÉTREHOZZUK AZ AUTH TOKENT A FRISS JOGOKKAL
+                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
-                        userDetails.getAuthorities()
+                        userDetails.getAuthorities() // Ez a Cadet.getAuthorities() hívja, ami DB-ből jön
                 );
+
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                // 6. Beállítjuk a Security Context-et
+                // 4. BEÁLLÍTJUK A KONTEXTUST
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }

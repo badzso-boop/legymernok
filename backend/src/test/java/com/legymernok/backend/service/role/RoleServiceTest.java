@@ -7,7 +7,6 @@ import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.repository.auth.PermissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
-import com.legymernok.backend.service.Role.RoleService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

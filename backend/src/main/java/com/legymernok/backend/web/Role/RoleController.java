@@ -3,7 +3,7 @@ package com.legymernok.backend.web.Role;
 import com.legymernok.backend.dto.Permission.PermissionResponse;
 import com.legymernok.backend.dto.Roles.CreateRoleRequest;
 import com.legymernok.backend.dto.Roles.RoleResponse;
-import com.legymernok.backend.service.Role.RoleService;
+import com.legymernok.backend.service.role.RoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
