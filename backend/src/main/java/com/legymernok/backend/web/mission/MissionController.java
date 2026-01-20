@@ -6,6 +6,7 @@ import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,16 +21,19 @@ public class MissionController {
     private final MissionService missionService;
 
     @PostMapping
+    @PreAuthorize("hasAuthority('mission:create')")
     public ResponseEntity<MissionResponse> createMission(@RequestBody CreateMissionRequest request) {
         return new ResponseEntity<>(missionService.createMission(request), HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('mission:read')")
     public ResponseEntity<MissionResponse> getMissionById(@PathVariable UUID id) {
         return ResponseEntity.ok(missionService.getMissionById(id));
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('mission:read')")
     public ResponseEntity<List<MissionResponse>> getAllMissions(@RequestParam(required = false) UUID starSystemId) {
         if (starSystemId != null) {
             return ResponseEntity.ok(missionService.getMissionsByStarSystem(starSystemId));
@@ -38,17 +42,20 @@ public class MissionController {
     }
 
     @GetMapping("/next-order")
+    @PreAuthorize("hasAuthority('mission:create')")
     public ResponseEntity<Integer> getNextOrder(@RequestParam UUID starSystemId) {
         return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('mission:delete')")
     public ResponseEntity<Void> deleteMission(@PathVariable UUID id) {
         missionService.deleteMission(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @PostMapping("/{id}/start")
+    @PreAuthorize("hasAuthority('mission:start')")
     public ResponseEntity<String> startMission(@PathVariable UUID id) {
         // A bejelentkezett user nevét a SecurityContext-ből szedjük ki
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
