@@ -106,6 +106,7 @@ const StarSystemList: React.FC = () => {
             color="primary"
             onClick={() => navigate(`/admin/star-systems/${params.row.id}`)}
             style={{ minWidth: "30px", padding: "5px" }}
+            aria-label={t("edit")}
           >
             <EditIcon fontSize="small" />
           </Button>
@@ -114,6 +115,7 @@ const StarSystemList: React.FC = () => {
             color="error"
             onClick={() => handleDelete(params.row.id, params.row.name)}
             style={{ minWidth: "30px", padding: "5px" }}
+            aria-label={t("delete")}
           >
             <DeleteIcon fontSize="small" />
           </Button>
