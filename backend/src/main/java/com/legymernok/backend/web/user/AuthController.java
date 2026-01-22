@@ -1,5 +1,6 @@
 package com.legymernok.backend.web.user;
 
+import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.user.LoginRequest;
 import com.legymernok.backend.dto.user.LoginResponse;
 import com.legymernok.backend.dto.user.RegisterRequest;
@@ -27,4 +28,8 @@ public class AuthController {
         return new ResponseEntity<>(authService.register(request), HttpStatus.CREATED);
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<CadetResponse> getCurrentUser() {
+        return ResponseEntity.ok(authService.getCurrentUser());
+    }
 }

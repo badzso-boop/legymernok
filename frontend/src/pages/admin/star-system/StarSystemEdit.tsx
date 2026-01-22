@@ -14,6 +14,7 @@ import {
   ListItemText,
   Divider,
 } from "@mui/material";
+import { Add as AddIcon } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { StarSystemWithMissionsResponse } from "../../../types/starSystem";
@@ -170,9 +171,26 @@ const StarSystemEdit: React.FC = () => {
 
       {!isNew && starSystem.missions && (
         <Box mt={5}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: "bold" }}>
-            {t("missionsInSystem")}
-          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: "bold" }}>
+              {t("missionsInSystem")}
+            </Typography>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={() => navigate(`/admin/missions/new?starSystemId=${id}`)}
+            >
+              Új küldetés
+            </Button>
+          </Box>
           <Paper>
             <List>
               {starSystem.missions.length > 0 ? (
@@ -183,6 +201,7 @@ const StarSystemEdit: React.FC = () => {
                         primary={mission.name}
                         secondary={`${t("difficulty")}: ${mission.difficulty}`}
                       />
+                      {mission.orderInSystem}
                     </ListItem>
                     {index < starSystem.missions!.length - 1 && <Divider />}
                   </React.Fragment>

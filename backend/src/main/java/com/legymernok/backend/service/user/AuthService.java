@@ -1,5 +1,6 @@
 package com.legymernok.backend.service.user;
 
+import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.user.LoginRequest;
 import com.legymernok.backend.dto.user.LoginResponse;
 import com.legymernok.backend.dto.user.RegisterRequest;
@@ -11,8 +12,10 @@ import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.security.JwtService;
+import com.legymernok.backend.service.cadet.CadetService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.legymernok.backend.exception.BadCredentialsException;
 import com.legymernok.backend.exception.UserNotFoundException;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,6 +93,30 @@ public class AuthService {
                 .username(savedCadet.getUsername())
                 .email(savedCadet.getEmail())
                 .token(token)
+                .build();
+    }
+
+    public CadetResponse getCurrentUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Cadet cadet = cadetRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException("Current user not found"));
+
+        return mapToResponse(cadet);
+    }
+
+    private CadetResponse mapToResponse(Cadet cadet) {
+        return CadetResponse.builder()
+                .id(cadet.getId())
+                .username(cadet.getUsername())
+                .email(cadet.getEmail())
+                .fullName(cadet.getFullName())
+                // A role objektumok neveit szedjük ki (pl. "ROLE_ADMIN")
+                .roles(cadet.getRoles().stream()
+                        .map(Role::getName)
+                        .collect(Collectors.toSet()))
+                .giteaUserId(cadet.getGiteaUserId())
+                .createdAt(cadet.getCreatedAt())
+                .updatedAt(cadet.getUpdatedAt())
                 .build();
     }
 }

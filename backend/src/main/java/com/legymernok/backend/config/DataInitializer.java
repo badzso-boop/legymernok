@@ -22,35 +22,63 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        // 1. Jogok létrehozása (ha még nincsenek)
-        Permission missionRead = createPermissionIfNotFound("mission:read", "Küldetések megtekintés");
+        // Mission jogok
+        Permission missionRead = createPermissionIfNotFound("mission:read", "Küldetések megtekintése");
         Permission missionStart = createPermissionIfNotFound("mission:start", "Küldetés indítása");
         Permission missionCreate = createPermissionIfNotFound("mission:create", "Küldetés létrehozása");
-        Permission userDelete = createPermissionIfNotFound("user:delete", "Felhasználó törlése");
-        Permission userCreate = createPermissionIfNotFound("user:create", "Felhasználó létrehozása");
-        Permission starSystemRead = createPermissionIfNotFound("starsystem:read", "Csillagrendszer megtekintés");
+        Permission missionEdit = createPermissionIfNotFound("mission:edit", "Küldetés szerkesztése");
+        Permission missionDelete = createPermissionIfNotFound("mission:delete", "Küldetés törlése");
+
+        // StarSystem jogok
+        Permission starSystemRead = createPermissionIfNotFound("starsystem:read", "Csillagrendszer megtekintése");
         Permission starSystemCreate = createPermissionIfNotFound("starsystem:create", "Csillagrendszer létrehozása");
+        Permission starSystemEdit = createPermissionIfNotFound("starsystem:edit", "Csillagrendszer szerkesztése");
+        Permission starSystemDelete = createPermissionIfNotFound("starsystem:delete", "Csillagrendszer törlése");
 
-        // 2. Szerepkörök létrehozása és jogok hozzárendelése
+        // User jogok
+        Permission userRead = createPermissionIfNotFound("user:read", "Felhasználók listázása");
+        Permission userCreate = createPermissionIfNotFound("user:create", "Felhasználó létrehozása");
+        Permission userEdit = createPermissionIfNotFound("user:edit", "Felhasználó szerkesztése");
+        Permission userDelete = createPermissionIfNotFound("user:delete", "Felhasználó törlése");
 
-        // CADET: Csak olvasni és indítani tud
+        // Role jogok (RBAC menedzsment)
+        Permission roleRead = createPermissionIfNotFound("role:read", "Szerepkörök megtekintése");
+        Permission roleWrite = createPermissionIfNotFound("role:write", "Szerepkörök kezelése (létrehozás, szerkesztés, törlés)");
+
+        // --- 2. SZEREPKÖRÖK (ROLES) LÉTREHOZÁSA ---
+
+        // ROLE_CADET: Alap jogok (Olvasás, Indítás)
         Set<Permission> cadetPermissions = new HashSet<>();
         cadetPermissions.add(missionRead);
         cadetPermissions.add(missionStart);
+        cadetPermissions.add(starSystemRead);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
 
-        // ADMIN: Mindent tud
+        // ROLE_ADMIN: Minden jog (Full Access)
         Set<Permission> adminPermissions = new HashSet<>();
+        // Mission
         adminPermissions.add(missionRead);
         adminPermissions.add(missionStart);
         adminPermissions.add(missionCreate);
-        adminPermissions.add(userDelete);
-        adminPermissions.add(userCreate);
+        adminPermissions.add(missionEdit);
+        adminPermissions.add(missionDelete);
+        // StarSystem
         adminPermissions.add(starSystemRead);
         adminPermissions.add(starSystemCreate);
+        adminPermissions.add(starSystemEdit);
+        adminPermissions.add(starSystemDelete);
+        // User
+        adminPermissions.add(userRead);
+        adminPermissions.add(userCreate);
+        adminPermissions.add(userEdit);
+        adminPermissions.add(userDelete);
+        // Role
+        adminPermissions.add(roleRead);
+        adminPermissions.add(roleWrite);
+
         createRoleIfNotFound("ROLE_ADMIN", adminPermissions);
 
-        System.out.println("--- Alap jogok és szerepkörök inicializálva ---");
+        System.out.println("--- Jogosultsági rendszer inicializálva (Permissions & Roles) ---");
     }
 
     private Permission createPermissionIfNotFound(String name, String description) {
@@ -62,6 +90,10 @@ public class DataInitializer implements CommandLineRunner {
 
     private Role createRoleIfNotFound(String name, Set<Permission> permissions) {
         return roleRepository.findByName(name)
+                .map(existingRole -> {
+                     existingRole.setPermissions(permissions);
+                     return roleRepository.save(existingRole);
+                })
                 .orElseGet(() -> roleRepository.save(
                         Role.builder().name(name).permissions(permissions).build()
                 ));
