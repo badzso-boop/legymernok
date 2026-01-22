@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Typography, Button, LinearProgress, Alert } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Button,
+  LinearProgress,
+  Alert,
+  Chip,
+  Stack,
+  Tooltip,
+} from "@mui/material";
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import { huHU } from "@mui/x-data-grid/locales";
@@ -11,47 +20,48 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
-import type { StarSystemResponse } from "../../../types/starSystem";
+import type { RoleResponse } from "../../../types/role";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
-const StarSystemList: React.FC = () => {
+const RoleList: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [starSystems, setStarSystems] = useState<StarSystemResponse[]>([]);
+
+  const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStarSystems = async () => {
+  const fetchRoles = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/star-systems`, {
+      const response = await axios.get<RoleResponse[]>(`${API_URL}/roles`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setStarSystems(response.data);
+      setRoles(response.data);
       setError(null);
     } catch (err) {
-      setError(t("errorFetchStarSystems")); // "Nem sikerült betölteni a csillagrendszereket"
+      setError(t("errorFetchRoles"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStarSystems();
+    fetchRoles();
   }, []);
 
-  const handleDelete = async (id: string, name: string) => {
-    if (window.confirm(t("deleteStarSystemConfirm", { name }))) {
+  const handleDelete = async (id: string) => {
+    if (window.confirm(t("deleteRoleConfirm"))) {
       try {
         const token = localStorage.getItem("token");
-        await axios.delete(`${API_URL}/star-systems/${id}`, {
+        await axios.delete(`${API_URL}/roles/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        fetchStarSystems(); // Frissítés
+        fetchRoles(); // Újratöltés
       } catch (err) {
-        alert(t("errorDelete"));
+        alert(t("errorDeleteRole"));
       }
     }
   };
@@ -62,19 +72,8 @@ const StarSystemList: React.FC = () => {
     </Box>
   );
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("hu-HU", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const columns: GridColDef[] = [
-    { field: "name", headerName: t("name"), flex: 1, minWidth: 150 },
+    { field: "name", headerName: t("roleName"), flex: 1, minWidth: 150 },
     {
       field: "description",
       headerName: t("description"),
@@ -82,16 +81,50 @@ const StarSystemList: React.FC = () => {
       minWidth: 200,
     },
     {
-      field: "createdAt",
-      headerName: t("createdAt"),
-      width: 180,
-      valueFormatter: (value: any) => formatDate(value as string),
-    },
-    {
-      field: "updatedAt",
-      headerName: t("updatedAt"),
-      width: 180,
-      valueFormatter: (value: any) => formatDate(value as string),
+      field: "permissions",
+      headerName: t("permissions"),
+      flex: 3,
+      minWidth: 300,
+      renderCell: (params: GridRenderCellParams) => {
+        const perms = params.value as RoleResponse["permissions"];
+        if (!perms || perms.length === 0) return "-";
+
+        const LIMIT = 3; // Mennyit mutassunk?
+        const visiblePerms = perms.slice(0, LIMIT);
+        const remainingCount = perms.length - LIMIT;
+
+        // Tooltip tartalma: az összes jog felsorolva
+        const tooltipText = perms.map((p) => p.name).join(", ");
+
+        return (
+          <Tooltip title={tooltipText} arrow>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{ overflow: "hidden", py: 1 }}
+            >
+              {visiblePerms.map((perm) => (
+                <Chip
+                  key={perm.id}
+                  label={perm.name}
+                  size="small"
+                  variant="outlined"
+                  // Opcionális: Ha hosszú a név, vágjuk le
+                  sx={{ maxWidth: 150 }}
+                />
+              ))}
+              {remainingCount > 0 && (
+                <Chip
+                  label={`+${remainingCount}`}
+                  size="small"
+                  color="primary"
+                  variant="filled"
+                />
+              )}
+            </Stack>
+          </Tooltip>
+        );
+      },
     },
     {
       field: "actions",
@@ -104,7 +137,7 @@ const StarSystemList: React.FC = () => {
           <Button
             size="small"
             color="primary"
-            onClick={() => navigate(`/admin/star-systems/${params.row.id}`)}
+            onClick={() => navigate(`/admin/roles/${params.row.id}`)}
             style={{ minWidth: "30px", padding: "5px" }}
           >
             <EditIcon fontSize="small" />
@@ -112,7 +145,7 @@ const StarSystemList: React.FC = () => {
           <Button
             size="small"
             color="error"
-            onClick={() => handleDelete(params.row.id, params.row.name)}
+            onClick={() => handleDelete(params.row.id)}
             style={{ minWidth: "30px", padding: "5px" }}
           >
             <DeleteIcon fontSize="small" />
@@ -126,14 +159,14 @@ const StarSystemList: React.FC = () => {
     <Box sx={{ height: 650, width: "100%" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-          {t("starSystems")}
+          {t("manageRoles")}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => navigate("/admin/star-systems/new")}
+          onClick={() => navigate("/admin/roles/new")}
         >
-          {t("newStarSystem")}
+          {t("newRole")}
         </Button>
       </Box>
 
@@ -144,7 +177,7 @@ const StarSystemList: React.FC = () => {
       )}
 
       <DataGrid
-        rows={starSystems}
+        rows={roles}
         columns={columns}
         loading={loading}
         slots={{ loadingOverlay: LoadingOverlay, toolbar: GridToolbar }}
@@ -164,4 +197,4 @@ const StarSystemList: React.FC = () => {
   );
 };
 
-export default StarSystemList;
+export default RoleList;

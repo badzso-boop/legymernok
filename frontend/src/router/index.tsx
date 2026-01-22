@@ -14,6 +14,9 @@ import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
 import MissionEdit from "../pages/admin/missions/MissionEdit";
 import MissionList from "../pages/admin/missions/MissionList";
+import RoleList from "../pages/admin/roles/RoleList";
+import PermissionList from "../pages/admin/permissions/PermissionList";
+import RoleEdit from "../pages/admin/roles/RoleEdit";
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -129,11 +132,19 @@ export const router = createHashRouter([
       },
       {
         path: "roles",
-        element: <div>Role-ok fejlesztés alatt...</div>,
+        element: <RoleList />,
+      },
+      {
+        path: "roles/new",
+        element: <RoleEdit />,
+      },
+      {
+        path: "roles/:id",
+        element: <RoleEdit />,
       },
       {
         path: "permissions",
-        element: <div>Permission-ök fejlesztés alatt...</div>,
+        element: <PermissionList />,
       },
     ],
   },

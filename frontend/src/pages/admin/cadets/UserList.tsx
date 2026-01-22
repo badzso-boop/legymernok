@@ -3,42 +3,37 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Avatar,
-  IconButton,
-  Chip,
-  Tooltip,
-  CircularProgress,
-  Alert,
   Button,
+  LinearProgress,
+  Alert,
+  Avatar,
+  Chip,
+  Stack,
 } from "@mui/material";
+import { DataGrid, GridToolbar } from "@mui/x-data-grid";
+import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import { huHU } from "@mui/x-data-grid/locales";
 import {
+  Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Person as PersonIcon,
-  Add as AddIcon,
 } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { UserResponse } from "../../../types/user";
 import { useAuth } from "../../../context/AuthContext";
 
-// API alap URL (a .env fájlból vagy fixen, ha nincs)
-const API_URL = "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const UserList: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { hasRole, isLoading: isAuthLoading } = useAuth();
+
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const { hasRole, isLoading: isAuthLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   const fetchUsers = async () => {
     try {
@@ -51,7 +46,7 @@ const UserList: React.FC = () => {
       setUsers(response.data);
       setError(null);
     } catch (err: any) {
-      setError("Nem sikerült betölteni a felhasználókat.");
+      setError(t("errorFetchUsers"));
       console.error(err);
     } finally {
       setLoading(false);
@@ -74,21 +69,25 @@ const UserList: React.FC = () => {
 
   const handleDelete = async (id: string, username: string) => {
     if (
-      window.confirm(`Biztosan törölni szeretnéd ${username} felhasználót?`)
+      window.confirm(
+        t("deleteConfirm", { username }), // "Biztosan törölni szeretnéd {{username}} felhasználót?"
+      )
     ) {
       try {
         const token = localStorage.getItem("token");
         await axios.delete(`${API_URL}/users/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setUsers(users.filter((user) => user.id !== id));
+        // Újratöltés helyett lokális szűrés is elég lehet, de a fetch biztosabb
+        fetchUsers();
       } catch (err) {
-        alert("Hiba történt a törlés során.");
+        alert(t("errorDelete"));
       }
     }
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("hu-HU", {
       year: "numeric",
       month: "long",
@@ -98,21 +97,111 @@ const UserList: React.FC = () => {
     });
   };
 
-  if (loading)
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+  const LoadingOverlay = () => (
+    <Box sx={{ position: "absolute", top: 0, width: "100%" }}>
+      <LinearProgress />
+    </Box>
+  );
+
+  const columns: GridColDef[] = [
+    {
+      field: "avatarUrl",
+      headerName: "",
+      width: 60,
+      sortable: false,
+      filterable: false,
+      align: "center",
+      renderCell: (params: GridRenderCellParams) => (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            height: "100%",
+            justifyContent: "center",
+          }}
+        >
+          <Avatar src={params.value as string} sx={{ width: 32, height: 32 }}>
+            <PersonIcon fontSize="small" />
+          </Avatar>
+        </Box>
+      ),
+    },
+    { field: "username", headerName: t("username"), flex: 1, minWidth: 120 },
+    { field: "fullName", headerName: t("fullName"), flex: 1, minWidth: 150 },
+    { field: "email", headerName: t("email"), flex: 1.5, minWidth: 200 },
+    {
+      field: "roles",
+      headerName: t("roles"),
+      flex: 2,
+      minWidth: 200,
+      sortable: false, // Tömböt nehéz rendezni
+      renderCell: (params: GridRenderCellParams) => (
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{ height: "100%", alignItems: "center", overflow: "hidden" }}
+        >
+          {(params.value as string[]).map((role, index) => (
+            <Chip
+              key={index}
+              label={role.replace("ROLE_", "")}
+              size="small"
+              color={role === "ROLE_ADMIN" ? "secondary" : "default"}
+              variant="outlined"
+            />
+          ))}
+        </Stack>
+      ),
+    },
+    {
+      field: "createdAt",
+      headerName: t("registered"),
+      width: 160,
+      valueFormatter: (value: any) => formatDate(value as string),
+    },
+    {
+      field: "updatedAt",
+      headerName: t("lastModified"),
+      width: 160,
+      valueFormatter: (value: any) => formatDate(value as string),
+    },
+    {
+      field: "actions",
+      headerName: t("actions"),
+      width: 120,
+      sortable: false,
+      filterable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Box>
+          <Button
+            size="small"
+            color="primary"
+            onClick={() => navigate(`/admin/users/${params.row.id}`)}
+            style={{ minWidth: "30px", padding: "5px" }}
+          >
+            <EditIcon fontSize="small" />
+          </Button>
+          <Button
+            size="small"
+            color="error"
+            onClick={() => handleDelete(params.row.id, params.row.username)}
+            style={{ minWidth: "30px", padding: "5px" }}
+          >
+            <DeleteIcon fontSize="small" />
+          </Button>
+        </Box>
+      ),
+    },
+  ];
 
   return (
-    <Box>
+    <Box sx={{ height: 650, width: "100%" }}>
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          mb: 4,
+          mb: 2,
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
@@ -123,7 +212,8 @@ const UserList: React.FC = () => {
           startIcon={<AddIcon />}
           onClick={() => navigate("/admin/users/new")}
         >
-          Új felhasználó
+          {t("newMission").replace("küldetés", "felhasználó")}{" "}
+          {/* Vagy külön kulcs: t("newUser") */}
         </Button>
       </Box>
 
@@ -133,88 +223,33 @@ const UserList: React.FC = () => {
         </Alert>
       )}
 
-      <TableContainer component={Paper} elevation={3}>
-        <Table sx={{ minWidth: 650 }}>
-          <TableHead sx={{ bgcolor: "rgba(255,255,255,0.05)" }}>
-            <TableRow>
-              <TableCell>{t("user")}</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>{t("registered")}</TableCell>
-              <TableCell>{t("lastModified")}</TableCell>
-              <TableCell>{t("roles")}</TableCell>
-              <TableCell align="right">{t("actions")}</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id} hover>
-                <TableCell>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Avatar src={user.avatarUrl || undefined}>
-                      <PersonIcon />
-                    </Avatar>
-                    <Box>
-                      <Typography
-                        variant="subtitle2"
-                        sx={{ fontWeight: "bold" }}
-                      >
-                        {user.fullName || user.username}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {user.fullName
-                          ? `@${user.username}`
-                          : t("noNameProvided")}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{formatDate(user.createdAt)}</TableCell>
-                <TableCell>{formatDate(user.updatedAt)}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                    {user.roles.map((role, index) => (
-                      <Chip
-                        key={index} // Mivel string, használhatjuk az index vagy magát a stringet key-nek
-                        label={role.toString().replace("ROLE_", "")}
-                        size="small"
-                        color={
-                          role.toString() === "ROLE_ADMIN"
-                            ? "secondary"
-                            : "default"
-                        }
-                        variant="outlined"
-                      />
-                    ))}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">
-                  <Box
-                    sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}
-                  >
-                    <Tooltip title={t("edit")}>
-                      <IconButton
-                        color="primary"
-                        onClick={() => navigate(`/admin/users/${user.id}`)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t("delete")}>
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDelete(user.id, user.username)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataGrid
+        rows={users}
+        columns={columns}
+        loading={loading}
+        slots={{
+          loadingOverlay: LoadingOverlay,
+          toolbar: GridToolbar,
+        }}
+        slotProps={{
+          toolbar: {
+            showQuickFilter: true,
+          },
+        }}
+        localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
+        initialState={{
+          pagination: { paginationModel: { pageSize: 10 } },
+        }}
+        pageSizeOptions={[5, 10, 25, 100]}
+        disableRowSelectionOnClick
+        sx={{
+          bgcolor: "background.paper",
+          boxShadow: 3,
+          borderRadius: 2,
+          border: "none",
+          "& .MuiDataGrid-cell:focus": { outline: "none" },
+        }}
+      />
     </Box>
   );
 };
