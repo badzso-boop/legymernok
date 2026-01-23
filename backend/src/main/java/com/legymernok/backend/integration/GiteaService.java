@@ -1,5 +1,6 @@
 package com.legymernok.backend.integration;
 
+import com.legymernok.backend.exception.ExternalServiceException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -63,7 +64,7 @@ public class GiteaService {
             return ((Number) response.get("id")).longValue();
         }
 
-        throw new RuntimeException("Failed to create user in Gitea: no ID returned");
+        throw new ExternalServiceException("Gitea", "Failed to create user: no ID returned");
     }
 
 
@@ -91,7 +92,7 @@ public class GiteaService {
             return (String) response.get("clone_url");
         }
 
-        throw new RuntimeException("Failed to create repository in Gitea: No clone URL returned");
+        throw new ExternalServiceException("Gitea", "Failed to create repository: No clone URL returned");
     }
 
     /**
@@ -153,7 +154,7 @@ public class GiteaService {
                     .retrieve()
                     .toBodilessEntity();
         } else {
-            throw new RuntimeException("Failed to retrieve SHA for existing file: " + filePath);
+            throw new ExternalServiceException("Gitea", "Failed to retrieve SHA for existing file: " + filePath);
         }
     }
 

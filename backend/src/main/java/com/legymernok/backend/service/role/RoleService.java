@@ -3,6 +3,8 @@ package com.legymernok.backend.service.role;
 import com.legymernok.backend.dto.Permission.PermissionResponse;
 import com.legymernok.backend.dto.Roles.CreateRoleRequest;
 import com.legymernok.backend.dto.Roles.RoleResponse;
+import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.model.auth.Permission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
@@ -30,7 +32,7 @@ public class RoleService {
     public RoleResponse createRole(CreateRoleRequest request) {
         // Validáció: Név egyedisége
         if (roleRepository.findByName(request.getName()).isPresent()) {
-            throw new RuntimeException("Role with name '" + request.getName() + "' already exists.");
+            throw new ResourceConflictException("Role", "name", request.getName());
         }
 
         // Engedélyek lekérése ID alapján
@@ -56,19 +58,19 @@ public class RoleService {
     @Transactional(readOnly = true)
     public RoleResponse getRoleById(UUID id) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
         return mapRoleToResponse(role);
     }
 
     @Transactional
     public RoleResponse updateRole(UUID id, CreateRoleRequest request) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
 
         // Név egyediségének ellenőrzése, ha változott
         if (!role.getName().equals(request.getName()) &&
                 roleRepository.findByName(request.getName()).isPresent()) {
-            throw new RuntimeException("Role with name '" + request.getName() + "' already exists.");
+            throw new ResourceConflictException("Role", "name", request.getName());
         }
 
         // Engedélyek frissítése
@@ -85,7 +87,7 @@ public class RoleService {
     @Transactional
     public void deleteRole(UUID id) {
         Role role = roleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
 
         // 1. Megkeressük azokat a felhasználókat, akiknek ez a szerepkörük megvan
 
