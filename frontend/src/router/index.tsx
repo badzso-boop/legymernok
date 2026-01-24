@@ -19,6 +19,7 @@ import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
 import StarMapPage from "../pages/starmap/StarMapPage";
+import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -85,6 +86,15 @@ export const router = createHashRouter([
       // Itt kellene egy olyan védett route, ami bármilyen bejelentkezett usernek engedélyezi
       <ProtectedRoute>
         <StarMapPage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/star-systems/:id", // Dinamikus ID
+    element: (
+      <ProtectedRoute>
+        <StarSystemDetailPage />
       </ProtectedRoute>
     ),
   },

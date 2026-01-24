@@ -185,8 +185,7 @@ const StarMapCanvas: React.FC<Props> = ({ systems }) => {
   const handleClick = () => {
     if (hoveredSystem) {
       // Navigáció a részletes oldalra
-      // navigate(`/star-systems/${hoveredSystem.id}`);
-      alert(`Warping to ${hoveredSystem.name}... (Dead Link for now)`);
+      navigate(`/star-systems/${hoveredSystem.id}`);
     }
   };
 

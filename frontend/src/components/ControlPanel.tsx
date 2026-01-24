@@ -3,6 +3,7 @@ import { Grid } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "../styles/ControlPanel.css";
+import "../styles/RetroUI.css";
 
 const ControlPanel: React.FC = () => {
   const { t } = useTranslation();
