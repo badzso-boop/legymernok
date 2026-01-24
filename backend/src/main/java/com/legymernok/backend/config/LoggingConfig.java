@@ -24,7 +24,7 @@ public class LoggingConfig {
         // Encoder beállítása (formázás)
         PatternLayoutEncoder encoder = new PatternLayoutEncoder();
         encoder.setContext(loggerContext);
-        encoder.setPattern("%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level --- [%thread] %logger{36} : %msg%n");
+        encoder.setPattern("%d{yyyy-MM-dd HH:mm:ss.SSS}  %5p --- [%15.15t] %-40.40logger{39} : %m%n");
         encoder.setCharset(StandardCharsets.UTF_8);
         encoder.start();
 

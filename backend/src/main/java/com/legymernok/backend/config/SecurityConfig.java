@@ -31,22 +31,23 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth
-                // Nyilvános végpontok: Login, Regisztráció, Swagger
-                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users").permitAll()
-                .requestMatchers(
-                        "/v3/api-docs/**",
-                        "/swagger-ui/**",
-                        "/swagger-ui.html"
-                ).permitAll()
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            // JWT-vel stateless a session
-            // Itt kötjük be a JWT filtert a UsernamePasswordAuthenticationFilter ELÉ!
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth
+                        // Nyilvános végpontok: Login, Regisztráció, Swagger
+                        .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users").permitAll()
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/ws-log/**"
+                        ).permitAll()
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // JWT-vel stateless a session
+                // Itt kötjük be a JWT filtert a UsernamePasswordAuthenticationFilter ELÉ!
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

@@ -29,8 +29,6 @@ public class LogService {
             int startIndex = Math.max(0, allLines.size() - limit);
             List<String> lastLines = allLines.subList(startIndex, allLines.size());
 
-            // Megfordítjuk, hogy a legfrissebb legyen felül
-            Collections.reverse(lastLines);
             return lastLines;
         } catch (IOException e) {
             return Collections.singletonList("Error reading log file: " + e.getMessage());

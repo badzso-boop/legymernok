@@ -215,7 +215,7 @@ class CadetServiceTest {
         when(cadetRepository.findById(cadetId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(UserNotFoundException.class, () -> cadetService.updateCadet(cadetId, request));
+        assertThrows(ResourceNotFoundException.class, () -> cadetService.updateCadet(cadetId, request));
         verify(cadetRepository, never()).save(any());
     }
 
