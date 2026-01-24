@@ -18,9 +18,14 @@ import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
+import StarMapPage from "../pages/starmap/StarMapPage";
 
-// Egyszerűbb védelem: csak ha van token
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+interface ProtectedRouteProps {
+  children: JSX.Element;
+  requiredRole?: string;
+}
+
+const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { hasRole, isLoading } = useAuth();
 
   if (isLoading) {
@@ -35,11 +40,14 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 
   const token = localStorage.getItem("token");
 
+  // 1. Alapvető token ellenőrzés
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!hasRole("ROLE_ADMIN")) {
+  // 2. Szerepkör ellenőrzés (csak ha specifikus role-t kérünk)
+  if (requiredRole && !hasRole(requiredRole)) {
+    // Ha admin felületre próbál lépni, de nem admin, küldjük a főoldalra
     return <Navigate to="/" replace />;
   }
 
@@ -69,6 +77,16 @@ export const router = createHashRouter([
         element: <ChangelogPage />,
       },
     ],
+  },
+
+  {
+    path: "/star-map",
+    element: (
+      // Itt kellene egy olyan védett route, ami bármilyen bejelentkezett usernek engedélyezi
+      <ProtectedRoute>
+        <StarMapPage />
+      </ProtectedRoute>
+    ),
   },
 
   // Védett Admin útvonalak

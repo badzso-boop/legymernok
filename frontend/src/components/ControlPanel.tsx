@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import "../styles/ControlPanel.css";
 
 const ControlPanel: React.FC = () => {
-  const { t } = useTranslation(); // <--- Hook
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   // Kezdeti állapotot useEffect-ben állítjuk be, hogy a nyelvváltásnál frissüljön
@@ -33,12 +33,7 @@ const ControlPanel: React.FC = () => {
     setTerminalOutput((prev) => [...prev, `> ${text}`]);
   };
 
-  const handleCommand = (
-    moduleId: string,
-    labelKey: string,
-    path: string,
-    color: string,
-  ) => {
+  const handleCommand = (moduleId: string, labelKey: string, path: string) => {
     setActiveButton(moduleId);
 
     // A gomb feliratát (lefordítva) használjuk a logban, vagy a kulcsot
@@ -64,7 +59,7 @@ const ControlPanel: React.FC = () => {
       id: "STAR_SYSTEMS",
       labelKey: "controlPanel.starSystems",
       color: "red",
-      path: "/login",
+      path: "/star-map",
     },
     {
       id: "SPEC_OPS",
@@ -104,9 +99,7 @@ const ControlPanel: React.FC = () => {
               <div className="button-group">
                 <button
                   className={`retro-btn ${btn.color} ${activeButton === btn.id ? "active" : ""}`}
-                  onClick={() =>
-                    handleCommand(btn.id, btn.labelKey, btn.path, btn.color)
-                  }
+                  onClick={() => handleCommand(btn.id, btn.labelKey, btn.path)}
                 />
                 <div className="label-plate">
                   <span>{t(btn.labelKey)}</span>

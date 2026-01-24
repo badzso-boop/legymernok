@@ -133,6 +133,18 @@ const resources = {
         monthlyQuest: "MONTHLY QUEST",
         pilotData: "PILOT DATA",
       },
+      // STAR MAP
+      starMap: {
+        title: "GALACTIC NAVIGATOR",
+        status: "STATUS",
+        online: "ONLINE",
+        scanning: "SCANNING...",
+        back: "BACK",
+        scan: "SCAN",
+        warp: "WARP",
+        data: "DATA",
+        lang: "LANG",
+      },
     },
   },
   hu: {
@@ -266,6 +278,18 @@ const resources = {
         specialOps: "SPEC KÜLDETÉS",
         monthlyQuest: "HAVI KÜLDETÉS",
         pilotData: "PILÓTA ADATOK",
+      },
+      // STAR MAP
+      starMap: {
+        title: "GALAKTIKUS NAVIGÁTOR",
+        status: "ÁLLAPOT",
+        online: "ONLINE",
+        scanning: "KERESÉS...",
+        back: "VISSZA",
+        scan: "KERES",
+        warp: "UGRÁS",
+        data: "ADAT",
+        lang: "NYELV",
       },
     },
   },
