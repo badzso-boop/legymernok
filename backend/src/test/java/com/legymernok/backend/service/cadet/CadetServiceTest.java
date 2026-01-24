@@ -4,8 +4,6 @@ import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
-import com.legymernok.backend.exception.UserAlreadyExistsException;
-import com.legymernok.backend.exception.UserNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
