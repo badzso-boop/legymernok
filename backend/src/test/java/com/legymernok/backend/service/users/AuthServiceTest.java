@@ -4,9 +4,7 @@ import com.legymernok.backend.dto.user.LoginRequest;
 import com.legymernok.backend.dto.user.LoginResponse;
 import com.legymernok.backend.dto.user.RegisterRequest;
 import com.legymernok.backend.dto.user.RegisterResponse;
-import com.legymernok.backend.exception.BadCredentialsException;
-import com.legymernok.backend.exception.UserAlreadyExistsException;
-import com.legymernok.backend.exception.UserNotFoundException;
+import com.legymernok.backend.exception.*;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
@@ -67,7 +65,7 @@ class AuthServiceTest {
         LoginRequest request = new LoginRequest();
         request.setUsername("unknown");
         when(cadetRepository.findByUsername("unknown")).thenReturn(Optional.empty());
-        assertThrows(UserNotFoundException.class, () -> authService.login(request));
+        assertThrows(ResourceNotFoundException.class, () -> authService.login(request));
     }
 
     @Test
@@ -127,7 +125,7 @@ class AuthServiceTest {
 
         when(cadetRepository.existsByUsername("existing")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> authService.register(request));
+        assertThrows(ResourceConflictException.class, () -> authService.register(request));
 
         verify(giteaService, never()).createGiteaUser(any(), any(), any());
         verify(cadetRepository, never()).save(any());
@@ -142,7 +140,7 @@ class AuthServiceTest {
         when(cadetRepository.existsByUsername("newuser")).thenReturn(false);
         when(cadetRepository.existsByEmail("existing@example.com")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> authService.register(request));
+        assertThrows(ResourceConflictException.class, () -> authService.register(request));
 
         verify(giteaService, never()).createGiteaUser(any(), any(), any());
         verify(cadetRepository, never()).save(any());

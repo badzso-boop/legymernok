@@ -2,14 +2,15 @@ package com.legymernok.backend.service.cadet;
 
 import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
-import com.legymernok.backend.exception.UserNotFoundException;
+import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
-import com.legymernok.backend.exception.UserAlreadyExistsException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.legymernok.backend.integration.GiteaService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CadetService {
 
     private final CadetRepository cadetRepository;
@@ -35,10 +37,10 @@ public class CadetService {
     @Transactional
     public CadetResponse createCadet(CreateCadetRequest request) {
         if (cadetRepository.existsByUsername(request.getUsername())) {
-            throw new UserAlreadyExistsException("Username '" + request.getUsername() + "' already exists");
+            throw new ResourceConflictException("Cadet", "username", request.getUsername());
         }
         if (cadetRepository.existsByEmail(request.getEmail())) {
-            throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' already exists");
+            throw new ResourceConflictException("Cadet", "email", request.getEmail());
         }
 
         Long giteaId = giteaService.createGiteaUser(
@@ -48,7 +50,7 @@ public class CadetService {
         );
 
         Role cadetRole = roleRepository.findByName(request.getRole())
-                .orElseThrow(() -> new RuntimeException("Default role ROLE_CADET not found. Databasnot initialized?"));
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
 
         Set<Role> roles = new HashSet<>();
         roles.add(cadetRole);
@@ -63,6 +65,7 @@ public class CadetService {
                 .build();
 
         Cadet savedCadet = cadetRepository.save(cadet);
+        log.info("Saved Cadet: {}", savedCadet);
         return mapToResponse(savedCadet);
     }
 
@@ -76,14 +79,14 @@ public class CadetService {
     @Transactional(readOnly = true)
     public CadetResponse getCadetById(UUID id) {
         Cadet cadet = cadetRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
         return mapToResponse(cadet);
     }
 
     @Transactional
     public void deleteCadet(UUID id) {
         Cadet cadet = cadetRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
 
         try {
             giteaService.deleteGiteaUser(cadet.getUsername());
@@ -92,6 +95,7 @@ public class CadetService {
         }
 
         cadetMissionRepository.deleteAllByCadetId(id);
+        log.info("Deleted Cadet: {}", cadet);
 
         cadetRepository.delete(cadet);
     }
@@ -99,13 +103,13 @@ public class CadetService {
     @Transactional
     public CadetResponse updateCadet(UUID id, CreateCadetRequest request) {
         Cadet cadetToUpdate = cadetRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
 
         // Email frissítése, ha meg van adva és nem egyezik a régivel
         if (request.getEmail() != null && !request.getEmail().equals(cadetToUpdate.getEmail())) {
             // Ellenőrizzük, hogy az új email cím foglalt-e már
             if (cadetRepository.existsByEmail(request.getEmail())) {
-                throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' already exists");
+                throw new ResourceConflictException("Cadet", "email", request.getEmail());
             }
             cadetToUpdate.setEmail(request.getEmail());
             // TODO: Gitea email frissítése, ha a GiteaService támogatja
@@ -128,7 +132,7 @@ public class CadetService {
             // Csak akkor módosítunk, ha a kérésben lévő szerepkör eltér a jelenlegitől
             if (!request.getRole().equals(currentRoleName)) {
                 Role newRole = roleRepository.findByName(request.getRole())
-                        .orElseThrow(() -> new RuntimeException("Role '" + request.getRole() + "' not found."));
+                        .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
 
                 cadetToUpdate.getRoles().clear();
                 cadetToUpdate.getRoles().add(newRole);
@@ -138,6 +142,7 @@ public class CadetService {
         cadetToUpdate.setFullName(request.getFullName());
 
         Cadet updatedCadet = cadetRepository.save(cadetToUpdate);
+        log.info("Updated Cadet: {}", updatedCadet);
         return mapToResponse(updatedCadet);
     }
 

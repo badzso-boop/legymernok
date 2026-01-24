@@ -1,5 +1,6 @@
 package com.legymernok.backend.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -10,37 +11,44 @@ import java.util.HashMap;
 import java.util.Map;
 
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
-    @ExceptionHandler(UserAlreadyExistsException.class)
-    public ResponseEntity<Object> handleUserAlreadyExistsException(UserAlreadyExistsException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.CONFLICT.value()); // 409 Conflict
-        body.put("error", "Conflict");
-        body.put("message", ex.getMessage());
-
-        return new ResponseEntity<>(body, HttpStatus.CONFLICT);
-    }
-
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<Object> handleUserNotFoundException(UserNotFoundException ex) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.NOT_FOUND.value()); // 404
-        body.put("error", "Not Found");
-        body.put("message", ex.getMessage());
-
-        return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
-    }
-
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Object> handleBadCredentialsException(BadCredentialsException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Unauthorized", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Object> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        return buildResponse(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage());
+    }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    public ResponseEntity<Object> handleResourceConflictException(ResourceConflictException ex) {
+        log.warn("Resource conflict: {}", ex.getMessage());
+        return buildResponse(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
+    }
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<Object> handleExternalServiceException(ExternalServiceException ex) {
+        log.error("External service error: {}", ex.getMessage(), ex);
+        return buildResponse(HttpStatus.BAD_GATEWAY, "External Service Error", ex.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Object> handleGlobalException(Exception ex) {
+        log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",ex.getMessage());
+    }
+
+    private ResponseEntity<Object> buildResponse(HttpStatus status, String error, String message) {
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.UNAUTHORIZED.value()); // 401
-        body.put("error", "Unauthorized");
-        body.put("message", ex.getMessage());
-
-        return new ResponseEntity<>(body, HttpStatus.UNAUTHORIZED);
+        body.put("status", status.value());
+        body.put("error", error);
+        body.put("message", message);
+        return new ResponseEntity<>(body, status);
     }
 }

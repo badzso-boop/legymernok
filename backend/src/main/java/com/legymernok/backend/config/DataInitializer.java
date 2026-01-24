@@ -45,6 +45,9 @@ public class DataInitializer implements CommandLineRunner {
         Permission roleRead = createPermissionIfNotFound("role:read", "Szerepkörök megtekintése");
         Permission roleWrite = createPermissionIfNotFound("role:write", "Szerepkörök kezelése (létrehozás, szerkesztés, törlés)");
 
+        // Log jogok
+        Permission logsRead = createPermissionIfNotFound("logs:read", "Rendszernaplók megtekintése");
+
         // --- 2. SZEREPKÖRÖK (ROLES) LÉTREHOZÁSA ---
 
         // ROLE_CADET: Alap jogok (Olvasás, Indítás)
@@ -75,6 +78,8 @@ public class DataInitializer implements CommandLineRunner {
         // Role
         adminPermissions.add(roleRead);
         adminPermissions.add(roleWrite);
+        // Logs
+        adminPermissions.add(logsRead);
 
         createRoleIfNotFound("ROLE_ADMIN", adminPermissions);
 

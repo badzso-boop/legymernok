@@ -2,6 +2,8 @@ package com.legymernok.backend.service.mission;
 
 import com.legymernok.backend.dto.mission.CreateMissionRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
+import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
@@ -12,6 +14,7 @@ import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MissionService {
 
     private final MissionRepository missionRepository;
@@ -39,10 +43,10 @@ public class MissionService {
     @Transactional
     public MissionResponse createMission(CreateMissionRequest request) {
         StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
-                .orElseThrow(() -> new RuntimeException("StarSystem not found with ID: " + request.getStarSystemId()));
+                .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
 
         if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(),request.getName())) {
-            throw new RuntimeException("Mission with this name already exists in the Star System.");
+            throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
         if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(),request.getOrderInSystem())) {
@@ -81,19 +85,21 @@ public class MissionService {
                 .build();
 
         Mission savedMission = missionRepository.save(mission);
+        log.info("New mission created: '{}' in StarSystem ID: {}", savedMission.getName(),savedMission.getStarSystem().getId());
         return mapToResponse(savedMission);
     }
 
     @Transactional
     public String startMission(UUID missionId, String username) {
         // 1. Adatok és User lekérése
-        Mission mission = missionRepository.findById(missionId).orElseThrow(() -> new RuntimeException("Mission not found"));
+        Mission mission = missionRepository.findById(missionId).orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
 
-        Cadet cadet = cadetRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+        Cadet cadet = cadetRepository.findByUsername(username).orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username));
 
         // 2. Ellenőrzés: Már elkezdte?
         Optional<CadetMission> existing = cadetMissionRepository.findByCadetIdAndMissionId(cadet.getId(), mission.getId());
         if (existing.isPresent()) {
+            log.info("User '{}' resumed mission '{}'", username, mission.getName());
             return existing.get().getRepositoryUrl();
         }
 
@@ -142,7 +148,7 @@ public class MissionService {
                 .build();
 
         cadetMissionRepository.save(cadetMission);
-
+        log.info("User '{}' started mission '{}'. Repo: {}", username, mission.getName(),userRepoName);
         return userRepoUrl;
     }
 
@@ -156,7 +162,7 @@ public class MissionService {
     @Transactional(readOnly = true)
     public MissionResponse getMissionById(UUID id) {
         Mission mission = missionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Mission not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
         return mapToResponse(mission);
     }
 
@@ -175,7 +181,7 @@ public class MissionService {
     @Transactional
     public void deleteMission(UUID id) {
         Mission mission = missionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Mission not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
 
         UUID starSystemId = mission.getStarSystem().getId();
         Integer deletedOrder = mission.getOrderInSystem();
@@ -196,6 +202,7 @@ public class MissionService {
 
         // 2. DB törlés
         missionRepository.delete(mission);
+        log.info("Mission deleted: ID {}, Name '{}'", id, mission.getName());
 
         // 3. Smart Delete: Sorszámok rendezése (hézag megszüntetése)
         missionRepository.shiftOrdersDown(starSystemId, deletedOrder);
