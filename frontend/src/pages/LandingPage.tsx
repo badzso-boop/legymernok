@@ -1,14 +1,12 @@
 import React, { useState } from "react";
-import { Box, Typography, Button, Container, Paper } from "@mui/material";
+import { Box, Typography, Button } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "../styles/LandingPage.css";
 import ControlPanel from "../components/ControlPanel";
 
 const LandingPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [phase, setPhase] = useState<"intro" | "transition" | "dashboard">(
     "intro",
   );

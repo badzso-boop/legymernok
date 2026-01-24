@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from "react";
-import {
-  Box,
-  Typography,
-  Grid,
-  CircularProgress,
-  Button,
-  Paper,
-} from "@mui/material";
+import { Box, Typography, Grid, Button, Paper } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import apiClient from "../../api/client";
 import type { StarSystemWithMissionsResponse } from "../../types/starSystem";
 import "../../styles/RetroUI.css"; // Az új közös stílus
@@ -16,7 +8,6 @@ import "../../styles/RetroUI.css"; // Az új közös stílus
 const StarSystemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const [data, setData] = useState<StarSystemWithMissionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
