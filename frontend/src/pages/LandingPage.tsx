@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "../styles/LandingPage.css";
+import ControlPanel from "../components/ControlPanel";
 
 const LandingPage: React.FC = () => {
   const { t } = useTranslation();
@@ -127,38 +128,7 @@ const LandingPage: React.FC = () => {
               alignItems: "center",
             }}
           >
-            <Container maxWidth="md">
-              <Paper
-                sx={{
-                  p: 6,
-                  textAlign: "center",
-                  bgcolor: "rgba(15, 23, 42, 0.9)",
-                  backdropFilter: "blur(10px)",
-                  color: "white",
-                  border: "1px solid #3b82f6",
-                  boxShadow: "0 0 30px rgba(59, 130, 246, 0.3)",
-                  borderRadius: 4,
-                }}
-              >
-                <Typography
-                  variant="h2"
-                  sx={{ mb: 2, fontFamily: "monospace", color: "#60a5fa" }}
-                >
-                  &gt; CONTROL_PANEL_ONLINE
-                </Typography>
-                <Typography variant="h5" sx={{ mb: 4, opacity: 0.8 }}>
-                  Készen állunk az indulásra.
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={() => navigate("/login")}
-                  sx={{ py: 2, px: 8, fontSize: "1.2rem" }}
-                >
-                  {t("login")}
-                </Button>
-              </Paper>
-            </Container>
+            <ControlPanel />
           </motion.div>
         )}
       </AnimatePresence>

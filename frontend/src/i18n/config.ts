@@ -121,6 +121,18 @@ const resources = {
       logsLevel: "Level",
       logsMessage: "Message",
       logsNoData: "No logs available yet.",
+      // CONTROL PANEL
+      controlPanel: {
+        systemReady: "SYSTEM READY",
+        waiting: "WAITING FOR INPUT...",
+        initializing: "INITIALIZING {{module}}...",
+        loadingAssets: "LOADING ASSETS...",
+        redirecting: "REDIRECTING...",
+        starSystems: "STAR SYSTEMS",
+        specialOps: "SPECIAL OPS",
+        monthlyQuest: "MONTHLY QUEST",
+        pilotData: "PILOT DATA",
+      },
     },
   },
   hu: {
@@ -243,6 +255,18 @@ const resources = {
       logsLevel: "Szint",
       logsMessage: "Üzenet",
       logsNoData: "Nincsenek elérhető naplóbejegyzések.",
+      // CONTROL PANEL
+      controlPanel: {
+        systemReady: "RENDSZER KÉSZ",
+        waiting: "PARANCSRA VÁR...",
+        initializing: "{{module}} INDÍTÁSA...",
+        loadingAssets: "ADATOK BETÖLTÉSE...",
+        redirecting: "ÁTIRÁNYÍTÁS...",
+        starSystems: "CSILLAG RENDSZER",
+        specialOps: "SPEC KÜLDETÉS",
+        monthlyQuest: "HAVI KÜLDETÉS",
+        pilotData: "PILÓTA ADATOK",
+      },
     },
   },
 };
