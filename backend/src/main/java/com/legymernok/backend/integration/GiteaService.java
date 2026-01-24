@@ -1,6 +1,7 @@
 package com.legymernok.backend.integration;
 
 import com.legymernok.backend.exception.ExternalServiceException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
+@Slf4j
 public class GiteaService {
 
     private final RestClient restClient;
@@ -61,6 +63,7 @@ public class GiteaService {
                 .body(Map.class);
 
         if (response != null && response.containsKey("id")) {
+            log.info("Creating Gitea user: {}", username);
             return ((Number) response.get("id")).longValue();
         }
 
@@ -75,6 +78,7 @@ public class GiteaService {
      * @return A repository klónozási URL-je (clone_url).
      */
     public String createRepository(String repoName) {
+        log.debug("Creating Gitea repository: {}", repoName);
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("name", repoName);
         requestBody.put("private", true);
@@ -89,6 +93,7 @@ public class GiteaService {
                 .body(Map.class);
 
         if (response != null && response.containsKey("clone_url")) {
+            log.info("Gitea repository created: {}", repoName);
             return (String) response.get("clone_url");
         }
 
@@ -164,6 +169,7 @@ public class GiteaService {
      * @param username A törlendő felhasználó Gitea login neve.
      */
     public void deleteGiteaUser(String username) {
+        log.info("Deleting Gitea user: {}", username);
         restClient.delete()
                 .uri("/admin/users/{username}", username)
                 .retrieve()
@@ -176,6 +182,7 @@ public class GiteaService {
      * @param repoName A törlendő repository neve.
      */
     public void deleteRepository(String ownerUsername, String repoName) {
+        log.info("Deleting Gitea repository: {}/{}", ownerUsername, repoName);
         restClient.delete()
                 .uri("/repos/{owner}/{repo}", ownerUsername, repoName)
                 .retrieve()

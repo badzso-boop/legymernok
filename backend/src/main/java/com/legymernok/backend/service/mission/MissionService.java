@@ -14,6 +14,7 @@ import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MissionService {
 
     private final MissionRepository missionRepository;
@@ -83,6 +85,7 @@ public class MissionService {
                 .build();
 
         Mission savedMission = missionRepository.save(mission);
+        log.info("New mission created: '{}' in StarSystem ID: {}", savedMission.getName(),savedMission.getStarSystem().getId());
         return mapToResponse(savedMission);
     }
 
@@ -96,6 +99,7 @@ public class MissionService {
         // 2. Ellenőrzés: Már elkezdte?
         Optional<CadetMission> existing = cadetMissionRepository.findByCadetIdAndMissionId(cadet.getId(), mission.getId());
         if (existing.isPresent()) {
+            log.info("User '{}' resumed mission '{}'", username, mission.getName());
             return existing.get().getRepositoryUrl();
         }
 
@@ -144,7 +148,7 @@ public class MissionService {
                 .build();
 
         cadetMissionRepository.save(cadetMission);
-
+        log.info("User '{}' started mission '{}'. Repo: {}", username, mission.getName(),userRepoName);
         return userRepoUrl;
     }
 
@@ -198,6 +202,7 @@ public class MissionService {
 
         // 2. DB törlés
         missionRepository.delete(mission);
+        log.info("Mission deleted: ID {}, Name '{}'", id, mission.getName());
 
         // 3. Smart Delete: Sorszámok rendezése (hézag megszüntetése)
         missionRepository.shiftOrdersDown(starSystemId, deletedOrder);

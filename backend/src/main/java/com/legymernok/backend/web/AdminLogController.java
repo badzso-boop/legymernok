@@ -19,7 +19,7 @@ public class AdminLogController {
     private final LogService logService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')") // Csak admin láthassa!
+    @PreAuthorize("hasAuthority('logs:read')")
     public ResponseEntity<List<String>> getLogs(@RequestParam(defaultValue = "100") int limit) {
         return ResponseEntity.ok(logService.getLatestLogs(limit));
     }

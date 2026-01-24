@@ -12,6 +12,7 @@ import com.legymernok.backend.repository.auth.PermissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RoleService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -45,6 +47,7 @@ public class RoleService {
                 .build();
 
         Role savedRole = roleRepository.save(role);
+        log.info("Created Role: {}", savedRole);
         return mapRoleToResponse(savedRole);
     }
 
@@ -81,6 +84,7 @@ public class RoleService {
         role.setPermissions(permissions);
 
         Role updatedRole = roleRepository.save(role);
+        log.info("Updated Role: {}", updatedRole);
         return mapRoleToResponse(updatedRole);
     }
 
@@ -101,6 +105,7 @@ public class RoleService {
 
         // 3. Most már biztonságosan törölhetjük a szerepkört
         roleRepository.delete(role);
+        log.info("Deleted Role: {}", role);
     }
 
     @Transactional(readOnly = true)

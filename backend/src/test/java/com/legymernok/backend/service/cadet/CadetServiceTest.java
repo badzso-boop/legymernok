@@ -2,6 +2,8 @@ package com.legymernok.backend.service.cadet;
 
 import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
+import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UserAlreadyExistsException;
 import com.legymernok.backend.exception.UserNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
@@ -118,7 +120,7 @@ class CadetServiceTest {
 
         when(cadetRepository.existsByUsername("vader")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> {
+        assertThrows(ResourceConflictException.class, () -> {
             cadetService.createCadet(request);
         });
 
@@ -155,7 +157,7 @@ class CadetServiceTest {
         UUID cadetId = UUID.randomUUID();
         when(cadetRepository.findById(cadetId)).thenReturn(Optional.empty());
 
-        assertThrows(UserNotFoundException.class, () -> cadetService.deleteCadet(cadetId));
+        assertThrows(ResourceNotFoundException.class, () -> cadetService.deleteCadet(cadetId));
 
         verify(giteaService, never()).deleteGiteaUser(anyString());
         verify(cadetRepository, never()).delete(any());
@@ -229,7 +231,7 @@ class CadetServiceTest {
         when(cadetRepository.existsByEmail("existing@example.com")).thenReturn(true);
 
         // Act & Assert
-        assertThrows(UserAlreadyExistsException.class, () -> cadetService.updateCadet(cadetId, request));
+        assertThrows(ResourceConflictException.class, () -> cadetService.updateCadet(cadetId, request));
         verify(cadetRepository, never()).save(any());
     }
 }

@@ -4,14 +4,13 @@ import com.legymernok.backend.dto.cadet.CadetResponse;
 import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
-import com.legymernok.backend.exception.UserNotFoundException;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
-import com.legymernok.backend.exception.UserAlreadyExistsException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.legymernok.backend.integration.GiteaService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CadetService {
 
     private final CadetRepository cadetRepository;
@@ -65,6 +65,7 @@ public class CadetService {
                 .build();
 
         Cadet savedCadet = cadetRepository.save(cadet);
+        log.info("Saved Cadet: {}", savedCadet);
         return mapToResponse(savedCadet);
     }
 
@@ -94,6 +95,7 @@ public class CadetService {
         }
 
         cadetMissionRepository.deleteAllByCadetId(id);
+        log.info("Deleted Cadet: {}", cadet);
 
         cadetRepository.delete(cadet);
     }
@@ -101,7 +103,7 @@ public class CadetService {
     @Transactional
     public CadetResponse updateCadet(UUID id, CreateCadetRequest request) {
         Cadet cadetToUpdate = cadetRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
 
         // Email frissítése, ha meg van adva és nem egyezik a régivel
         if (request.getEmail() != null && !request.getEmail().equals(cadetToUpdate.getEmail())) {
@@ -140,6 +142,7 @@ public class CadetService {
         cadetToUpdate.setFullName(request.getFullName());
 
         Cadet updatedCadet = cadetRepository.save(cadetToUpdate);
+        log.info("Updated Cadet: {}", updatedCadet);
         return mapToResponse(updatedCadet);
     }
 

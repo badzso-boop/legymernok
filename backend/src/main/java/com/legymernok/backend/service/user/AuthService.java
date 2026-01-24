@@ -15,6 +15,7 @@ import com.legymernok.backend.security.JwtService;
 import com.legymernok.backend.service.cadet.CadetService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final CadetRepository cadetRepository;
@@ -43,6 +45,8 @@ public class AuthService {
         }
 
         String token = jwtService.generateToken(cadet);
+
+        log.info("User logged in successfully: {}", request.getUsername());
 
         return new LoginResponse(token, cadet.getUsername());
     }
@@ -85,6 +89,8 @@ public class AuthService {
         Cadet savedCadet = cadetRepository.save(cadet);
 
         String token = jwtService.generateToken(savedCadet);
+
+        log.info("New user registered: {} ({})", savedCadet.getUsername(), savedCadet.getEmail());
 
         // 5. Válasz összeállítása (Csak a publikus adatok)
         return RegisterResponse.builder()

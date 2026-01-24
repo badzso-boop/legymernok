@@ -10,6 +10,7 @@ import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StarSystemService {
 
     private final StarSystemRepository starSystemRepository;
@@ -41,6 +43,7 @@ public class StarSystemService {
                 .build();
 
         StarSystem savedStarSystem = starSystemRepository.save(starSystem);
+        log.info("StarSystem created: {}", savedStarSystem);
         return mapToResponse(savedStarSystem);
     }
 
@@ -64,6 +67,7 @@ public class StarSystemService {
         if (!starSystemRepository.existsById(id)) {
             throw new ResourceNotFoundException("StarSystem", "id", id);
         }
+        log.info("Deleting StarSystem with ID: {}", id);
         starSystemRepository.deleteById(id);
     }
 
