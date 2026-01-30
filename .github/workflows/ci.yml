@@ -62,9 +62,10 @@ jobs:
         run: ./mvnw test -Dtest=com.legymernok.backend.web.**
 
   # ---------------------------------------------------------------------------
-  # Frontend Job: Build -> Unit Test -> E2E Test
+  # Frontend Unit Tests (Vitest)
   # ---------------------------------------------------------------------------
-  frontend-ci:
+  frontend-unit-test:
+    name: Frontend Unit Tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -82,15 +83,34 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # 1. Build Lépés (Fordítás és statikus ellenőrzés)
       - name: Build Project
         run: npm run build
 
-      # 2. Unit Tests (Csak ha a build sikeres volt)
       - name: Run Unit Tests (Vitest)
         run: npm run test -- --run
 
-      # 3. E2E Tests (Csak ha a Unit tesztek sikeresek voltak)
+  # ---------------------------------------------------------------------------
+  # Frontend E2E Tests (Cypress)
+  # ---------------------------------------------------------------------------
+  frontend-e2e-test:
+    name: Frontend E2E Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "./frontend/package-lock.json"
+
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Run E2E Tests (Cypress)
         uses: cypress-io/github-action@v6
         with:
