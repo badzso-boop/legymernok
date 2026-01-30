@@ -121,6 +121,30 @@ const resources = {
       logsLevel: "Level",
       logsMessage: "Message",
       logsNoData: "No logs available yet.",
+      // CONTROL PANEL
+      controlPanel: {
+        systemReady: "SYSTEM READY",
+        waiting: "WAITING FOR INPUT...",
+        initializing: "INITIALIZING {{module}}...",
+        loadingAssets: "LOADING ASSETS...",
+        redirecting: "REDIRECTING...",
+        starSystems: "STAR SYSTEMS",
+        specialOps: "SPECIAL OPS",
+        monthlyQuest: "MONTHLY QUEST",
+        pilotData: "PILOT DATA",
+      },
+      // STAR MAP
+      starMap: {
+        title: "GALACTIC NAVIGATOR",
+        status: "STATUS",
+        online: "ONLINE",
+        scanning: "SCANNING...",
+        back: "BACK",
+        scan: "SCAN",
+        warp: "WARP",
+        data: "DATA",
+        lang: "LANG",
+      },
     },
   },
   hu: {
@@ -243,6 +267,30 @@ const resources = {
       logsLevel: "Szint",
       logsMessage: "Üzenet",
       logsNoData: "Nincsenek elérhető naplóbejegyzések.",
+      // CONTROL PANEL
+      controlPanel: {
+        systemReady: "RENDSZER KÉSZ",
+        waiting: "PARANCSRA VÁR...",
+        initializing: "{{module}} INDÍTÁSA...",
+        loadingAssets: "ADATOK BETÖLTÉSE...",
+        redirecting: "ÁTIRÁNYÍTÁS...",
+        starSystems: "CSILLAG RENDSZER",
+        specialOps: "SPEC KÜLDETÉS",
+        monthlyQuest: "HAVI KÜLDETÉS",
+        pilotData: "PILÓTA ADATOK",
+      },
+      // STAR MAP
+      starMap: {
+        title: "GALAKTIKUS NAVIGÁTOR",
+        status: "ÁLLAPOT",
+        online: "ONLINE",
+        scanning: "KERESÉS...",
+        back: "VISSZA",
+        scan: "KERES",
+        warp: "UGRÁS",
+        data: "ADAT",
+        lang: "NYELV",
+      },
     },
   },
 };

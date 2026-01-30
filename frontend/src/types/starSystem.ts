@@ -12,6 +12,7 @@ export interface MissionResponse {
   descriptionMarkdown: string;
   orderInSystem: number;
   difficulty: string;
+  missionType: string;
 }
 
 export interface StarSystemWithMissionsResponse {

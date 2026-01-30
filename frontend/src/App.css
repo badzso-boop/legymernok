@@ -1,42 +1,46 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+body {
+  margin: 0;
+  /* Alap háttér legyen sötét, hogy betöltéskor se villanjon fehéret */
+  background-color: #020617;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Csillagos háttér animáció (GLOBÁLIS) */
+.star-background {
+  /* Absolute helyett Fixed, hogy görgetésnél ne mozduljon el, mindig ott legyen */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1; /* Minden tartalom mögé kerül */
+
+  background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
+  background-image:
+    radial-gradient(white, rgba(255, 255, 255, 0.2) 2px, transparent 40px),
+    radial-gradient(white, rgba(255, 255, 255, 0.15) 1px, transparent 30px),
+    radial-gradient(white, rgba(255, 255, 255, 0.1) 2px, transparent 40px);
+  background-size:
+    550px 550px,
+    350px 350px,
+    250px 250px;
+  background-position:
+    0 0,
+    40px 60px,
+    130px 270px;
+  animation: stars-move 100s linear infinite;
 }
 
-@keyframes logo-spin {
+@keyframes stars-move {
   from {
-    transform: rotate(0deg);
+    background-position:
+      0 0,
+      40px 60px,
+      130px 270px;
   }
   to {
-    transform: rotate(360deg);
+    background-position:
+      550px 550px,
+      440px 460px,
+      630px 770px;
   }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }
