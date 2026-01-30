@@ -8,14 +8,15 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Backend Job (Java + Maven)
+  # Backend Unit Tests (Service, Config, etc.)
   # ---------------------------------------------------------------------------
-  backend-test:
+  backend-unit-test:
+    name: Backend Unit Tests
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./backend # Minden parancs ebben a mappában fut
+        working-directory: ./backend
 
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +26,40 @@ jobs:
         with:
           java-version: "17"
           distribution: "temurin"
-          cache: "maven" # Maven függőségek cache-elése (gyorsabb build)
+          cache: "maven"
 
-      - name: Build with Maven
+      - name: Build with Maven (Skip Tests)
         run: ./mvnw clean package -DskipTests
 
-      - name: Run Tests
-        run: ./mvnw test
+      - name: Run Unit Tests (Service & Config)
+        run: ./mvnw test -Dtest=com.legymernok.backend.service.**,com.legymernok.backend.config.**
+
+  # ---------------------------------------------------------------------------
+  # Backend Controller Tests (Web Layer)
+  # ---------------------------------------------------------------------------
+  backend-controller-test:
+    name: Backend Controller Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Build with Maven (Skip Tests)
+        run: ./mvnw clean package -DskipTests
+
+      - name: Run Controller Tests (Web Layer)
+        run: ./mvnw test -Dtest=com.legymernok.backend.web.**
 
   # ---------------------------------------------------------------------------
   # Frontend Job: Build -> Unit Test -> E2E Test
