@@ -39,6 +39,7 @@ jobs:
   # ---------------------------------------------------------------------------
   backend-controller-test:
     name: Backend Controller Tests
+    needs: backend-unit-test
     runs-on: ubuntu-latest
 
     defaults:
@@ -94,6 +95,7 @@ jobs:
   # ---------------------------------------------------------------------------
   frontend-e2e-test:
     name: Frontend E2E Tests
+    needs: frontend-unit-test
     runs-on: ubuntu-latest
     defaults:
       run:
