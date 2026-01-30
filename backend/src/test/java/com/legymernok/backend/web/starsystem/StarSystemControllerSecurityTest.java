@@ -12,7 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -40,14 +40,14 @@ class StarSystemControllerSecurityTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean // Spring Boot 3.x-ben még @MockBean a standard, 4.x-ben @MockitoBean
+    @MockitoBean
     private StarSystemService starSystemService;
 
     // A SecurityConfig miatt kellenek ezek a mockok:
-    @MockBean
+    @MockitoBean
     private JwtService jwtService;
     
-    @MockBean
+    @MockitoBean
     private UserDetailsService userDetailsService;
 
     private StarSystemResponse mockResponse;
@@ -90,7 +90,7 @@ class StarSystemControllerSecurityTest {
     @DisplayName("GET /api/star-systems - Unauthorized user should fail (401)")
     void getAllStarSystems_NoUser_ShouldReturn401() throws Exception {
         mockMvc.perform(get("/api/star-systems"))
-                .andExpect(status().isForbidden()); // Spring Security alapbeállítás gyakran Forbidden-t ad 401 helyett authentication hiba esetén is, ha nincs entry point configolva
+                .andExpect(status().isForbidden());
     }
 
     // --- POST (CREATE) TESZTEK ---
@@ -107,7 +107,7 @@ class StarSystemControllerSecurityTest {
         when(starSystemService.createStarSystem(any(CreateStarSystemRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/api/star-systems")
-                        .with(csrf()) // Fontos: Security teszteknél a CSRF védelem aktív lehet
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
