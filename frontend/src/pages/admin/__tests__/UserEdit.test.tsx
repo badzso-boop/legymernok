@@ -25,13 +25,12 @@ vi.mock("react-router-dom", async () => {
 });
 
 describe("UserEdit Component", () => {
-  // --- JAVÍTÁS: MOCK ADATOK ---
   const mockUser = {
     id: "1",
     username: "luke",
     email: "luke@rebel.com",
     fullName: "Luke Skywalker",
-    roles: [{ name: "ROLE_CADET", id: "role-1" }], // A UserEdit most már objektumot vár, nem stringet!
+    roles: ["ROLE_CADET"],
     avatarUrl: null,
   };
 
@@ -39,7 +38,6 @@ describe("UserEdit Component", () => {
     { id: "role-1", name: "ROLE_CADET", description: "Cadet" },
     { id: "role-2", name: "ROLE_ADMIN", description: "Admin" },
   ];
-  // -------------------------
 
   beforeEach(() => {
     vi.clearAllMocks();

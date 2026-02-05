@@ -25,7 +25,7 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
-import type { Role, UserResponse } from "../../../types/user";
+import type { RoleName, UserResponse } from "../../../types/user";
 import type { RoleResponse } from "../../../types/role";
 
 const API_URL = "http://localhost:8080/api";
@@ -37,7 +37,9 @@ const UserEdit: React.FC = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<
-    Partial<Omit<UserResponse, "roles"> & { password?: string; role?: Role }>
+    Partial<
+      Omit<UserResponse, "roles"> & { password?: string; role?: RoleName }
+    >
   >({});
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -58,7 +60,11 @@ const UserEdit: React.FC = () => {
             },
           );
           // A backend 'roles' tömbjéből az elsőt vesszük a legördülőhöz
-          setUser({ ...response.data, role: response.data.roles[0] });
+          const currentRoleName =
+            response.data.roles && response.data.roles.length > 0
+              ? response.data.roles[0]
+              : "";
+          setUser({ ...response.data, role: currentRoleName });
         } catch (err) {
           setError(t("errorFetchUserDetails"));
         } finally {
@@ -103,7 +109,7 @@ const UserEdit: React.FC = () => {
   };
 
   const handleRoleChange = (event: SelectChangeEvent<string>) => {
-    setUser((prev) => ({ ...prev, role: event.target.value as Role }));
+    setUser((prev) => ({ ...prev, role: event.target.value as RoleName }));
   };
 
   const handleSave = async () => {
