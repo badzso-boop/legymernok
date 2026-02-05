@@ -74,7 +74,7 @@ describe("UserEdit Component", () => {
       expect(screen.getByDisplayValue("Luke Skywalker")).toBeInTheDocument();
 
       // Ellenőrizzük a szerepkörök betöltődését is
-      expect(screen.getByText("ROLE_CADET")).toBeInTheDocument();
+      expect(screen.getByText("CADET")).toBeInTheDocument();
     });
   });
 
