@@ -4,6 +4,24 @@ Ez a dokumentum a LégyMérnök.hu projekt fejlesztésének történetét örök
 
 ---
 
+## 📡 Bejegyzés #14: A Fekete Doboz Élesítése (System Logs & WebSocket)
+
+**Stardate:** 2026.01.24
+**Status:** Valós Idejű Monitorozás Aktív
+
+A Parancsnoki Híd (Admin Dashboard) újabb kritikus rendszerrel bővült. Mostantól nem repülünk vakon: a hajó minden rezdülését, minden rendszerüzenetet és hibajelzést valós időben látunk a központi kijelzőn.
+Kiépítettük a neurális hálózatot (WebSocket) a gépház és a parancsnoki pult között, így az üzenetek késleltetés nélkül érkeznek. A Fekete Doboz (LogList) nem csak rögzít, de színezett, szűrhető és azonnal
+olvasható formában tálalja az eseményeket a mérnököknek.
+
+- **Technikai részletek:**
+  - **Backend WebSocket:** `WebSocketConfig` és STOMP protokoll beüzemelése.
+  - **Custom Log Appender:** Egyedi `WebSocketLogAppender` írása, ami a Logback eseményeket közvetlenül a `/topic/logs` csatornára továbbítja.
+  - **Frontend Console:** Új `LogList.tsx` komponens, ami feliratkozik a WebSocket csatornára és terminál-szerű nézetben megjeleníti a bejövő logokat.
+  - **Security:** WebSocket végpontok védelme (csak ADMIN számára elérhető).
+  - **Refaktor:** `GlobalExceptionHandler` és a Service osztályok tisztítása a jobb logolás érdekében.
+
+---
+
 ## 🛰️ Bejegyzés #13: A Műszerfal Teljes Aktiválása (DataGrid & Final Admin UI)
 
 **Stardate:** 2026.01.21

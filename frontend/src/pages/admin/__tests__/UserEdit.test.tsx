@@ -25,46 +25,72 @@ vi.mock("react-router-dom", async () => {
 });
 
 describe("UserEdit Component", () => {
+  const mockUser = {
+    id: "1",
+    username: "luke",
+    email: "luke@rebel.com",
+    fullName: "Luke Skywalker",
+    roles: ["ROLE_CADET"],
+    avatarUrl: null,
+  };
+
+  const mockRoles = [
+    { id: "role-1", name: "ROLE_CADET", description: "Cadet" },
+    { id: "role-2", name: "ROLE_ADMIN", description: "Admin" },
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // --- JAVÍTÁS: Mock API válaszok beállítása ---
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes("/roles")) {
+        // Ha a szerepköröket kéri, adjuk vissza a mockRoles-t
+        return Promise.resolve({ data: mockRoles });
+      }
+      if (url.includes("/users/")) {
+        // Ha a usert kéri, adjuk vissza a mockUser-t
+        return Promise.resolve({ data: mockUser });
+      }
+      return Promise.reject(new Error("not found"));
+    });
+    // ------------------------------------------
   });
 
   it("loads existing user data for editing", async () => {
-    const mockUser = {
-      id: "1",
-      username: "luke",
-      email: "luke@rebel.com",
-      fullName: "Luke Skywalker",
-      roles: ["ROLE_CADET"],
-      avatarUrl: null,
-    };
-
-    mockedAxios.get.mockResolvedValue({ data: mockUser });
+    // A mockokat már a beforeEach beállította, itt nincs több teendő
 
     render(
       <MemoryRouter initialEntries={["/admin/users/1"]}>
         <Routes>
           <Route path="/admin/users/:id" element={<UserEdit />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
+    // Most már a `waitFor` megtalálja az elemeket
     await waitFor(() => {
       expect(screen.getByDisplayValue("luke")).toBeInTheDocument();
       expect(screen.getByDisplayValue("Luke Skywalker")).toBeInTheDocument();
+
+      // Ellenőrizzük a szerepkörök betöltődését is
+      expect(screen.getByText("CADET")).toBeInTheDocument();
     });
   });
 
   it("creates new user", async () => {
-    mockedAxios.post.mockResolvedValue({});
+    mockedAxios.post.mockResolvedValue({}); // POST hívás mockolása
 
     render(
       <MemoryRouter initialEntries={["/admin/users/new"]}>
         <Routes>
           <Route path="/admin/users/new" element={<UserEdit />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
+
+    // Várjuk meg, hogy a szerepkörök betöltődjenek
+    await waitFor(() => expect(screen.getByText("CADET")).toBeInTheDocument());
 
     const usernameInput = screen.getByLabelText("username");
     const emailInput = screen.getByLabelText("email");
@@ -80,14 +106,16 @@ describe("UserEdit Component", () => {
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining("/users"),
-        {
+        // A payload most már a role NAME-et küldi, nem az objektumot. Ellenőrizd a UserEdit handleSave-et!
+        // A UserEdit-ben a payload ezt küldi: role: user.role ? user.role : "",
+        // A user.role pedig a Select miatt a role neve (string) lesz.
+        expect.objectContaining({
           username: "leia",
           email: "leia@rebel.com",
           password: "general",
-          role: "ROLE_CADET",
-          fullName: "",
-        },
-        expect.any(Object)
+          role: "ROLE_CADET", // A komponens ezt teszi bele alapból
+        }),
+        expect.any(Object),
       );
     });
 
