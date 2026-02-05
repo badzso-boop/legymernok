@@ -90,9 +90,7 @@ describe("UserEdit Component", () => {
     );
 
     // Várjuk meg, hogy a szerepkörök betöltődjenek
-    await waitFor(() =>
-      expect(screen.getByText("ROLE_CADET")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("CADET")).toBeInTheDocument());
 
     const usernameInput = screen.getByLabelText("username");
     const emailInput = screen.getByLabelText("email");
