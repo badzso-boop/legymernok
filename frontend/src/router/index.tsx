@@ -137,7 +137,7 @@ export const router = createHashRouter([
   {
     path: "/admin",
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRole="ROLE_ADMIN">
         <AdminLayout />
       </ProtectedRoute>
     ),
