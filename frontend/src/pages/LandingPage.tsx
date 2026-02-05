@@ -1,135 +1,212 @@
-import React, { useState } from "react";
-import { Box, Typography, Button } from "@mui/material";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { Box, Grid } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import "../styles/LandingPage.css";
-import ControlPanel from "../components/ControlPanel";
+import SpaceStationCanvas from "./landing/SpaceStationCanvas";
+import { mainNavigationControls } from "../router/index";
+import "../styles/RetroUI.css";
 
 const LandingPage: React.FC = () => {
   const { t } = useTranslation();
-  const [phase, setPhase] = useState<"intro" | "transition" | "dashboard">(
-    "intro",
-  );
+  const navigate = useNavigate();
 
-  const handleStart = () => {
-    setPhase("transition");
-    // Amikor a robot lecsúszik, megjelenik a vezérlőpult
-    setTimeout(() => {
-      setPhase("dashboard");
-    }, 1200); // Kicsit gyorsabb átmenet
+  const [launchingIndex, setLaunchingIndex] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState(
+    "SYSTEMS READY. SELECT DESTINATION.",
+  );
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  // Animációs loop a kilövéshez
+  useEffect(() => {
+    if (launchingIndex !== null && countdown === 0) {
+      let animId: number;
+      const startTime = Date.now();
+
+      const animate = () => {
+        const elapsed = (Date.now() - startTime) / 1000; // másodperc
+        // 3 másodperc alatt érjen ki a képből
+        const p = elapsed / 3;
+        setProgress(p);
+
+        if (p < 1.5) {
+          animId = requestAnimationFrame(animate);
+        } else {
+          // Vége, navigáció
+          // Itt döntjük el hova megyünk a launchingIndex alapján
+          const targetPath = mainNavigationControls[launchingIndex].path;
+          navigate(targetPath);
+        }
+      };
+      animId = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(animId);
+    }
+  }, [launchingIndex, countdown, navigate]);
+
+  // Visszaszámláló logika
+  useEffect(() => {
+    if (countdown !== null && countdown > 0) {
+      setStatusMessage(`LAUNCH IN T-${countdown}...`);
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      setStatusMessage("LIFTOFF! ENGINES MAX POWER!");
+    }
+  }, [countdown]);
+
+  const handleLaunch = (index: number) => {
+    if (launchingIndex !== null) return; // Már megy egy
+    setLaunchingIndex(index);
+    setCountdown(3); // 3 mp visszaszámlálás indul
   };
 
   return (
     <Box
       sx={{
         width: "100%",
-        height: "80vh",
+        height: "100%",
+        minHeight: "80vh",
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
         justifyContent: "center",
+        alignItems: "center",
       }}
     >
-      <AnimatePresence mode="wait">
-        {(phase === "intro" || phase === "transition") && (
+      {/* A GÉP / KONZOL (Szélesebb, fekvő tájolás) */}
+      <Box
+        sx={{
+          aspectRatio: "16/9",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          border: "8px solid #2c2c2c",
+          borderRadius: "10px",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+          overflow: "hidden",
+          bgcolor: "#111",
+        }}
+      >
+        {/* ABLAK (Felső rész - Nagyobb arányban) */}
+        <Box
+          sx={{
+            flex: 2,
+            position: "relative",
+            borderBottom: "8px solid #2c2c2c",
+            overflow: "hidden",
+            bgcolor: "#000",
+          }}
+        >
+          <SpaceStationCanvas
+            launchingRocketIndex={launchingIndex}
+            launchProgress={progress}
+          />
+        </Box>
+
+        {/* CONTROL PANEL (Alsó rész - Kisebb, laposabb) */}
+        <div
+          className="control-panel-casing"
+          style={{
+            flex: 1,
+            borderRadius: 0,
+            border: "none",
+            borderTop: "2px solid #444",
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-around",
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Csavarok (csak a sarkokban) */}
+          <div
+            className="screw top-left"
+            style={{ left: "10px", top: "10px" }}
+          />
+          <div
+            className="screw top-right"
+            style={{ right: "10px", top: "10px" }}
+          />
+          <div
+            className="screw bottom-left"
+            style={{ left: "10px", bottom: "10px" }}
+          />
+          <div
+            className="screw bottom-right"
+            style={{ right: "10px", bottom: "10px" }}
+          />
+
+          {/* BAL OLDAL: Kijelző (Monitor) */}
           <Box
-            key="intro-content"
             sx={{
-              position: "relative",
-              zIndex: 10,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            {/* Szövegbuborék - csak az intro fázisban látszik */}
-            {phase === "intro" && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.5, y: 50 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                className="speech-bubble"
-              >
-                <Typography
-                  variant="h5"
-                  sx={{ fontWeight: "bold", mb: 1, color: "#1e293b" }}
-                >
-                  {t("welcome") || "Üdvözöllek a galaktikus utazásban!"}
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 3, color: "#475569" }}>
-                  Készen állsz a kezdésre?
-                </Typography>
-
-                <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={handleStart}
-                    sx={{
-                      bgcolor: "#3b82f6",
-                      px: 4,
-                      fontWeight: "bold",
-                      "&:hover": { bgcolor: "#2563eb" },
-                    }}
-                  >
-                    Igen
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => alert("Pedig az utazás nem vár! :)")}
-                  >
-                    Nem
-                  </Button>
-                </Box>
-              </motion.div>
-            )}
-
-            {/* A Robot - Sprite.png */}
-            <motion.div
-              initial={{ y: 0, opacity: 1 }}
-              animate={
-                phase === "transition"
-                  ? { y: 1000, rotate: 10 } // Lecsúszik
-                  : { y: [0, -15, 0] } // Finom lebegés az intro alatt
-              }
-              transition={
-                phase === "transition"
-                  ? { duration: 1, ease: "anticipate" }
-                  : { duration: 3, repeat: Infinity, ease: "easeInOut" } // Folyamatos lebegés
-              }
-              style={{
-                width: "256px", // Legyen szép nagy
-                height: "256px",
-                backgroundImage: 'url("/Sprite.png")',
-                backgroundSize: "contain",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "center",
-                imageRendering: "pixelated",
-              }}
-            />
-          </Box>
-        )}
-
-        {phase === "dashboard" && (
-          /* CONTROL PANEL PHASE */
-          <motion.div
-            key="dashboard-content"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-            style={{
-              width: "100%",
+              width: "500px",
               height: "100%",
               display: "flex",
-              justifyContent: "center",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              paddingRight: "25px",
+            }}
+          >
+            <div
+              className="crt-monitor"
+              style={{ width: "100%", height: "80%" }}
+            >
+              <div className="screen-overlay" />
+              <div
+                className="terminal-content"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.1rem",
+                  textAlign: "center",
+                  padding: "0 10px",
+                }}
+              >
+                {statusMessage}
+                <span className="blinking-cursor">_</span>
+              </div>
+            </div>
+          </Box>
+
+          {/* JOBB OLDAL: Gombok (Rácsban vagy sorban) */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "flex-start",
               alignItems: "center",
             }}
           >
-            <ControlPanel />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <Grid container spacing={2} justifyContent="center">
+              {mainNavigationControls.map((btn, index) => (
+                <Grid
+                  key={index}
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    xs: 6,
+                    sm: 3,
+                  }}
+                >
+                  <div className="button-group">
+                    <button
+                      className={`retro-btn ${btn.color} ${launchingIndex === index ? "active" : ""}`}
+                      onClick={() => handleLaunch(index)}
+                      disabled={launchingIndex !== null}
+                      style={{ width: "50px", height: "50px" }}
+                    />
+                    {/* Címke elhagyható, vagy nagyon kicsiben, ha zsúfolt */}
+                    <div
+                      className="label-plate"
+                      style={{ fontSize: "0.6rem", marginTop: "5px" }}
+                    >
+                      {t(btn.labelKey)}
+                    </div>
+                  </div>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+        </div>
+      </Box>
     </Box>
   );
 };

@@ -1,24 +1,3 @@
-/* Fő doboz */
-.control-panel-casing {
-  width: 100%;
-  max-width: 800px;
-  background-color: #2c2c2c; /* Sötétszürke fém */
-  border: 4px solid #1a1a1a;
-  border-radius: 10px;
-  padding: 30px;
-  position: relative;
-  box-shadow:
-    inset 0 0 20px rgba(0, 0, 0, 0.8),
-    0 20px 50px rgba(0, 0, 0, 0.5);
-  background-image: repeating-linear-gradient(
-    45deg,
-    #2c2c2c,
-    #2c2c2c 10px,
-    #303030 10px,
-    #303030 20px
-  ); /* Szálcsiszolt fém hatás */
-}
-
 /* Csavarok */
 .screw {
   width: 15px;

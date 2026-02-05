@@ -26,6 +26,40 @@ interface ProtectedRouteProps {
   requiredRole?: string;
 }
 
+interface NavControl {
+  id: string;
+  labelKey: string; // Fordításhoz
+  color: "red" | "blue" | "yellow" | "green";
+  path: string;
+}
+
+export const mainNavigationControls: NavControl[] = [
+  {
+    id: "STAR_SYSTEMS",
+    labelKey: "controlPanel.starSystems",
+    color: "red",
+    path: "/star-map",
+  },
+  {
+    id: "YOUR_BASE",
+    labelKey: "controlPanel.pilotData", // Vagy 'controlPanel.base'
+    color: "blue",
+    path: "/base", // Későbbi oldal
+  },
+  {
+    id: "LOBBY",
+    labelKey: "controlPanel.lobby",
+    color: "yellow",
+    path: "/lobby", // Későbbi oldal
+  },
+  {
+    id: "ARENA",
+    labelKey: "controlPanel.arena",
+    color: "green",
+    path: "/arena", // Későbbi oldal
+  },
+];
+
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { hasRole, isLoading } = useAuth();
 
