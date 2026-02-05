@@ -4,6 +4,7 @@ import com.legymernok.backend.dto.mission.CreateMissionRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
@@ -17,6 +18,7 @@ import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -42,8 +44,13 @@ public class MissionService {
 
     @Transactional
     public MissionResponse createMission(CreateMissionRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
         StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
+
+        if (!starSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only add missions to your own star systems or if you have 'mission:create_any_system' permission.");
+        }
 
         if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(),request.getName())) {
             throw new ResourceConflictException("Mission", "name", request.getName());
@@ -82,11 +89,61 @@ public class MissionService {
                 .orderInSystem(request.getOrderInSystem())
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
+                .owner(currentUser)
                 .build();
 
         Mission savedMission = missionRepository.save(mission);
         log.info("New mission created: '{}' in StarSystem ID: {}", savedMission.getName(),savedMission.getStarSystem().getId());
         return mapToResponse(savedMission);
+    }
+
+    @Transactional
+    public MissionResponse updateMission(UUID id, CreateMissionRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission missionToUpdate = missionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!missionToUpdate.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        StarSystem newStarSystem = starSystemRepository.findById(request.getStarSystemId())
+                .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
+
+        if (!newStarSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only move missions to your own star systems or if you have 'mission:create_any_system' permission.");
+        }
+
+        // Név ütközés ellenőrzése (ha a név változik, és már létezik a célrendszerben)
+        if (!missionToUpdate.getName().equals(request.getName()) &&
+                missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(), request.getName())) {
+            throw new ResourceConflictException("Mission", "name", request.getName());
+        }
+
+        // Sorrend ütközés (ha a sorrend változik)
+        if (missionToUpdate.getOrderInSystem() != request.getOrderInSystem()) {
+            if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
+                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+                missionRepository.flush(); // Biztosítjuk, hogy a shift lefusson
+            }
+        }
+
+        // Fájlok frissítése a Gitea-ban (opcionális, ha az update request is tartalmazza)
+        // Ez egy komplexebb rész lehet: fájl SHA lekérése, PUT hívás a Gitea API-ra.
+        // Most feltételezzük, hogy az update request NEM tartalmazza a fájl tartalmát,
+        // hanem a Mission Forge majd közvetlenül hívja a GiteaService-t, ha kell.
+        // Ha mégis, akkor a GiteaService.updateFile() metódusát kell használni.
+
+        missionToUpdate.setStarSystem(newStarSystem);
+        missionToUpdate.setName(request.getName());
+        missionToUpdate.setDescriptionMarkdown(request.getDescriptionMarkdown());
+        missionToUpdate.setMissionType(request.getMissionType());
+        missionToUpdate.setDifficulty(request.getDifficulty());
+        missionToUpdate.setOrderInSystem(request.getOrderInSystem());
+        missionToUpdate.setUpdatedAt(Instant.now());
+
+        Mission updatedMission = missionRepository.save(missionToUpdate);
+        return mapToResponse(updatedMission);
     }
 
     @Transactional
@@ -180,8 +237,13 @@ public class MissionService {
 
     @Transactional
     public void deleteMission(UUID id) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
         Mission mission = missionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:delete_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to delete this mission.");
+        }
 
         UUID starSystemId = mission.getStarSystem().getId();
         Integer deletedOrder = mission.getOrderInSystem();
@@ -244,5 +306,17 @@ public class MissionService {
                 .orderInSystem(mission.getOrderInSystem())
                 .createdAt(mission.getCreatedAt())
                 .build();
+    }
+
+    private Cadet getCurrentAuthenticatedUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return cadetRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+    }
+
+    private boolean hasAuthority(Cadet user, String authorityName) {
+        return user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> authority.equals(authorityName));
     }
 }

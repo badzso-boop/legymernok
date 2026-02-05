@@ -47,6 +47,14 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<MissionResponse> updateMission(@PathVariable UUID id, @RequestBody
+    CreateMissionRequest request) {
+        MissionResponse updatedMission = missionService.updateMission(id, request);
+        return ResponseEntity.ok(updatedMission);
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('mission:delete')")
     public ResponseEntity<Void> deleteMission(@PathVariable UUID id) {

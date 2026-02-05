@@ -1,5 +1,6 @@
 package com.legymernok.backend.model.mission;
 
+import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -47,6 +48,11 @@ public class Mission {
 
     @Column(nullable = false)
     private Integer orderInSystem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private Cadet owner;
+
 
     @CreationTimestamp
     private Instant createdAt;
