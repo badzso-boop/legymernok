@@ -10,6 +10,7 @@ import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionStatus;
+import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
@@ -41,6 +42,9 @@ public class MissionService {
     private final CadetMissionRepository cadetMissionRepository;
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
+
+    private final String templateRepoOwner;
+    private final String templateRepoName;
 
     @Transactional
     public MissionResponse createMission(CreateMissionRequest request) {
@@ -236,6 +240,15 @@ public class MissionService {
     }
 
     @Transactional
+    public void updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus) {
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+
+        mission.setVerificationStatus(newStatus);
+        missionRepository.save(mission);
+    }
+
+    @Transactional
     public void deleteMission(UUID id) {
         Cadet currentUser = getCurrentAuthenticatedUser();
         Mission mission = missionRepository.findById(id)
@@ -304,6 +317,9 @@ public class MissionService {
                 .missionType(mission.getMissionType())
                 .difficulty(mission.getDifficulty())
                 .orderInSystem(mission.getOrderInSystem())
+                .ownerId(mission.getOwner() != null ? mission.getOwner().getId() : null)
+                .ownerUsername(mission.getOwner() != null ? mission.getOwner().getUsername() : null)
+                .verificationStatus(mission.getVerificationStatus())
                 .createdAt(mission.getCreatedAt())
                 .build();
     }

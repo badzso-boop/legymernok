@@ -4,6 +4,7 @@ import com.legymernok.backend.exception.ExternalServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.http.MediaType;
 import org.springframework.core.ParameterizedTypeReference;
@@ -18,15 +19,18 @@ public class GiteaService {
     private final RestClient restClient;
     private final String adminUsername;
     private final String adminToken;
+    private final String templateRepoUrl;
 
     public GiteaService(
             @Value("${gitea.api.url}") String apiUrl,
             @Value("${gitea.admin.username}") String adminUsername,
             @Value("${gitea.admin.password}") String adminPassword,
-            @Value("${gitea.admin.token}") String adminToken) {
+            @Value("${gitea.admin.token}") String adminToken,
+            @Value("${gitea.template-repo-url}") String templateRepoUrl) {
 
         this.adminUsername = adminUsername;
         this.adminToken = adminToken;
+        this.templateRepoUrl = templateRepoUrl;
 
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
 
@@ -98,6 +102,81 @@ public class GiteaService {
         }
 
         throw new ExternalServiceException("Gitea", "Failed to create repository: No clone URL returned");
+    }
+
+    /**
+     * Klónoz egy template repository-t egy új user repository-vá.
+     * @param newRepoName Az új repository neve.
+     * @return Az új repository klónozási URL-je.
+     */
+    public String createRepoFromTemplate(String newRepoName, String templateOwner, String templateRepo) {
+        // 1. Létrehozzuk az ÜRES repót az admin user alatt
+        String newRepoCloneUrl = createRepository(newRepoName); // Ez már létező metódus
+
+        // 2. Lekérjük a template repo tartalmát
+        List<GiteaContent> templateContents = getRepoContents(templateOwner, templateRepo, "");
+
+        // 3. Feltöltjük az új repóba
+        for (GiteaContent content : templateContents) {
+            if ("file".equals(content.getType())) {
+                String fileContent = getFileContent(templateOwner, templateRepo, content.getPath());
+                createFile(newRepoName, content.getPath(), fileContent); // Az admin a saját repójába másolja
+            } else if ("dir".equals(content.getType())) {
+                // Rekurzívan másoljuk a mappákat (ha a template bonyolultabb)
+                // Jelenleg ez csak a gyökér szintet másolja
+                // Ide jöhetne egy rekurzív copyDir(templateOwner, templateRepo, newRepoName, content.getPath());
+            }
+        }
+
+        return newRepoCloneUrl;
+    }
+
+    /**
+     * Lekér egy mappa tartalmát (fájllista).
+     * @param owner A repository tulajdonosának felhasználóneve.
+     * @param repoName A repository neve.
+     * @param path A mappa útvonala a repón belül.
+     * @return A mappa tartalma.
+     */
+    public List<GiteaContent> getRepoContents(String owner, String repoName, String path) { // <--- Módosítva: owner paraméter
+        String uriPath = (path == null || path.isEmpty()) ? "" : "/" + path;
+        try {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}/contents{path}", owner, repoName, uriPath) // <--- Owner használata
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<GiteaContent>>() {});
+        } catch (HttpClientErrorException.NotFound e) { // <--- Importálni kell
+            return Collections.emptyList(); // Ha nem létezik a mappa
+        } catch (Exception e) {
+            log.error("Failed to get repo contents for {}/{}/{}: {}", owner, repoName, path, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Lekéri egy fájl tartalmát (Stringként, decode-olva).
+     * @param owner A repository tulajdonosának felhasználóneve.
+     * @param repoName A repository neve.
+     * @param filePath A fájl útvonala.
+     */
+    public String getFileContent(String owner, String repoName, String filePath) { // <--- Módosítva: owner paraméter
+        try {
+            GiteaContent content = restClient.get()
+                    .uri("/repos/{owner}/{repo}/contents/{path}", owner, repoName, filePath) // <--- Owner használata
+                    .retrieve()
+                    .body(GiteaContent.class);
+
+            if (content != null && content.getContent() != null) {
+                byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll("\\n", ""));
+                return new String(decodedBytes);
+            }
+        } catch (HttpClientErrorException.NotFound e) { // <--- Importálni kell
+            log.warn("File not found in Gitea: {}/{}/{}", owner, repoName, filePath);
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get file content for {}/{}/{}: {}", owner, repoName, filePath, e.getMessage());
+        }
+        return null;
     }
 
     /**

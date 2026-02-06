@@ -53,6 +53,9 @@ public class Mission {
     @JoinColumn(name = "owner_id")
     private Cadet owner;
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private VerificationStatus verificationStatus = VerificationStatus.DRAFT;
 
     @CreationTimestamp
     private Instant createdAt;
