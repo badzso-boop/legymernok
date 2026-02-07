@@ -1,5 +1,6 @@
 package com.legymernok.backend.web.mission;
 
+import com.legymernok.backend.dto.mission.CreateForgeMissionRequest;
 import com.legymernok.backend.dto.mission.CreateMissionRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.service.mission.MissionService;
@@ -20,10 +21,11 @@ public class MissionController {
 
     private final MissionService missionService;
 
-    @PostMapping
+    @PostMapping("/forge")
     @PreAuthorize("hasAuthority('mission:create')")
-    public ResponseEntity<MissionResponse> createMission(@RequestBody CreateMissionRequest request) {
-        return new ResponseEntity<>(missionService.createMission(request), HttpStatus.CREATED);
+    public ResponseEntity<MissionResponse> createMissionFromForge(@RequestBody CreateForgeMissionRequest request) {
+        MissionResponse newMission = missionService.createMissionFromForge(request);
+        return new ResponseEntity<>(newMission, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")

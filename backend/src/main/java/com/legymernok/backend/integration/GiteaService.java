@@ -1,6 +1,8 @@
 package com.legymernok.backend.integration;
 
 import com.legymernok.backend.exception.ExternalServiceException;
+import com.legymernok.backend.model.cadet.Cadet;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,31 +19,40 @@ import java.util.*;
 public class GiteaService {
 
     private final RestClient restClient;
+    /**
+     * -- GETTER --
+     *  Visszaadja a Gitea adminisztrátor felhasználónevét.
+     *
+     * @return Az admin felhasználónév.
+     */
+    @Getter
     private final String adminUsername;
     private final String adminToken;
-    private final String templateRepoUrl;
+    // Template repo konfigurációk
+    private final String jsTemplateRepoOwner;
+    private final String jsTemplateRepoName;
+    private final String pythonTemplateRepoOwner;
+    private final String pythonTemplateRepoName;
 
     public GiteaService(
             @Value("${gitea.api.url}") String apiUrl,
             @Value("${gitea.admin.username}") String adminUsername,
             @Value("${gitea.admin.password}") String adminPassword,
             @Value("${gitea.admin.token}") String adminToken,
-            @Value("${gitea.template-repo-url}") String templateRepoUrl) {
+            @Value("${gitea.template.js.owner}") String jsTemplateRepoOwner,
+            @Value("${gitea.template.js.repo}") String jsTemplateRepoName,
+            @Value("${gitea.template.python.owner}") String pythonTemplateRepoOwner,
+            @Value("${gitea.template.python.repo}") String pythonTemplateRepoName) {
 
         this.adminUsername = adminUsername;
         this.adminToken = adminToken;
-        this.templateRepoUrl = templateRepoUrl;
+        this.jsTemplateRepoOwner = jsTemplateRepoOwner;
+        this.jsTemplateRepoName = jsTemplateRepoName;
+        this.pythonTemplateRepoOwner = pythonTemplateRepoOwner;
+        this.pythonTemplateRepoName = pythonTemplateRepoName;
 
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
 
-        // DEBUG LOG - Ezt később kivesszük
-        System.out.println("--- GITEA SERVICE INIT ---");
-        System.out.println("URL: " + apiUrl);
-        System.out.println("User: " + adminUsername);
-        System.out.println("Token (first 5 chars): " + (adminToken != null && adminToken.length() > 5 ? adminToken.substring(0, 5) : "null"));
-        // ------------------------------------
-
-        // Basic Auth beállítása az adminnak
         this.restClient = RestClient.builder()
                 .baseUrl(apiUrl)
                 //.defaultHeader("Authorization", "token " + adminToken)
@@ -50,7 +61,16 @@ public class GiteaService {
                 .build();
     }
 
+    /**
+     * Létrehoz egy Gitea felhasználói fiókot az admin jogokkal.
+     * @param username A létrehozandó felhasználó neve.
+     * @param email A felhasználó email címe.
+     * @param password A felhasználó jelszava.
+     * @return A Gitea felhasználó ID-je.
+     * @throws ExternalServiceException Ha hiba történik (pl. már létező felhasználó, vagy API hiba).
+     */
     public Long createGiteaUser(String username, String email, String password) {
+        log.info("Attempting to create Gitea user: {}", username);
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("username", username);
         requestBody.put("email", email);
@@ -59,76 +79,231 @@ public class GiteaService {
         requestBody.put("must_change_password", false);
         requestBody.put("send_notify", false);
 
-        Map response = restClient.post()
-                .uri("/admin/users")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
-                .retrieve()
-                .body(Map.class);
+        try {
+            Map response = restClient.post()
+                    .uri("/admin/users")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(Map.class);
 
-        if (response != null && response.containsKey("id")) {
-            log.info("Creating Gitea user: {}", username);
-            return ((Number) response.get("id")).longValue();
+            if (response != null && response.containsKey("id")) {
+                Long giteaId = ((Number) response.get("id")).longValue();
+                log.info("Successfully created Gitea user: {} with ID: {}", username, giteaId);
+                return giteaId;
+            }
+        } catch (HttpClientErrorException.Conflict e) {
+            log.warn("Gitea user '{}' already exists. Conflict: {}", username, e.getMessage());
+            throw new ExternalServiceException("Gitea", "User '" + username + "' already exists.");
+        } catch (Exception e) {
+            log.error("Failed to create Gitea user '{}'. Error: {}", username, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to create user: " + e.getMessage());
         }
-
-        throw new ExternalServiceException("Gitea", "Failed to create user: no ID returned");
+        throw new ExternalServiceException("Gitea", "Failed to create user: no ID returned.");
     }
 
+    /**
+     * Töröl egy felhasználót a Gitea-ból.
+     * FIGYELEM: Ez véglegesen törli a felhasználót és az általa birtokolt összes repository-t is!
+     * @param username A törlendő felhasználó Gitea login neve.
+     * @throws ExternalServiceException Ha hiba történik (pl. felhasználó nem található).
+     */
+    public void deleteGiteaUser(String username) {
+        log.info("Attempting to delete Gitea user: {}", username);
+        try {
+            restClient.delete()
+                    .uri("/admin/users/{username}", username)
+                    .retrieve()
+                    .toBodilessEntity(); // A 204 No Content választ várjuk
+            log.info("Successfully deleted Gitea user: {}", username);
+        } catch (HttpClientErrorException.NotFound e) {
+            log.warn("Gitea user '{}' not found, skipping deletion. Error: {}", username, e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to delete Gitea user '{}'. Error: {}", username, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to delete user: " + e.getMessage());
+        }
+    }
 
     /**
-     * Létrehoz egy új repository-t az adminisztrátor felhasználó alatt.
+     * Létrehoz egy új, üres repository-t az adminisztrátor felhasználó alatt.
      *
-     * @param repoName A létrehozandó repository neve (pl. "mission-1-template").
-     * @return A repository klónozási URL-je (clone_url).
+     * @param repoName Az létrehozandó repository neve (pl. "mission-1-template").
+     * @param isPrivate A repository legyen-e privát.
+     * @return Az új repository klónozási URL-je (clone_url).
      */
-    public String createRepository(String repoName) {
-        log.debug("Creating Gitea repository: {}", repoName);
+    public String createEmptyRepository(String repoName, boolean isPrivate) {
+        log.info("Attempting to create empty Gitea repository '{}' as admin.", repoName);
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("name", repoName);
-        requestBody.put("private", true);
-        requestBody.put("auto_init", true);
+        requestBody.put("private", isPrivate);
+        requestBody.put("auto_init", false);
+        // description, license is beállítható
 
-        // API hívás: POST /user/repos (Az aktuálisan bejelentkezett usernek, azaz az adminnak hozza létre)
-        Map response = restClient.post()
-                .uri("/user/repos")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
-                .retrieve()
-                .body(Map.class);
+        try {
+            Map response = restClient.post()
+                    .uri("/user/repos")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(Map.class);
 
-        if (response != null && response.containsKey("clone_url")) {
-            log.info("Gitea repository created: {}", repoName);
-            return (String) response.get("clone_url");
+            if (response != null && response.containsKey("clone_url")) {
+                String cloneUrl = (String) response.get("clone_url");
+                log.info("Successfully created Gitea repository '{}'. URL: {}", repoName, cloneUrl);
+                return cloneUrl;
+            }
+        } catch (HttpClientErrorException.Conflict e) {
+            log.warn("Gitea repository '{}' already exists. Conflict: {}", repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Repository '" + repoName + "' already exists.");
+        } catch (Exception e) {
+            log.error("Failed to create Gitea repository '{}'. Error: {}", repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to create repository: " + e.getMessage());
         }
-
-        throw new ExternalServiceException("Gitea", "Failed to create repository: No clone URL returned");
+        throw new ExternalServiceException("Gitea", "Failed to create repository: No clone URL returned.");
     }
 
     /**
-     * Klónoz egy template repository-t egy új user repository-vá.
-     * @param newRepoName Az új repository neve.
-     * @return Az új repository klónozási URL-je.
+     * Töröl egy repository-t a Gitea-ból.
+     * @param owner A repository tulajdonosának neve.
+     * @param repoName A törlendő repository neve.
+     * @throws ExternalServiceException Ha hiba történik (pl. repó nem található, vagy jogosultság hiánya).
      */
-    public String createRepoFromTemplate(String newRepoName, String templateOwner, String templateRepo) {
-        // 1. Létrehozzuk az ÜRES repót az admin user alatt
-        String newRepoCloneUrl = createRepository(newRepoName); // Ez már létező metódus
+    public void deleteRepository(String owner, String repoName) {
+        log.info("Attempting to delete Gitea repository: {}/{}", owner, repoName);
+        try {
+            restClient.delete()
+                    .uri("/repos/{owner}/{repo}", owner, repoName)
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Successfully deleted Gitea repository: {}/{}", owner, repoName);
+        } catch (HttpClientErrorException.NotFound e) {
+            log.warn("Gitea repository '{}/{}' not found, skipping deletion. Error: {}", owner, repoName, e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to delete Gitea repository '{}/{}'. Error: {}", owner, repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to delete repository: " + e.getMessage());
+        }
+    }
 
-        // 2. Lekérjük a template repo tartalmát
-        List<GiteaContent> templateContents = getRepoContents(templateOwner, templateRepo, "");
+    /**
+     * Töröl egy, az admin felhasználóhoz tartozó repository-t.
+     * @param repoName A törlendő repository neve.
+     * @throws ExternalServiceException Ha hiba történik.
+     */
+    public void deleteAdminRepository(String repoName) {
+        deleteRepository(this.adminUsername, repoName);
+    }
 
-        // 3. Feltöltjük az új repóba
-        for (GiteaContent content : templateContents) {
+    /**
+     * Rekurzívan másolja egy repository tartalmát (fájlok és mappák) egy másik repository-ba.
+     * Mindkét repository-nak az admin tulajdonában kell lennie a művelethez.
+     *
+     * @param sourceOwner    A forrás repository tulajdonosának neve.
+     * @param sourceRepoName A forrás repository neve.
+     * @param targetRepoName A cél repository neve (az admin alatt).
+     * @throws ExternalServiceException Ha hiba történik a másolás során.
+     */
+    public void copyRepositoryContents(String sourceOwner, String sourceRepoName, String targetRepoName) {
+        log.info("Copying contents from {}/{} to admin's {}", sourceOwner, sourceRepoName, targetRepoName);
+        try {
+            List<GiteaContent> contents = getRepoContents(sourceOwner, sourceRepoName, "");
+
+            for (GiteaContent content : contents) {
+                if ("file".equals(content.getType())) {
+                    String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
+                    if (fileContent != null) {
+                        uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
+                    }
+                } else if ("dir".equals(content.getType())) {
+                    copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath());
+                }
+            }
+            log.info("Successfully copied contents from {}/{} to admin's {}.", sourceOwner, sourceRepoName, targetRepoName);
+        } catch (Exception e) {
+            log.error("Failed to copy repository contents from {}/{} to {}. Error: {}", sourceOwner, sourceRepoName, targetRepoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to copy repository contents: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Segédmetódus mappák rekurzív másolására.
+     */
+    private void copyDirectory(String sourceOwner, String sourceRepoName, String targetRepoName, String currentPath) {
+        List<GiteaContent> contents = getRepoContents(sourceOwner, sourceRepoName, currentPath);
+        for (GiteaContent content : contents) {
             if ("file".equals(content.getType())) {
-                String fileContent = getFileContent(templateOwner, templateRepo, content.getPath());
-                createFile(newRepoName, content.getPath(), fileContent); // Az admin a saját repójába másolja
+                String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
+                if (fileContent != null) {
+                    uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
+                }
             } else if ("dir".equals(content.getType())) {
-                // Rekurzívan másoljuk a mappákat (ha a template bonyolultabb)
-                // Jelenleg ez csak a gyökér szintet másolja
-                // Ide jöhetne egy rekurzív copyDir(templateOwner, templateRepo, newRepoName, content.getPath());
+                copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath()); // Rekurzió
             }
         }
+    }
 
-        return newRepoCloneUrl;
+    /**
+     * Feltölt vagy frissít egy fájlt a megadott repository-ban.
+     * Ha a fájl létezik, frissíti; ha nem, létrehozza.
+     * @param repoOwner A repository tulajdonosának neve.
+     * @param repoName A repository neve.
+     * @param filePath A fájl útvonala a repón belül.
+     * @param content A feltöltendő tartalom stringként.
+     * @return A fájl URL-je.
+     * @throws ExternalServiceException Ha hiba történik a művelet során.
+     */
+    public String uploadFile(String repoOwner, String repoName, String filePath, String content) {
+        String encodedContent = Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8));
+        String commitMessage = "Update " + filePath;
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("content", encodedContent);
+        requestBody.put("message", commitMessage);
+
+        try {
+            Map<String, Object> fileInfo = getFileInfo(repoOwner, repoName, filePath);
+            if (fileInfo != null && fileInfo.containsKey("sha")) {
+                requestBody.put("sha", fileInfo.get("sha"));
+
+                log.info("Updating file {} in {}/{}", filePath, repoOwner, repoName);
+                Map response = restClient.put()
+                        .uri("/repos/{owner}/{repo}/contents/{filepath}", repoOwner, repoName, filePath)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestBody)
+                        .retrieve()
+                        .body(Map.class);
+                return (String) response.get("html_url");
+            }
+        } catch (HttpClientErrorException.NotFound e) {
+            log.info("Creating file {} in {}/{}", filePath, repoOwner, repoName);
+            Map response = restClient.post()
+                    .uri("/repos/{owner}/{repo}/contents/{filepath}", repoOwner, repoName, filePath)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(Map.class);
+            return (String) response.get("html_url");
+        } catch (Exception e) {
+            log.error("Failed to upload file {} in {}/{}. Error: {}", filePath, repoOwner, repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to upload file: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Segédmetódus a fájl információinak lekéréséhez (SHA-érték miatt).
+     */
+    private Map<String, Object> getFileInfo(String owner, String repoName, String filePath) {
+        try {
+            return restClient.get()
+                    .uri("/repos/{owner}/{repo}/contents/{filepath}", owner, repoName, filePath)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (HttpClientErrorException.NotFound e) {
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get file info for {}/{}/{}: {}", owner, repoName, filePath, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to get file info: " + e.getMessage());
+        }
     }
 
     /**
@@ -138,15 +313,15 @@ public class GiteaService {
      * @param path A mappa útvonala a repón belül.
      * @return A mappa tartalma.
      */
-    public List<GiteaContent> getRepoContents(String owner, String repoName, String path) { // <--- Módosítva: owner paraméter
+    public List<GiteaContent> getRepoContents(String owner, String repoName, String path) {
         String uriPath = (path == null || path.isEmpty()) ? "" : "/" + path;
         try {
             return restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents{path}", owner, repoName, uriPath) // <--- Owner használata
+                    .uri("/repos/{owner}/{repo}/contents{path}", owner, repoName, uriPath)
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<GiteaContent>>() {});
-        } catch (HttpClientErrorException.NotFound e) { // <--- Importálni kell
-            return Collections.emptyList(); // Ha nem létezik a mappa
+        } catch (HttpClientErrorException.NotFound e) {
+            return Collections.emptyList();
         } catch (Exception e) {
             log.error("Failed to get repo contents for {}/{}/{}: {}", owner, repoName, path, e.getMessage());
             return Collections.emptyList();
@@ -159,10 +334,10 @@ public class GiteaService {
      * @param repoName A repository neve.
      * @param filePath A fájl útvonala.
      */
-    public String getFileContent(String owner, String repoName, String filePath) { // <--- Módosítva: owner paraméter
+    public String getFileContent(String owner, String repoName, String filePath) {
         try {
             GiteaContent content = restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents/{path}", owner, repoName, filePath) // <--- Owner használata
+                    .uri("/repos/{owner}/{repo}/contents/{path}", owner, repoName, filePath)
                     .retrieve()
                     .body(GiteaContent.class);
 
@@ -170,7 +345,7 @@ public class GiteaService {
                 byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll("\\n", ""));
                 return new String(decodedBytes);
             }
-        } catch (HttpClientErrorException.NotFound e) { // <--- Importálni kell
+        } catch (HttpClientErrorException.NotFound e) {
             log.warn("File not found in Gitea: {}/{}/{}", owner, repoName, filePath);
             return null;
         } catch (Exception e) {
@@ -180,134 +355,66 @@ public class GiteaService {
     }
 
     /**
-     *Létrehoz vagy felülír egy fájlt a repository-ban.
-     *Kezeli a "file already exists" esetet (pl. README.md) update hívással.
+     * Létrehoz egy új mission repository-t egy template alapján, és hozzáadja a usert kollaborátorként.
+     * A repository az admin tulajdonában marad.
      *
-     * @param repoName A repository neve (ahová a fájlt tesszük).
-     * @param filePath A fájl útvonala a repón belül (pl. "src/Main.java").
-     * @param content  A fájl szöveges tartalma.
+     * @param missionIdString Az új repository neve (ajánlott, hogy ez legyen a Mission UUID string formában).
+     * @param templateLanguage A template nyelve (pl. "javascript", "python").
+     * @param user             A Cadet objektum, aki a repóhoz hozzáférést kap.
+     * @return Az új repository klónozási URL-je.
+     * @throws ExternalServiceException Ha hiba történik a Gitea műveletek során.
      */
-    public void createFile(String repoName, String filePath, String content) {
-        String encodedContent = Base64.getEncoder().encodeToString(content.getBytes());
+    public String createMissionRepository(String missionIdString, String templateLanguage, Cadet user) {
+        log.info("Creating mission repository for user '{}' from '{}' template.", user.getUsername(), templateLanguage);
 
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("content", encodedContent);
-        requestBody.put("message", "Commit for " + filePath);
+        String sourceOwner;
+        String sourceRepoName;
+        String newRepoName = missionIdString;
 
-        try {
-            restClient.post()
-                    .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName,
-                            filePath)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .toBodilessEntity();
-        } catch (org.springframework.web.client.HttpClientErrorException.UnprocessableEntity e) {
-            updateFile(repoName, filePath, requestBody);
-        } catch (org.springframework.web.client.HttpClientErrorException e) {
-            // Egyéb hiba esetén dobjuk tovább (pl. 404, 401)
-            // Ha a 422 nem UnprocessableEntity-ként jön, hanem sima ClientError-ként, itt is elkaphatjuk
-            if (e.getStatusCode().value() == 422) {
-                updateFile(repoName, filePath, requestBody);
-            } else {
-                throw e;
-            }
-        }
-    }
-
-    /**
-     * Segédmetódus egy fájl tartalmának felülírására egy Gitea repository-ban.
-     * Az update művelethez szükséges a fájl aktuális SHA hash-e.
-     */
-    private void updateFile(String repoName, String filePath, Map<String, Object> requestBody) {
-        Map fileInfo = restClient.get()
-                .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName, filePath)
-                        .retrieve()
-                        .body(Map.class);
-
-        if (fileInfo != null && fileInfo.containsKey("sha")) {
-            String sha = (String) fileInfo.get("sha");
-            requestBody.put("sha", sha);
-            requestBody.put("message", "Update " + filePath);
-
-            restClient.put()
-                    .uri("/repos/{owner}/{repo}/contents/{filepath}", adminUsername, repoName,
-                            filePath)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .toBodilessEntity();
+        if ("javascript".equalsIgnoreCase(templateLanguage)) {
+            sourceOwner = jsTemplateRepoOwner;
+            sourceRepoName = jsTemplateRepoName;
+        } else if ("python".equalsIgnoreCase(templateLanguage)) {
+            sourceOwner = pythonTemplateRepoOwner;
+            sourceRepoName = pythonTemplateRepoName;
         } else {
-            throw new ExternalServiceException("Gitea", "Failed to retrieve SHA for existing file: " + filePath);
+            throw new IllegalArgumentException("Unsupported template language: " + templateLanguage);
         }
+
+        // 1. Üres repó létrehozása az admin alatt
+        String newRepoCloneUrl = createEmptyRepository(newRepoName, true); // Privát repó
+
+        // 2. Template tartalmának másolása az új repóba
+        copyRepositoryContents(sourceOwner, sourceRepoName, newRepoName);
+
+        // 3. User hozzáadása kollaborátorként 'write' joggal
+        addCollaborator(newRepoName, user.getUsername(), "write");
+        log.info("Mission repository '{}' created and user '{}' added as collaborator.", newRepoName, user.getUsername());
+
+        return newRepoCloneUrl;
     }
 
     /**
-     * Töröl egy felhasználót a Gitea-ból.
-     * FIGYELEM: Ez véglegesen törli a felhasználót és az általa birtokolt összes repository-t is!
-     * @param username A törlendő felhasználó Gitea login neve.
-     */
-    public void deleteGiteaUser(String username) {
-        log.info("Deleting Gitea user: {}", username);
-        restClient.delete()
-                .uri("/admin/users/{username}", username)
-                .retrieve()
-                .toBodilessEntity(); // A 204 No Content választ várjuk
-    }
-
-    /**
-     * Töröl egy repository-t a Gitea-ból.
-     * @param ownerUsername A repository tulajdonosának Gitea login neve.
-     * @param repoName A törlendő repository neve.
-     */
-    public void deleteRepository(String ownerUsername, String repoName) {
-        log.info("Deleting Gitea repository: {}/{}", ownerUsername, repoName);
-        restClient.delete()
-                .uri("/repos/{owner}/{repo}", ownerUsername, repoName)
-                .retrieve()
-                .toBodilessEntity();
-    }
-
-    /**
-     * Töröl egy repót, ami az admin felhasználóhoz tartozik.
-     */
-    public void deleteAdminRepository(String repoName) {
-        deleteRepository(this.adminUsername, repoName);
-    }
-
-    /**
-     * Lekérdez egy adott repository-t név alapján az admin felhasználó alatt.
-     *
+     * Lekér egy repository-t név alapján egy adott tulajdonos alatt.
+     * @param owner A repository tulajdonosának neve.
      * @param repoName A lekérdezendő repository neve.
      * @return Optional<Map<String, Object>> - A repository adatai, ha létezik.
+     * @throws ExternalServiceException Ha API hiba történik (kivéve 404).
      */
-    public Optional<Map<String, Object>> getRepository(String repoName) {
+    public Optional<Map<String, Object>> getRepository(String owner, String repoName) {
+        log.debug("Attempting to get Gitea repository: {}/{}", owner, repoName);
         try {
-            // API hívás: GET /repos/{owner}/{repo}
             Map<String, Object> response = restClient.get()
-                    .uri("/repos/{owner}/{repo}", adminUsername, repoName)
+                    .uri("/repos/{owner}/{repo}", owner, repoName)
                     .retrieve()
                     .body(Map.class);
             return Optional.ofNullable(response);
-        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
-            return Optional.empty();
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty(); // Nem talált repository-t
+        } catch (Exception e) {
+            log.error("Failed to get Gitea repository '{}/{}'. Error: {}", owner, repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to get repository: " + e.getMessage());
         }
-    }
-
-    /**
-     * Lekérdezi az admin felhasználó összes repository-ját.
-     *
-     * @return List<Map<String, Object>> - Az összes repository listája.
-     */
-    public List<Map<String, Object>> getAllUserRepositories() {
-        // API hívás: GET /user/repos
-        // Figyelem: A Gitea API alapértelmezetten lapozza az eredményeket.
-        // Itt most csak az első oldalt kérjük le, de élesben kezelni kell a lapozást!
-        List<Map<String, Object>> response = restClient.get()
-                .uri("/user/repos")
-                .retrieve()
-                .body(List.class);
-        return response;
     }
 
 
@@ -318,43 +425,6 @@ public class GiteaService {
         private String type; // "file" vagy "dir"
         private String content; // Base64
         private String download_url;
-    }
-
-    /**
-     * Lekéri egy mappa tartalmát (fájllista).
-     */
-    public List<GiteaContent> getRepoContents(String repoName, String path) {
-        String uriPath = (path == null || path.isEmpty()) ? "" : "/" + path;
-        try {
-            return restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents{path}", adminUsername, repoName, uriPath)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<List<GiteaContent>>() {});
-        } catch (Exception e) {
-            return List.of(); // Ha üres vagy hiba van
-        }
-    }
-
-    /**
-     * Lekéri egy fájl tartalmát (Stringként, decode-olva).
-     */
-    public String getFileContent(String repoName, String filePath) {
-        try {
-            GiteaContent content = restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents/{path}", adminUsername, repoName, filePath)
-                            .retrieve()
-                            .body(GiteaContent.class);
-
-            if (content != null && content.getContent() != null) {
-                // A Gitea Base64-e néha tartalmaz sortörést, ki kell venni
-                byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll(
-                        "\\n", ""));
-                return new String(decodedBytes);
-            }
-        } catch (Exception e) {
-            // Logolhatnánk
-        }
-        return "";
     }
 
     /**
