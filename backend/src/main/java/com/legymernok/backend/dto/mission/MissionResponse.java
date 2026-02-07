@@ -2,6 +2,7 @@ package com.legymernok.backend.dto.mission;
 
 import com.legymernok.backend.model.mission.Difficulty;
 import com.legymernok.backend.model.mission.MissionType;
+import com.legymernok.backend.model.mission.VerificationStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -20,4 +21,7 @@ public class MissionResponse {
     private Difficulty difficulty;
     private Integer orderInSystem;
     private Instant createdAt;
+    private UUID ownerId;
+    private String ownerUsername;
+    private VerificationStatus verificationStatus;
 }

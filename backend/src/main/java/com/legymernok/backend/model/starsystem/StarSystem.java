@@ -1,5 +1,6 @@
 package com.legymernok.backend.model.starsystem;
 
+import com.legymernok.backend.model.cadet.Cadet;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +31,10 @@ public class StarSystem {
     private String description;
 
     private String iconUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private Cadet owner;
 
     @CreationTimestamp
     private Instant createdAt;

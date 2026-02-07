@@ -1,6 +1,7 @@
 package com.legymernok.backend.repository.mission;
 
 import com.legymernok.backend.model.mission.Mission;
+import com.legymernok.backend.model.starsystem.StarSystem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -28,6 +29,8 @@ public interface MissionRepository extends JpaRepository<Mission, UUID> {
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Mission m SET m.orderInSystem = m.orderInSystem - 1 WHERE m.starSystem.id = :starSystemId AND m.orderInSystem > :deletedOrder")
     void shiftOrdersDown(@Param("starSystemId") UUID starSystemId, @Param("deletedOrder") Integer deletedOrder);
+
+    List<Mission> findAllByOwnerId(UUID ownerId);
 
 
 }

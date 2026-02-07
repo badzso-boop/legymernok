@@ -43,6 +43,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
     }
 
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Object> handleUnauthorizedAccessException(UnauthorizedAccessException ex) {
+        log.warn("Unauthorized access attempt: {}", ex.getMessage());
+        return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleGlobalException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);

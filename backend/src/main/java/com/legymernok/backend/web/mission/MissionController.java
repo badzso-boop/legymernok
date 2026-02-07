@@ -1,5 +1,6 @@
 package com.legymernok.backend.web.mission;
 
+import com.legymernok.backend.dto.mission.CreateForgeMissionRequest;
 import com.legymernok.backend.dto.mission.CreateMissionRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.service.mission.MissionService;
@@ -20,10 +21,11 @@ public class MissionController {
 
     private final MissionService missionService;
 
-    @PostMapping
+    @PostMapping("/forge")
     @PreAuthorize("hasAuthority('mission:create')")
-    public ResponseEntity<MissionResponse> createMission(@RequestBody CreateMissionRequest request) {
-        return new ResponseEntity<>(missionService.createMission(request), HttpStatus.CREATED);
+    public ResponseEntity<MissionResponse> createMissionFromForge(@RequestBody CreateForgeMissionRequest request) {
+        MissionResponse newMission = missionService.createMissionFromForge(request);
+        return new ResponseEntity<>(newMission, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
@@ -45,6 +47,14 @@ public class MissionController {
     @PreAuthorize("hasAuthority('mission:create')")
     public ResponseEntity<Integer> getNextOrder(@RequestParam UUID starSystemId) {
         return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<MissionResponse> updateMission(@PathVariable UUID id, @RequestBody
+    CreateMissionRequest request) {
+        MissionResponse updatedMission = missionService.updateMission(id, request);
+        return ResponseEntity.ok(updatedMission);
     }
 
     @DeleteMapping("/{id}")
