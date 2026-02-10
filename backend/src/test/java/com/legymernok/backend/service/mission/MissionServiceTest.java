@@ -18,6 +18,7 @@ import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -439,5 +440,129 @@ class MissionServiceTest {
 
         assertEquals(VerificationStatus.SUCCESS, mission.getVerificationStatus());
         verify(missionRepository).save(mission);
+    }
+
+    @Test
+    void shouldSuccessfullyCompleteMissionForgeWorkflow() {
+        // --- 1. Rendszerezés (Arrange) ---
+        setupAuthentication(testUser); // Autentikáció beállítása
+
+        // Mission Initializáláshoz szükséges mock-ok
+        CreateMissionInitialRequest initialRequest = new CreateMissionInitialRequest();
+        initialRequest.setStarSystemId(testStarSystem.getId());
+        initialRequest.setName("New Full Workflow Mission");
+        initialRequest.setTemplateLanguage("javascript");
+        initialRequest.setDifficulty(Difficulty.EASY);
+        initialRequest.setMissionType(MissionType.CODING);
+        initialRequest.setOrderInSystem(1);
+
+        when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
+        when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser))).thenReturn("http://gitea/init_repo.git");
+
+        // FONTOS: Láncolt thenAnswer a missionRepository.save() hívásokhoz
+        // Az első hívás (initializeForgeMission-ből) generál egy ID-t.
+        // A második hívás (saveForgeMissionContent-ből) egyszerűen visszaadja a frissített missziót.
+        when(missionRepository.save(any(Mission.class)))
+                .thenAnswer(invocation -> {
+                    Mission savedMission = invocation.getArgument(0);
+                    if (savedMission.getId() == null) {
+                        savedMission.setId(UUID.randomUUID()); // Generálunk egy ID-t az inicializáláshoz
+                    }
+                    return savedMission;
+                })
+                .thenAnswer(invocation -> {
+                    Mission updatedMission = invocation.getArgument(0);
+                    return updatedMission;
+                });
+
+        // Fájlok lekéréséhez szükséges mock-ok (ez szimulálja a template tartalmát)
+        List<GiteaService.GiteaContent> initialGiteaContents = Arrays.asList(
+                new GiteaService.GiteaContent("solution.js", "solution.js", "file", "encoded", "url"),
+                new GiteaService.GiteaContent("README.md", "README.md", "file", "encoded", "url")
+        );
+        // A getMissionFiles hívja a getRepoContents-t és a getFileContent-et
+        when(giteaService.getRepoContents(eq("legymernok_admin"), anyString(), eq(""))).thenReturn(initialGiteaContents);
+        when(giteaService.getFileContent(eq("legymernok_admin"), anyString(), eq("solution.js"))).thenReturn("console.log('initial code');");
+        when(giteaService.getFileContent(eq("legymernok_admin"), anyString(), eq("README.md"))).thenReturn("# Initial Readme");
+
+        // Fájlok mentéséhez szükséges mock-ok
+        when(giteaService.uploadFile(eq("legymernok_admin"), anyString(), anyString(), anyString())).thenReturn("http://gitea/uploaded_file.js");
+
+        // --- 2. Végrehajtás (Act) ---
+
+        // 1. Mission inicializálása
+        MissionResponse initialResponse = missionService.initializeForgeMission(initialRequest);
+        assertNotNull(initialResponse);
+        UUID missionId = initialResponse.getId();
+        assertNotNull(missionId);
+
+        // A MissionService.getMissionFiles és saveForgeMissionContent hívja a missionRepository.findById-t.
+        // Beállítjuk, hogy az inicializált missziót adja vissza.
+        Mission missionAfterInit = Mission.builder()
+                .id(missionId)
+                .owner(testUser)
+                .starSystem(testStarSystem)
+                .templateRepositoryUrl(initialResponse.getTemplateRepositoryUrl())
+                .name(initialResponse.getName())
+                .verificationStatus(initialResponse.getVerificationStatus())
+                .build();
+        when(missionRepository.findById(missionId)).thenReturn(Optional.of(missionAfterInit));
+
+        // 2. Fájlok betöltésének szimulálása (MissionService.getMissionFiles)
+        Map<String, String> loadedFiles = missionService.getMissionFiles(missionId);
+        assertNotNull(loadedFiles);
+        assertEquals(2, loadedFiles.size());
+        assertTrue(loadedFiles.containsKey("solution.js"));
+        assertEquals("console.log('initial code');", loadedFiles.get("solution.js"));
+
+        // 3. Fájlok mentésének szimulálása (MissionService.saveForgeMissionContent)
+        MissionForgeContentRequest saveRequest = new MissionForgeContentRequest();
+        saveRequest.setMissionId(missionId);
+        saveRequest.setFiles(Map.of("solution.js", "console.log('updated code');", "new_file.txt", "This is a new file."));
+
+        MissionResponse finalResponse = missionService.saveForgeMissionContent(saveRequest);
+
+        // --- 3. Ellenőrzés (Assert) ---
+
+        // initializeForgeMission ellenőrzések
+        verify(giteaService, times(1)).createMissionRepository(anyString(), eq("javascript"), eq(testUser));
+
+        // Fájl betöltés ellenőrzések
+        verify(missionRepository, times(2)).findById(missionId); // Kétszer hívódott: getMissionFiles és saveForgeMissionContent
+        verify(giteaService, times(1)).getRepoContents(eq("legymernok_admin"), eq(missionId.toString()), eq(""));
+        verify(giteaService, times(1)).getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("solution.js"));
+        verify(giteaService, times(1)).getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("README.md"));
+
+        // saveForgeMissionContent ellenőrzések
+        verify(giteaService, times(2)).uploadFile(eq("legymernok_admin"), eq(missionId.toString()), anyString(), anyString()); // Két fájl került feltöltésre
+
+        // GiteaService.getAdminUsername() meghívásának ellenőrzése
+        // createMissionRepository: 1x (belsőleg hívja)
+        // getMissionFiles: 1x
+        // saveForgeMissionContent: 1x
+        verify(giteaService, times(2)).getAdminUsername();
+
+        // missionRepository.save() hívások ellenőrzése ArgumentCaptorral
+        ArgumentCaptor<Mission> missionCaptor = ArgumentCaptor.forClass(Mission.class);
+        verify(missionRepository, times(2)).save(missionCaptor.capture());
+
+        List<Mission> capturedMissions = missionCaptor.getAllValues();
+        assertEquals(2, capturedMissions.size());
+
+        Mission firstSavedMission = capturedMissions.get(0);
+        assertNotNull(firstSavedMission.getId());
+        assertEquals("New Full Workflow Mission", firstSavedMission.getName());
+        assertEquals(VerificationStatus.DRAFT, firstSavedMission.getVerificationStatus());
+        assertNotNull(firstSavedMission.getTemplateRepositoryUrl());
+
+        Mission secondSavedMission = capturedMissions.get(1);
+        assertEquals(missionId, secondSavedMission.getId());
+        assertEquals(VerificationStatus.PENDING, secondSavedMission.getVerificationStatus());
+
+        assertNotNull(finalResponse);
+        assertEquals(VerificationStatus.PENDING, finalResponse.getVerificationStatus());
+        assertEquals("New Full Workflow Mission", finalResponse.getName());
     }
 }
