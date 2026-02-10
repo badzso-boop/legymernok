@@ -2,26 +2,25 @@ package com.legymernok.backend.dto.mission;
 
 import com.legymernok.backend.model.mission.Difficulty;
 import com.legymernok.backend.model.mission.MissionType;
-import com.legymernok.backend.model.mission.VerificationStatus;
-import lombok.Builder;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @Data
-@Builder
-public class MissionResponse {
-    private UUID id;
+public class CreateMissionInitialRequest {
+    @NotNull
     private UUID starSystemId;
+    @NotBlank
     private String name;
     private String descriptionMarkdown;
-    private String templateRepositoryUrl;
+    @NotNull
     private MissionType missionType;
+    @NotNull
     private Difficulty difficulty;
+    @NotNull
     private Integer orderInSystem;
-    private Instant createdAt;
-    private UUID ownerId;
-    private String ownerUsername;
-    private VerificationStatus verificationStatus;
+    @NotBlank
+    private String templateLanguage;
 }

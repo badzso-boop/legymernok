@@ -1,14 +1,16 @@
 package com.legymernok.backend.service.mission;
 
-import com.legymernok.backend.dto.mission.CreateMissionRequest;
-import com.legymernok.backend.dto.mission.MissionResponse;
+import com.legymernok.backend.dto.mission.*;
+import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionStatus;
+import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
@@ -17,16 +19,15 @@ import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,53 +41,215 @@ public class MissionService {
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
 
+    @Value("${gitea.template.js.owner}")
+    private String jsTemplateRepoOwner;
+
+    @Value("${gitea.template.js.repo}")
+    private String jsTemplateRepoName;
+
+    @Value("${gitea.template.python.owner}")
+    private String pythonTemplateRepoOwner;
+
+    @Value("${gitea.template.python.repo}")
+    private String pythonTemplateRepoName;
+
+    /**
+     * Inicializál egy új missziót a Mission Forge mechanizmuson keresztül.
+     * Létrehozza az adatbázis rekordot és a Gitea repository-t a template alapján.
+     *
+     * @param request A kérés DTO, ami tartalmazza a misszió alapadatait és a választott nyelvet.
+     * @return A létrehozott misszió válasz DTO-ja.
+     * @throws ResourceNotFoundException Ha a csillagrendszer nem található.
+     * @throws ResourceConflictException Ha már létezik azonos nevű misszió.
+     * @throws UnauthorizedAccessException Ha a user nem jogosult a műveletre.
+     * @throws ExternalServiceException Ha Gitea hiba történik.
+     */
     @Transactional
-    public MissionResponse createMission(CreateMissionRequest request) {
+    public MissionResponse initializeForgeMission(CreateMissionInitialRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser(); // Hitelesített user lekérése
         StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
 
-        if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(),request.getName())) {
+        // Ellenőrzés: A user csak a saját rendszerébe tehet missziót, vagy ha van create_any_system joga
+        if (!starSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only add missions to your own star systems or if you have 'mission:create_any_system' permission.");
+        }
+
+        // Ellenőrzés: Név egyedisége az adott rendszerben
+        if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(), request.getName())) {
             throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
-        if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(),request.getOrderInSystem())) {
+        // Ellenőrzés: Sorrend ütközés (ha a sorrend már foglalt, eltoljuk a többit)
+        if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
             missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
             missionRepository.flush();
         }
 
-        // 1. Repo nevének generálása (egyedinek kell lennie Giteán belül)
-        // Pl. "mission-template-[starSystemName]-[missionName]" (kicsit megtisztítva)
-        String safeMissionName = request.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
-        String repoName = "mission-template-" + safeMissionName + "-" + System.currentTimeMillis();
+        // 1. Gitea Repository Létrehozása a template alapján
+        // A repo neve legyen a Mission UUID-ja, hogy a Gitea Action vissza tudjon jelezni!
+        UUID newMissionId = UUID.randomUUID(); // Generálunk egy ID-t előre
+        String newRepoName = newMissionId.toString(); // Ez lesz a repo neve is
 
-        // 2. Gitea Repo létrehozása
-        String repoUrl = giteaService.createRepository(repoName);
+        String templateRepositoryUrl = giteaService.createMissionRepository(newRepoName, request.getTemplateLanguage(), currentUser);
 
-        // 3. Template fájlok feltöltése (Map iterálás)
-        if (request.getTemplateFiles() != null && !request.getTemplateFiles().isEmpty()) {
-            for (Map.Entry<String, String> entry : request.getTemplateFiles().entrySet()) {
-                String fileName = entry.getKey();
-                String content = entry.getValue();
-
-                giteaService.createFile(repoName, fileName, content);
-            }
-        }
-
+        // 3. Misszió mentése az adatbázisba
         Mission mission = Mission.builder()
+                .id(newMissionId)
                 .starSystem(starSystem)
                 .name(request.getName())
                 .descriptionMarkdown(request.getDescriptionMarkdown())
-                .templateRepositoryUrl(repoUrl)
                 .missionType(request.getMissionType())
                 .difficulty(request.getDifficulty())
                 .orderInSystem(request.getOrderInSystem())
+                .templateRepositoryUrl(templateRepositoryUrl)
+                .owner(currentUser)
+                .verificationStatus(VerificationStatus.DRAFT)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
 
         Mission savedMission = missionRepository.save(mission);
-        log.info("New mission created: '{}' in StarSystem ID: {}", savedMission.getName(),savedMission.getStarSystem().getId());
+        log.info("New mission '{}' created by user '{}' with repo '{}'. Initial status: PENDING.",
+                savedMission.getName(), currentUser.getUsername(), templateRepositoryUrl);
+
         return mapToResponse(savedMission);
+    }
+
+    /**
+     * Menti a user által szerkesztett fájlokat a Gitea repóba, és frissíti a misszió státuszát.
+     *
+     * @param request A DTO, ami tartalmazza a misszió ID-jét és a fájlok tartalmát.
+     * @return A frissített misszió válasz DTO-ja.
+     * @throws ResourceNotFoundException Ha a misszió nem található.
+     * @throws UnauthorizedAccessException Ha a user nem jogosult a műveletre.
+     * @throws ExternalServiceException Ha Gitea hiba történik.
+     */
+    @Transactional
+    public MissionResponse saveForgeMissionContent(MissionForgeContentRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(request.getMissionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getMissionId()));
+
+        // Ellenőrzés: User a tulajdonos, vagy van edit_any joga
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        String repoName = mission.getId().toString(); // A repó neve a Mission UUID-ja
+        String repoOwner = giteaService.getAdminUsername(); // Az admin a tulajdonos
+
+        // Fájlok feltöltése/frissítése a Gitea repóban
+        if (request.getFiles() != null && !request.getFiles().isEmpty()) {
+            for (Map.Entry<String, String> entry : request.getFiles().entrySet()) {
+                String fileName = entry.getKey();
+                String content = entry.getValue();
+                giteaService.uploadFile(repoOwner, repoName, fileName, content);
+            }
+        } else {
+            log.warn("Mission '{}' content saved without any files. Mission ID: {}", mission.getName(), mission.getId());
+        }
+
+        // Státusz frissítése PENDING-re, mert új kód került feltöltésre, amit tesztelni kell.
+        mission.setVerificationStatus(VerificationStatus.PENDING);
+        mission.setUpdatedAt(Instant.now());
+        Mission updatedMission = missionRepository.save(mission);
+
+        log.info("Mission '{}' (ID: {}) content saved by user '{}'. Status set to PENDING.",
+                mission.getName(), mission.getId(), currentUser.getUsername());
+
+        return mapToResponse(updatedMission);
+    }
+
+    /**
+     * Lekéri egy adott misszióhoz tartozó Gitea repó tartalmát a Monaco Editorba való betöltéshez.
+     *
+     * @param missionId A misszió ID-je.
+     * @return Map<String, String>, ahol a kulcs a fájlnév, az érték a fájl tartalma.
+     * @throws ResourceNotFoundException Ha a misszió nem található.
+     * @throws UnauthorizedAccessException Ha a user nem jogosult a műveletre.
+     * @throws ExternalServiceException Ha Gitea hiba történik.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> getMissionFiles(UUID missionId) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+
+        // Ellenőrzés: User a tulajdonos, vagy van read joga
+        // Itt dönthetünk, hogy csak az owner olvashatja, vagy bárki (ha van "mission:read" joga,
+        // de az owner-specifikus fájlokat csak az owner látja)
+        // Kezdésnek legyen csak owner vagy edit jog
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any") && !hasAuthority(currentUser, "mission:read")) {
+            throw new UnauthorizedAccessException("You do not have permission to view files for this mission.");
+        }
+
+        String repoName = mission.getId().toString(); // A repó neve a Mission UUID-ja
+        String repoOwner = giteaService.getAdminUsername(); // Az admin a tulajdonos
+
+        Map<String, String> filesContent = new HashMap<>();
+        List<GiteaService.GiteaContent> contents = giteaService.getRepoContents(repoOwner, repoName, ""); // Gyökér mappa
+
+        for (GiteaService.GiteaContent content : contents) {
+            // Csak fájlokat olvasunk ki
+            if ("file".equals(content.getType())) {
+                String fileContent = giteaService.getFileContent(repoOwner, repoName, content.getPath());
+                if (fileContent != null) {
+                    filesContent.put(content.getName(), fileContent);
+                }
+            }
+        }
+        log.info("Files for mission '{}' (ID: {}) fetched for user '{}'.", mission.getName(), mission.getId(), currentUser.getUsername());
+        return filesContent;
+    }
+
+    @Transactional
+    public MissionResponse updateMission(UUID id, CreateMissionRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission missionToUpdate = missionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!missionToUpdate.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        StarSystem newStarSystem = starSystemRepository.findById(request.getStarSystemId())
+                .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
+
+        if (!newStarSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only move missions to your own star systems or if you have 'mission:create_any_system' permission.");
+        }
+
+        // Név ütközés ellenőrzése (ha a név változik, és már létezik a célrendszerben)
+        if (!missionToUpdate.getName().equals(request.getName()) &&
+                missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(), request.getName())) {
+            throw new ResourceConflictException("Mission", "name", request.getName());
+        }
+
+        // Sorrend ütközés (ha a sorrend változik)
+        if (missionToUpdate.getOrderInSystem() != request.getOrderInSystem()) {
+            if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
+                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+                missionRepository.flush(); // Biztosítjuk, hogy a shift lefusson
+            }
+        }
+
+        // Fájlok frissítése a Gitea-ban (opcionális, ha az update request is tartalmazza)
+        // Ez egy komplexebb rész lehet: fájl SHA lekérése, PUT hívás a Gitea API-ra.
+        // Most feltételezzük, hogy az update request NEM tartalmazza a fájl tartalmát,
+        // hanem a Mission Forge majd közvetlenül hívja a GiteaService-t, ha kell.
+        // Ha mégis, akkor a GiteaService.updateFile() metódusát kell használni.
+
+        missionToUpdate.setStarSystem(newStarSystem);
+        missionToUpdate.setName(request.getName());
+        missionToUpdate.setDescriptionMarkdown(request.getDescriptionMarkdown());
+        missionToUpdate.setMissionType(request.getMissionType());
+        missionToUpdate.setDifficulty(request.getDifficulty());
+        missionToUpdate.setOrderInSystem(request.getOrderInSystem());
+        missionToUpdate.setUpdatedAt(Instant.now());
+
+        Mission updatedMission = missionRepository.save(missionToUpdate);
+        return mapToResponse(updatedMission);
     }
 
     @Transactional
@@ -103,42 +266,27 @@ public class MissionService {
             return existing.get().getRepositoryUrl();
         }
 
-        // 3. Template Repo nevének kinyerése az URL-ből
-        // Feltételezzük: http://localhost:3001/admin/repo-name.git
-        String templateRepoUrl = mission.getTemplateRepositoryUrl();
-        // Egyszerűsített logika: az utolsó "/" utáni rész a név (.git nélkül)
-        String templateRepoName = templateRepoUrl.substring(templateRepoUrl.lastIndexOf('/') + 1);
-        if (templateRepoName.endsWith(".git")) {
-            templateRepoName = templateRepoName.substring(0, templateRepoName.length() - 4);
+        // 3. User Repó Létrehozása Giteán (a mission template alapján)
+        // A repo neve: cadet-[username]-[missionId]
+        String userRepoName = "cadet-" + cadet.getUsername() + "-" + mission.getId().toString();
+        String sourceMissionRepoUrl = mission.getTemplateRepositoryUrl(); // Ez az admin által birtokolt user-specifikus repó URL-je
+        String sourceRepoOwner = giteaService.getAdminUsername(); // Az admin, mert övé a mission template repó
+        String sourceRepoName = extractRepoNameFromUrl(sourceMissionRepoUrl); // Repó név kinyerése
+
+        if (sourceRepoName == null) {
+            throw new ExternalServiceException("Gitea", "Could not extract repository name from mission template URL: " + sourceMissionRepoUrl);
         }
 
-        // 4. Új Diák Repo Létrehozása (pl. cadet-username-mission-name)
-        // Egyedivé tesszük timestamp-pel vagy UUID-vel, ha kell, de a username+mission elég lehet
-        String userRepoName = "cadet-" + cadet.getUsername() + "-" + templateRepoName;
+        // Létrehozzuk az üres repót a usernek az admin alatt
+        String userRepoUrl = giteaService.createEmptyRepository(userRepoName, true);
 
-        // Ha véletlenül már létezne ilyen nevű repo (de nincs DB bejegyzés), akkor kezelni kéne,
-        // de most feltételezzük, hogy a Gitea dob egy hibát vagy létrehozza.
-        // A createRepository visszadja az URL-t.
-        String userRepoUrl = giteaService.createRepository(userRepoName);
+        // Átmásoljuk az eredeti misszió repójának tartalmát az új user-specifikus repóba
+        giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
 
-        // 5. Jogosultság adása a diáknak
+        // User hozzáadása kollaborátorként (write joggal)
         giteaService.addCollaborator(userRepoName, cadet.getUsername(), "write");
 
-        // 6. Fájlok átmásolása (SMART COPY)
-        // Lekérjük a template repo gyökerét
-        List<GiteaService.GiteaContent> files = giteaService.getRepoContents(templateRepoName, "");
-
-        for (GiteaService.GiteaContent file : files) {
-            // Itt szűrhetünk: pl. ".solution"-t kihagyjuk
-            if ("file".equals(file.getType())) {
-                String content = giteaService.getFileContent(templateRepoName, file.getPath());
-                giteaService.createFile(userRepoName, file.getName(), content);
-            }
-            // TODO: Mappák rekurzív másolása (ha a feladat mappákból áll)
-            // Most az MVP-ben csak a gyökérfájlokat másoljuk.
-        }
-
-        // 7. Mentés az adatbázisba
+        // Mentés az adatbázisba
         CadetMission cadetMission = CadetMission.builder()
                 .cadet(cadet)
                 .mission(mission)
@@ -179,9 +327,23 @@ public class MissionService {
     }
 
     @Transactional
+    public void updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus) {
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+
+        mission.setVerificationStatus(newStatus);
+        missionRepository.save(mission);
+    }
+
+    @Transactional
     public void deleteMission(UUID id) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
         Mission mission = missionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:delete_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to delete this mission.");
+        }
 
         UUID starSystemId = mission.getStarSystem().getId();
         Integer deletedOrder = mission.getOrderInSystem();
@@ -242,7 +404,22 @@ public class MissionService {
                 .missionType(mission.getMissionType())
                 .difficulty(mission.getDifficulty())
                 .orderInSystem(mission.getOrderInSystem())
+                .ownerId(mission.getOwner() != null ? mission.getOwner().getId() : null)
+                .ownerUsername(mission.getOwner() != null ? mission.getOwner().getUsername() : null)
+                .verificationStatus(mission.getVerificationStatus())
                 .createdAt(mission.getCreatedAt())
                 .build();
+    }
+
+    private Cadet getCurrentAuthenticatedUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return cadetRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+    }
+
+    private boolean hasAuthority(Cadet user, String authorityName) {
+        return user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> authority.equals(authorityName));
     }
 }
