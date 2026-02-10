@@ -1,8 +1,6 @@
 package com.legymernok.backend.web.mission;
 
-import com.legymernok.backend.dto.mission.CreateForgeMissionRequest;
-import com.legymernok.backend.dto.mission.CreateMissionRequest;
-import com.legymernok.backend.dto.mission.MissionResponse;
+import com.legymernok.backend.dto.mission.*;
 import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -21,11 +20,44 @@ public class MissionController {
 
     private final MissionService missionService;
 
-    @PostMapping("/forge")
+    /**
+     * Inicializál egy új missziót a Mission Forge-on keresztül (létrehozza az adatbázis rekordot és a Gitea repót).
+     * @param request A misszió alapadatai és a választott nyelv.
+     * @return A létrehozott misszió.
+     */
+    @PostMapping("/forge/initialize")
     @PreAuthorize("hasAuthority('mission:create')")
-    public ResponseEntity<MissionResponse> createMissionFromForge(@RequestBody CreateForgeMissionRequest request) {
-        MissionResponse newMission = missionService.createMissionFromForge(request);
+    public ResponseEntity<MissionResponse> initializeForgeMission(@RequestBody CreateMissionInitialRequest request) {
+        MissionResponse newMission = missionService.initializeForgeMission(request);
         return new ResponseEntity<>(newMission, HttpStatus.CREATED);
+    }
+
+    /**
+     * Menti egy Forge misszió fájljainak tartalmát a Gitea repóba.
+     * @param missionId A misszió ID-je.
+     * @param request A DTO, ami tartalmazza a fájlok tartalmát.
+     * @return A frissített misszió.
+     */
+    @PostMapping("/{missionId}/forge/save")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<MissionResponse> saveForgeMissionContent(
+            @PathVariable UUID missionId,
+            @RequestBody MissionForgeContentRequest request) {
+        request.setMissionId(missionId);
+        MissionResponse updatedMission = missionService.saveForgeMissionContent(request);
+        return ResponseEntity.ok(updatedMission);
+    }
+
+    /**
+     * Lekéri egy Forge misszió fájljainak tartalmát a Gitea repóból.
+     * @param missionId A misszió ID-je.
+     * @return Map<String, String>, ahol a kulcs a fájlnév, az érték a fájl tartalma.
+     */
+    @GetMapping("/{missionId}/forge/files")
+    @PreAuthorize("hasAuthority('mission:read')")
+    public ResponseEntity<Map<String, String>> getMissionFiles(@PathVariable UUID missionId) {
+        Map<String, String> files = missionService.getMissionFiles(missionId);
+        return ResponseEntity.ok(files);
     }
 
     @GetMapping("/{id}")

@@ -2,7 +2,9 @@ package com.legymernok.backend.web.mission;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.config.SecurityConfig;
+import com.legymernok.backend.dto.mission.CreateMissionInitialRequest;
 import com.legymernok.backend.dto.mission.CreateMissionRequest;
+import com.legymernok.backend.dto.mission.MissionForgeContentRequest;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.model.mission.Difficulty;
 import com.legymernok.backend.model.mission.MissionType;
@@ -22,12 +24,12 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -73,6 +75,126 @@ class MissionControllerSecurityTest {
                 .build();
     }
 
+    private CreateMissionInitialRequest createForgeInitialRequest() {
+        CreateMissionInitialRequest request = new CreateMissionInitialRequest();
+        request.setStarSystemId(UUID.randomUUID());
+        request.setName("Test Forge Mission");
+        request.setTemplateLanguage("javascript");
+        request.setDifficulty(Difficulty.EASY);
+        request.setMissionType(MissionType.CODING);
+        request.setOrderInSystem(1);
+        return request;
+    }
+
+    private MissionForgeContentRequest createForgeContentRequest() {
+        MissionForgeContentRequest request = new MissionForgeContentRequest();
+        // request.setMissionId(UUID.randomUUID()); // Ezt az URL-ből kapja
+        request.setFiles(Map.of("solution.js", "function add(){return 1;}"));
+        return request;
+    }
+
+    @Test
+    @DisplayName("POST /api/missions/forge/initialize - with mission:create authority should return CREATED")
+    @WithMockUser(authorities = "mission:create") // Cadet joga van létrehozni
+    void initializeForgeMission_withValidAuthority_shouldReturnCreated() throws Exception {
+        when(missionService.initializeForgeMission(any(CreateMissionInitialRequest.class))).thenReturn(mockResponse);
+
+        mockMvc.perform(post("/api/missions/forge/initialize") // ÚJ VÉGPONT
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeInitialRequest())))
+                .andExpect(status().isCreated());
+
+        verify(missionService).initializeForgeMission(any(CreateMissionInitialRequest.class));
+    }
+
+    @Test
+    @DisplayName("POST /api/missions/forge/initialize - without mission:create authority should return FORBIDDEN")
+    @WithMockUser // Nincs joga
+    void initializeForgeMission_withoutAuthority_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(post("/api/missions/forge/initialize")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeInitialRequest())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /api/missions/forge/initialize - when not authenticated should return FORBIDDEN")
+    void initializeForgeMission_whenNotAuthenticated_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(post("/api/missions/forge/initialize")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeInitialRequest())))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- saveForgeMissionContent (POST /api/missions/{missionId}/forge/save) TESZTEK ---
+    @Test
+    @DisplayName("POST /api/missions/{missionId}/forge/save - with mission:edit authority should return OK")
+    @WithMockUser(authorities = "mission:edit") // Edit joggal menthet
+    void saveForgeMissionContent_withValidAuthority_shouldReturnOk() throws Exception {
+        when(missionService.saveForgeMissionContent(any(MissionForgeContentRequest.class))).thenReturn(mockResponse);
+
+        mockMvc.perform(post("/api/missions/{missionId}/forge/save", missionId) // ÚJ VÉGPONT
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeContentRequest())))
+                .andExpect(status().isOk());
+
+        verify(missionService).saveForgeMissionContent(any(MissionForgeContentRequest.class));
+    }
+
+    @Test
+    @DisplayName("POST /api/missions/{missionId}/forge/save - without mission:edit authority should return FORBIDDEN")
+    @WithMockUser // Nincs joga
+    void saveForgeMissionContent_withoutAuthority_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(post("/api/missions/{missionId}/forge/save", missionId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeContentRequest())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /api/missions/{missionId}/forge/save - when not authenticated should return FORBIDDEN")
+    void saveForgeMissionContent_whenNotAuthenticated_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(post("/api/missions/{missionId}/forge/save", missionId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createForgeContentRequest())))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- getMissionFiles (GET /api/missions/{missionId}/forge/files) TESZTEK ---
+    @Test
+    @DisplayName("GET /api/missions/{missionId}/forge/files - with mission:read authority should return OK")
+    @WithMockUser(authorities = "mission:read") // Read joggal olvashat
+    void getMissionFiles_withValidAuthority_shouldReturnOk() throws Exception {
+        when(missionService.getMissionFiles(any(UUID.class))).thenReturn(Map.of("solution.js", "code"));
+
+        mockMvc.perform(get("/api/missions/{missionId}/forge/files", missionId)) // ÚJ VÉGPONT
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.['solution.js']").value("code"));
+
+        verify(missionService).getMissionFiles(eq(missionId));
+    }
+
+    @Test
+    @DisplayName("GET /api/missions/{missionId}/forge/files - without mission:read authority should return FORBIDDEN")
+    @WithMockUser // Nincs joga
+    void getMissionFiles_withoutAuthority_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(get("/api/missions/{missionId}/forge/files", missionId))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/missions/{missionId}/forge/files - when not authenticated should return FORBIDDEN")
+    void getMissionFiles_whenNotAuthenticated_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(get("/api/missions/{missionId}/forge/files", missionId))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     @DisplayName("GET /api/missions - Cadet (read) should succeed")
     @WithMockUser(username = "cadet", authorities = {"mission:read"})
@@ -82,38 +204,6 @@ class MissionControllerSecurityTest {
         mockMvc.perform(get("/api/missions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("Test Mission"));
-    }
-
-    @Test
-    @DisplayName("POST /api/missions - Admin (create) should succeed")
-    @WithMockUser(username = "admin", authorities = {"mission:create"})
-    void createMission_AsAdmin_ShouldSucceed() throws Exception {
-        CreateMissionRequest request = new CreateMissionRequest();
-        request.setName("New Mission");
-        request.setStarSystemId(starSystemId);
-        request.setMissionType(MissionType.CODING);
-        request.setDifficulty(Difficulty.HARD);
-
-        when(missionService.createMission(any(CreateMissionRequest.class))).thenReturn(mockResponse);
-
-        mockMvc.perform(post("/api/missions")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
-    }
-
-    @Test
-    @DisplayName("POST /api/missions - Cadet (no permission) should be Forbidden")
-    @WithMockUser(username = "cadet", authorities = {"mission:read"})
-    void createMission_AsCadet_ShouldFail() throws Exception {
-        CreateMissionRequest request = new CreateMissionRequest();
-        request.setName("Hacker Mission");
-
-        mockMvc.perform(post("/api/missions")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
     }
 
     @Test

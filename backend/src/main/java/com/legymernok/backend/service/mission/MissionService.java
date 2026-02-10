@@ -1,8 +1,6 @@
 package com.legymernok.backend.service.mission;
 
-import com.legymernok.backend.dto.mission.CreateForgeMissionRequest;
-import com.legymernok.backend.dto.mission.CreateMissionRequest;
-import com.legymernok.backend.dto.mission.MissionResponse;
+import com.legymernok.backend.dto.mission.*;
 import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
@@ -29,10 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -59,10 +54,10 @@ public class MissionService {
     private String pythonTemplateRepoName;
 
     /**
-     * Létrehoz egy új missziót a Mission Forge mechanizmuson keresztül.
-     * Ez a metódus intézi a Gitea repository létrehozását és a fájlok feltöltését is.
+     * Inicializál egy új missziót a Mission Forge mechanizmuson keresztül.
+     * Létrehozza az adatbázis rekordot és a Gitea repository-t a template alapján.
      *
-     * @param request A kérés DTO, ami tartalmazza a misszió adatait és a fájlok tartalmát.
+     * @param request A kérés DTO, ami tartalmazza a misszió alapadatait és a választott nyelvet.
      * @return A létrehozott misszió válasz DTO-ja.
      * @throws ResourceNotFoundException Ha a csillagrendszer nem található.
      * @throws ResourceConflictException Ha már létezik azonos nevű misszió.
@@ -70,7 +65,7 @@ public class MissionService {
      * @throws ExternalServiceException Ha Gitea hiba történik.
      */
     @Transactional
-    public MissionResponse createMissionFromForge(CreateForgeMissionRequest request) {
+    public MissionResponse initializeForgeMission(CreateMissionInitialRequest request) {
         Cadet currentUser = getCurrentAuthenticatedUser(); // Hitelesített user lekérése
         StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
@@ -98,29 +93,18 @@ public class MissionService {
 
         String templateRepositoryUrl = giteaService.createMissionRepository(newRepoName, request.getTemplateLanguage(), currentUser);
 
-        // 2. User által megadott fájlok feltöltése (felülírja a template fájlokat)
-        if (request.getFiles() != null && !request.getFiles().isEmpty()) {
-            for (Map.Entry<String, String> entry : request.getFiles().entrySet()) {
-                String fileName = entry.getKey();
-                String content = entry.getValue();
-                giteaService.uploadFile(giteaService.getAdminUsername(), newRepoName, fileName, content);
-            }
-        } else {
-            log.warn("Mission '{}' created without any files.", request.getName());
-        }
-
         // 3. Misszió mentése az adatbázisba
         Mission mission = Mission.builder()
-                .id(newMissionId) // A generált ID-t használjuk
+                .id(newMissionId)
                 .starSystem(starSystem)
                 .name(request.getName())
                 .descriptionMarkdown(request.getDescriptionMarkdown())
                 .missionType(request.getMissionType())
                 .difficulty(request.getDifficulty())
                 .orderInSystem(request.getOrderInSystem())
-                .templateRepositoryUrl(templateRepositoryUrl) // Ez most az admin által birtokolt user-specifikus repo URL-je
+                .templateRepositoryUrl(templateRepositoryUrl)
                 .owner(currentUser)
-                .verificationStatus(VerificationStatus.PENDING) // Kezdetben PENDING
+                .verificationStatus(VerificationStatus.DRAFT)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -132,6 +116,92 @@ public class MissionService {
         return mapToResponse(savedMission);
     }
 
+    /**
+     * Menti a user által szerkesztett fájlokat a Gitea repóba, és frissíti a misszió státuszát.
+     *
+     * @param request A DTO, ami tartalmazza a misszió ID-jét és a fájlok tartalmát.
+     * @return A frissített misszió válasz DTO-ja.
+     * @throws ResourceNotFoundException Ha a misszió nem található.
+     * @throws UnauthorizedAccessException Ha a user nem jogosult a műveletre.
+     * @throws ExternalServiceException Ha Gitea hiba történik.
+     */
+    @Transactional
+    public MissionResponse saveForgeMissionContent(MissionForgeContentRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(request.getMissionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getMissionId()));
+
+        // Ellenőrzés: User a tulajdonos, vagy van edit_any joga
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        String repoName = mission.getId().toString(); // A repó neve a Mission UUID-ja
+        String repoOwner = giteaService.getAdminUsername(); // Az admin a tulajdonos
+
+        // Fájlok feltöltése/frissítése a Gitea repóban
+        if (request.getFiles() != null && !request.getFiles().isEmpty()) {
+            for (Map.Entry<String, String> entry : request.getFiles().entrySet()) {
+                String fileName = entry.getKey();
+                String content = entry.getValue();
+                giteaService.uploadFile(repoOwner, repoName, fileName, content);
+            }
+        } else {
+            log.warn("Mission '{}' content saved without any files. Mission ID: {}", mission.getName(), mission.getId());
+        }
+
+        // Státusz frissítése PENDING-re, mert új kód került feltöltésre, amit tesztelni kell.
+        mission.setVerificationStatus(VerificationStatus.PENDING);
+        mission.setUpdatedAt(Instant.now());
+        Mission updatedMission = missionRepository.save(mission);
+
+        log.info("Mission '{}' (ID: {}) content saved by user '{}'. Status set to PENDING.",
+                mission.getName(), mission.getId(), currentUser.getUsername());
+
+        return mapToResponse(updatedMission);
+    }
+
+    /**
+     * Lekéri egy adott misszióhoz tartozó Gitea repó tartalmát a Monaco Editorba való betöltéshez.
+     *
+     * @param missionId A misszió ID-je.
+     * @return Map<String, String>, ahol a kulcs a fájlnév, az érték a fájl tartalma.
+     * @throws ResourceNotFoundException Ha a misszió nem található.
+     * @throws UnauthorizedAccessException Ha a user nem jogosult a műveletre.
+     * @throws ExternalServiceException Ha Gitea hiba történik.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> getMissionFiles(UUID missionId) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+
+        // Ellenőrzés: User a tulajdonos, vagy van read joga
+        // Itt dönthetünk, hogy csak az owner olvashatja, vagy bárki (ha van "mission:read" joga,
+        // de az owner-specifikus fájlokat csak az owner látja)
+        // Kezdésnek legyen csak owner vagy edit jog
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any") && !hasAuthority(currentUser, "mission:read")) {
+            throw new UnauthorizedAccessException("You do not have permission to view files for this mission.");
+        }
+
+        String repoName = mission.getId().toString(); // A repó neve a Mission UUID-ja
+        String repoOwner = giteaService.getAdminUsername(); // Az admin a tulajdonos
+
+        Map<String, String> filesContent = new HashMap<>();
+        List<GiteaService.GiteaContent> contents = giteaService.getRepoContents(repoOwner, repoName, ""); // Gyökér mappa
+
+        for (GiteaService.GiteaContent content : contents) {
+            // Csak fájlokat olvasunk ki
+            if ("file".equals(content.getType())) {
+                String fileContent = giteaService.getFileContent(repoOwner, repoName, content.getPath());
+                if (fileContent != null) {
+                    filesContent.put(content.getName(), fileContent);
+                }
+            }
+        }
+        log.info("Files for mission '{}' (ID: {}) fetched for user '{}'.", mission.getName(), mission.getId(), currentUser.getUsername());
+        return filesContent;
+    }
 
     @Transactional
     public MissionResponse updateMission(UUID id, CreateMissionRequest request) {

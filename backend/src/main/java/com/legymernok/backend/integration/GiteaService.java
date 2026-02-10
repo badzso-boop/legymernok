@@ -382,7 +382,7 @@ public class GiteaService {
         }
 
         // 1. Üres repó létrehozása az admin alatt
-        String newRepoCloneUrl = createEmptyRepository(newRepoName, true); // Privát repó
+        String newRepoCloneUrl = createEmptyRepository(newRepoName, true);
 
         // 2. Template tartalmának másolása az új repóba
         copyRepositoryContents(sourceOwner, sourceRepoName, newRepoName);
@@ -419,6 +419,8 @@ public class GiteaService {
 
 
     @lombok.Data
+    @lombok.AllArgsConstructor
+    @lombok.NoArgsConstructor
     public static class GiteaContent {
         private String name;
         private String path;
