@@ -18,9 +18,49 @@ import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
+import StarMapPage from "../pages/starmap/StarMapPage";
+import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 
-// Egyszerűbb védelem: csak ha van token
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+interface ProtectedRouteProps {
+  children: JSX.Element;
+  requiredRole?: string;
+}
+
+interface NavControl {
+  id: string;
+  labelKey: string; // Fordításhoz
+  color: "red" | "blue" | "yellow" | "green";
+  path: string;
+}
+
+export const mainNavigationControls: NavControl[] = [
+  {
+    id: "STAR_SYSTEMS",
+    labelKey: "controlPanel.starSystems",
+    color: "red",
+    path: "/star-map",
+  },
+  {
+    id: "YOUR_BASE",
+    labelKey: "controlPanel.pilotData", // Vagy 'controlPanel.base'
+    color: "blue",
+    path: "/base", // Későbbi oldal
+  },
+  {
+    id: "LOBBY",
+    labelKey: "controlPanel.lobby",
+    color: "yellow",
+    path: "/lobby", // Későbbi oldal
+  },
+  {
+    id: "ARENA",
+    labelKey: "controlPanel.arena",
+    color: "green",
+    path: "/arena", // Későbbi oldal
+  },
+];
+
+const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { hasRole, isLoading } = useAuth();
 
   if (isLoading) {
@@ -35,11 +75,14 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 
   const token = localStorage.getItem("token");
 
+  // 1. Alapvető token ellenőrzés
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!hasRole("ROLE_ADMIN")) {
+  // 2. Szerepkör ellenőrzés (csak ha specifikus role-t kérünk)
+  if (requiredRole && !hasRole(requiredRole)) {
+    // Ha admin felületre próbál lépni, de nem admin, küldjük a főoldalra
     return <Navigate to="/" replace />;
   }
 
@@ -71,11 +114,30 @@ export const router = createHashRouter([
     ],
   },
 
+  {
+    path: "/star-map",
+    element: (
+      // Itt kellene egy olyan védett route, ami bármilyen bejelentkezett usernek engedélyezi
+      <ProtectedRoute>
+        <StarMapPage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/star-systems/:id", // Dinamikus ID
+    element: (
+      <ProtectedRoute>
+        <StarSystemDetailPage />
+      </ProtectedRoute>
+    ),
+  },
+
   // Védett Admin útvonalak
   {
     path: "/admin",
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requiredRole="ROLE_ADMIN">
         <AdminLayout />
       </ProtectedRoute>
     ),
