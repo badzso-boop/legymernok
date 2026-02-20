@@ -86,32 +86,42 @@ public class MissionService {
             missionRepository.flush();
         }
 
-        // 1. Gitea Repository Létrehozása a template alapján
-        // A repo neve legyen a Mission UUID-ja, hogy a Gitea Action vissza tudjon jelezni!
-        UUID newMissionId = UUID.randomUUID(); // Generálunk egy ID-t előre
-        String newRepoName = newMissionId.toString(); // Ez lesz a repo neve is
-
-        String templateRepositoryUrl = giteaService.createMissionRepository(newRepoName, request.getTemplateLanguage(), currentUser);
-
-        // 3. Misszió mentése az adatbázisba
         Mission mission = Mission.builder()
-                .id(newMissionId)
                 .starSystem(starSystem)
                 .name(request.getName())
                 .descriptionMarkdown(request.getDescriptionMarkdown())
                 .missionType(request.getMissionType())
                 .difficulty(request.getDifficulty())
                 .orderInSystem(request.getOrderInSystem())
-                .templateRepositoryUrl(templateRepositoryUrl)
                 .owner(currentUser)
                 .verificationStatus(VerificationStatus.DRAFT)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .templateRepositoryUrl("PENDING_INITIALIZATION")
                 .build();
 
         Mission savedMission = missionRepository.save(mission);
-        log.info("New mission '{}' created by user '{}' with repo '{}'. Initial status: PENDING.",
-                savedMission.getName(), currentUser.getUsername(), templateRepositoryUrl);
+
+        String newRepoName = savedMission.getId().toString();
+
+        try {
+            String templateRepositoryUrl = giteaService.createMissionRepository(
+                    newRepoName,
+                    request.getTemplateLanguage(),
+                    currentUser
+            );
+
+            // 3. Frissítsük a rekordot a valódi Gitea URL-lel
+            savedMission.setTemplateRepositoryUrl(templateRepositoryUrl);
+            // Ez már egy valódi UPDATE lesz, ami működni fog
+            savedMission = missionRepository.save(savedMission);
+
+        } catch (Exception e) {
+            log.error("Gitea repository creation failed for mission {}. Error: {}", newRepoName, e.getMessage());
+            // Mivel @Transactional, ha itt kivételt dobsz, a DB-ből is visszagörgeti a missziót!
+            throw new ExternalServiceException("Gitea", "Failed to create repository: " + e.getMessage());
+        }
+
+        log.info("New mission '{}' created by user '{}' with repo '{}'.",
+                savedMission.getName(), currentUser.getUsername(), savedMission.getTemplateRepositoryUrl());
 
         return mapToResponse(savedMission);
     }

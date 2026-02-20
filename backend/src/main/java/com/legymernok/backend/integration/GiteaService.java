@@ -210,10 +210,12 @@ public class GiteaService {
             for (GiteaContent content : contents) {
                 if ("file".equals(content.getType())) {
                     String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
+                    log.info("File content from {}/{}/{}: {}", sourceOwner, sourceRepoName, content.getPath(), fileContent);
                     if (fileContent != null) {
                         uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
                     }
                 } else if ("dir".equals(content.getType())) {
+                    log.info("Dir content from {}/{}: {}", sourceOwner, sourceRepoName, content.getPath());
                     copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath());
                 }
             }
@@ -229,13 +231,16 @@ public class GiteaService {
      */
     private void copyDirectory(String sourceOwner, String sourceRepoName, String targetRepoName, String currentPath) {
         List<GiteaContent> contents = getRepoContents(sourceOwner, sourceRepoName, currentPath);
+        log.info("Content: {}", contents);
         for (GiteaContent content : contents) {
+            log.info("File type: {}", content.getType());
             if ("file".equals(content.getType())) {
                 String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
                 if (fileContent != null) {
                     uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
                 }
             } else if ("dir".equals(content.getType())) {
+                log.info("Dir type: {}", content.getType());
                 copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath()); // Rekurzió
             }
         }
@@ -259,50 +264,53 @@ public class GiteaService {
         requestBody.put("content", encodedContent);
         requestBody.put("message", commitMessage);
 
+        // Fontos: Itt kézzel fűzzük össze az URI-t, hogy a filePath-ban lévő / jelek ne legyenek kódolva!
+        String uri = String.format("/repos/%s/%s/contents/%s", repoOwner, repoName, filePath);
+
         try {
             Map<String, Object> fileInfo = getFileInfo(repoOwner, repoName, filePath);
-            if (fileInfo != null && fileInfo.containsKey("sha")) {
-                requestBody.put("sha", fileInfo.get("sha"));
 
-                log.info("Updating file {} in {}/{}", filePath, repoOwner, repoName);
+            if (fileInfo != null && fileInfo.containsKey("sha")) {
+                // Frissítés (PUT)
+                requestBody.put("sha", fileInfo.get("sha"));
+                log.info("Updating file: {}", filePath);
                 Map response = restClient.put()
-                        .uri("/repos/{owner}/{repo}/contents/{filepath}", repoOwner, repoName, filePath)
+                        .uri(uri)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestBody)
+                        .retrieve()
+                        .body(Map.class);
+                return (String) response.get("html_url");
+            } else {
+                // Létrehozás (POST)
+                log.info("Creating file: {}", filePath);
+                Map response = restClient.post()
+                        .uri(uri)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(requestBody)
                         .retrieve()
                         .body(Map.class);
                 return (String) response.get("html_url");
             }
-        } catch (HttpClientErrorException.NotFound e) {
-            log.info("Creating file {} in {}/{}", filePath, repoOwner, repoName);
-            Map response = restClient.post()
-                    .uri("/repos/{owner}/{repo}/contents/{filepath}", repoOwner, repoName, filePath)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(Map.class);
-            return (String) response.get("html_url");
         } catch (Exception e) {
-            log.error("Failed to upload file {} in {}/{}. Error: {}", filePath, repoOwner, repoName, e.getMessage());
+            log.error("Failed to upload file {} to {}/{}. Error: {}", filePath, repoOwner, repoName, e.getMessage());
             throw new ExternalServiceException("Gitea", "Failed to upload file: " + e.getMessage());
         }
-        return null;
     }
 
-    /**
-     * Segédmetódus a fájl információinak lekéréséhez (SHA-érték miatt).
-     */
     private Map<String, Object> getFileInfo(String owner, String repoName, String filePath) {
         try {
+            // Itt is fontos a közvetlen URI összefűzés
+            String uri = String.format("/repos/%s/%s/contents/%s", owner, repoName, filePath);
             return restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents/{filepath}", owner, repoName, filePath)
+                    .uri(uri)
                     .retrieve()
                     .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         } catch (HttpClientErrorException.NotFound e) {
-            return null;
+            return null; // Ez így már jó lesz az uploadFile if-ágához
         } catch (Exception e) {
-            log.error("Failed to get file info for {}/{}/{}: {}", owner, repoName, filePath, e.getMessage());
-            throw new ExternalServiceException("Gitea", "Failed to get file info: " + e.getMessage());
+            log.error("Error getting file info for {}: {}", filePath, e.getMessage());
+            return null;
         }
     }
 
@@ -314,13 +322,17 @@ public class GiteaService {
      * @return A mappa tartalma.
      */
     public List<GiteaContent> getRepoContents(String owner, String repoName, String path) {
-        String uriPath = (path == null || path.isEmpty()) ? "" : "/" + path;
+        String uri = String.format("/repos/%s/%s/contents%s",
+                owner,
+                repoName,
+                (path == null || path.isEmpty()) ? "" : "/" + path);
         try {
             return restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents{path}", owner, repoName, uriPath)
+                    .uri(uri)
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<GiteaContent>>() {});
         } catch (HttpClientErrorException.NotFound e) {
+            log.warn("Directory not found in Gitea: {}/{}/{}", owner, repoName, path);
             return Collections.emptyList();
         } catch (Exception e) {
             log.error("Failed to get repo contents for {}/{}/{}: {}", owner, repoName, path, e.getMessage());
@@ -335,14 +347,15 @@ public class GiteaService {
      * @param filePath A fájl útvonala.
      */
     public String getFileContent(String owner, String repoName, String filePath) {
+        String uri = String.format("/repos/%s/%s/contents/%s", owner, repoName, filePath);
         try {
             GiteaContent content = restClient.get()
-                    .uri("/repos/{owner}/{repo}/contents/{path}", owner, repoName, filePath)
+                    .uri(uri)
                     .retrieve()
                     .body(GiteaContent.class);
 
             if (content != null && content.getContent() != null) {
-                byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll("\\n", ""));
+                byte[] decodedBytes = Base64.getDecoder().decode(content.getContent().replaceAll("\\s", ""));
                 return new String(decodedBytes);
             }
         } catch (HttpClientErrorException.NotFound e) {

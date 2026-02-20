@@ -18,6 +18,7 @@ import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
+import MissionForgePage from "../pages/mission-forge/MissionForgePage";
 
 // Egyszerűbb védelem: csak ha van token
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -69,6 +70,10 @@ export const router = createHashRouter([
         element: <ChangelogPage />,
       },
     ],
+  },
+  {
+    path: "forge", // Vagy "mission-forge" az egyértelműség kedvéért
+    element: <MissionForgePage />,
   },
 
   // Védett Admin útvonalak
