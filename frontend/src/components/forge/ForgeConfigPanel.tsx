@@ -25,9 +25,6 @@ import type {
   // VerificationStatus, // Nem közvetlenül használatos ebben a panel logikájában
 } from "../../types/mission-forge"; // Helyesbített importálási útvonal a missionForge.ts-hez
 import type { StarSystemResponse } from "../../types/starSystem";
-// A MissionType és Difficulty importálása tényleges futásidejű értékként, ha defaultValues-ben használjuk
-// Mivel string literál típusok, közvetlenül a literális stringeket használjuk
-import type { MissionType, Difficulty } from "../../types/mission";
 
 interface ForgeConfigPanelProps {
   onMissionInitialized: (mission: MissionForgeResponse) => void;
@@ -41,7 +38,6 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
 
   // --- useForm beállítása értelmes alapértelmezett értékekkel ---
   const {
-    control,
     handleSubmit,
     register,
     formState: { errors },
