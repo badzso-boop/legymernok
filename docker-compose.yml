@@ -38,15 +38,21 @@ services:
       - GITEA__database__NAME=gitea
       - GITEA__database__USER=postgres
       - GITEA__database__PASSWD=postgres
+      - GITEA__actions__ENABLED=true
     ports:
       - "3001:3000" # Web UI: http://localhost:3001
-      - "2222:22"   # SSH port
+      - "2222:22" # SSH port
     volumes:
       - gitea_data:/data
     depends_on:
       - postgres
     networks:
       - legymernok-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
 
   # ---------------------------------------------------------------------------
   # Backend Service (Spring Boot)
@@ -87,13 +93,37 @@ services:
     networks:
       - legymernok-net
 
+  # ---------------------------------------------------------------------------
+  # Gitea Actions Runner Service
+  # ---------------------------------------------------------------------------
+
+  runner:
+    image: docker.io/gitea/act_runner:nightly
+    container_name: legymernok-gitea-runner
+    environment:
+      CONFIG_FILE: "/config.yaml"
+      GITEA_INSTANCE_URL: "http://gitea:3000"
+      GITEA_RUNNER_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
+      GITEA_RUNNER_NAME: "Gitea Runner"
+    depends_on:
+      gitea:
+        condition: service_healthy
+    networks:
+      - legymernok-net
+    volumes:
+      - ./runner-config.yaml:/config.yaml
+      - ./runner:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
 # -----------------------------------------------------------------------------
 # Volumes and Networks
 # -----------------------------------------------------------------------------
 volumes:
   postgres_data:
   gitea_data:
+  gitea_runner_data:
 
 networks:
   legymernok-net:
+    external: true
     driver: bridge
