@@ -154,7 +154,7 @@ public class MissionService {
             for (Map.Entry<String, String> entry : request.getFiles().entrySet()) {
                 String fileName = entry.getKey();
                 String content = entry.getValue();
-                giteaService.uploadFile(repoOwner, repoName, fileName, content);
+                giteaService.uploadFile(repoOwner, repoName, fileName, content, currentUser);
             }
         } else {
             log.warn("Mission '{}' content saved without any files. Mission ID: {}", mission.getName(), mission.getId());

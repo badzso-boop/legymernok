@@ -19,7 +19,6 @@ public class MissionVerificationController {
 
     private final MissionService missionService;
 
-    // A titkos kulcs a gitea actionből jön majd
     @Value("${mission.verification.secret}")
     private String verificationSecret;
 
@@ -34,14 +33,14 @@ public class MissionVerificationController {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
 
-        try {
-            VerificationStatus verificationStatus = VerificationStatus.valueOf(status.toUpperCase());
-            missionService.updateMissionVerificationStatus(missionId, verificationStatus);
-            log.info("Mission {} verification status updated to: {}", missionId, verificationStatus);
-            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid verification status received for mission {}: {}", missionId, status);
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+        VerificationStatus verificationStatus = "SUCCESS".equalsIgnoreCase(status)
+                ? VerificationStatus.SUCCESS
+                : VerificationStatus.FAILED;
+
+        log.info("Received verification callback for mission {}: {}", missionId, verificationStatus);
+
+        missionService.updateMissionVerificationStatus(missionId, verificationStatus);
+
+        return ResponseEntity.ok().build();
     }
 }

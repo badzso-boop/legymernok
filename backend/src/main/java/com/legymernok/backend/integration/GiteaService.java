@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.core.ParameterizedTypeReference;
 
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service
@@ -33,6 +34,7 @@ public class GiteaService {
     private final String jsTemplateRepoName;
     private final String pythonTemplateRepoOwner;
     private final String pythonTemplateRepoName;
+    private final String verificationSecretValue;
 
     public GiteaService(
             @Value("${gitea.api.url}") String apiUrl,
@@ -42,7 +44,8 @@ public class GiteaService {
             @Value("${gitea.template.js.owner}") String jsTemplateRepoOwner,
             @Value("${gitea.template.js.repo}") String jsTemplateRepoName,
             @Value("${gitea.template.python.owner}") String pythonTemplateRepoOwner,
-            @Value("${gitea.template.python.repo}") String pythonTemplateRepoName) {
+            @Value("${gitea.template.python.repo}") String pythonTemplateRepoName,
+            @Value("${mission.verification.secret}") String verificationSecretValue) {
 
         this.adminUsername = adminUsername;
         this.adminToken = adminToken;
@@ -50,6 +53,7 @@ public class GiteaService {
         this.jsTemplateRepoName = jsTemplateRepoName;
         this.pythonTemplateRepoOwner = pythonTemplateRepoOwner;
         this.pythonTemplateRepoName = pythonTemplateRepoName;
+        this.verificationSecretValue = verificationSecretValue;
 
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
 
@@ -241,9 +245,13 @@ public class GiteaService {
                 }
             } else if ("dir".equals(content.getType())) {
                 log.info("Dir type: {}", content.getType());
-                copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath()); // Rekurzió
+                copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath());
             }
         }
+    }
+
+    public String uploadFile(String repoOwner, String repoName, String filePath, String content) {
+        return uploadFile(repoOwner, repoName, filePath, content, null);
     }
 
     /**
@@ -256,15 +264,31 @@ public class GiteaService {
      * @return A fájl URL-je.
      * @throws ExternalServiceException Ha hiba történik a művelet során.
      */
-    public String uploadFile(String repoOwner, String repoName, String filePath, String content) {
+    public String uploadFile(String repoOwner, String repoName, String filePath, String content, Cadet user) {
         String encodedContent = Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8));
+
+        String now = OffsetDateTime.now().toString();
         String commitMessage = "Update " + filePath;
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("content", encodedContent);
         requestBody.put("message", commitMessage);
 
-        // Fontos: Itt kézzel fűzzük össze az URI-t, hogy a filePath-ban lévő / jelek ne legyenek kódolva!
+        String authorName = (user != null) ? user.getUsername() : adminUsername;
+        String authorEmail = (user != null && user.getEmail() != null) ? user.getEmail() : adminUsername + "@legymernok.hu";
+
+        Map<String, String> identity = new HashMap<>();
+        identity.put("name", authorName);
+        identity.put("email", authorEmail);
+
+        requestBody.put("author", identity);
+        requestBody.put("committer", identity);
+
+        Map<String, String> dates = new HashMap<>();
+        dates.put("author", now);
+        dates.put("committer", now);
+        requestBody.put("dates", dates);
+
         String uri = String.format("/repos/%s/%s/contents/%s", repoOwner, repoName, filePath);
 
         try {
@@ -312,6 +336,19 @@ public class GiteaService {
             log.error("Error getting file info for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    public void setRepositorySecret(String repoName, String secretName, String secretValue) {
+        Map<String, String> body = new HashMap<>();
+        body.put("data", secretValue);
+
+        // Gitea API végpont a secret beállításához
+        restClient.put()
+                .uri("/repos/{owner}/{repo}/actions/secrets/{secret_name}", adminUsername, repoName, secretName)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
     }
 
     /**
@@ -396,6 +433,8 @@ public class GiteaService {
 
         // 1. Üres repó létrehozása az admin alatt
         String newRepoCloneUrl = createEmptyRepository(newRepoName, true);
+
+        setRepositorySecret(newRepoName, "MISSION_VERIFICATION_SECRET", this.verificationSecretValue);
 
         // 2. Template tartalmának másolása az új repóba
         copyRepositoryContents(sourceOwner, sourceRepoName, newRepoName);
