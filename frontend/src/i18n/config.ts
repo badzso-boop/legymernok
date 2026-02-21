@@ -170,6 +170,7 @@ const resources = {
         coding: "Coding",
         quiz: "Quiz",
         challenge: "Challenge",
+      },
       // CONTROL PANEL
       controlPanel: {
         systemReady: "SYSTEM READY",
@@ -365,6 +366,7 @@ const resources = {
         coding: "Programozás",
         quiz: "Kvíz",
         challenge: "Kihívás",
+      },
       // CONTROL PANEL
       controlPanel: {
         systemReady: "RENDSZER KÉSZ",
