@@ -25,11 +25,10 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
-import type { Role, UserResponse } from "../../../types/user";
+import type { RoleName, UserResponse } from "../../../types/user";
+import type { RoleResponse } from "../../../types/role";
 
 const API_URL = "http://localhost:8080/api";
-
-const AVAILABLE_ROLES: Role[] = ["ROLE_CADET", "ROLE_ADMIN"];
 
 const UserEdit: React.FC = () => {
   const { t } = useTranslation();
@@ -38,11 +37,15 @@ const UserEdit: React.FC = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<
-    Partial<Omit<UserResponse, "roles"> & { password?: string; role?: Role }>
+    Partial<
+      Omit<UserResponse, "roles"> & { password?: string; role?: RoleName }
+    >
   >({});
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<any[]>([]);
+  const [roleLoading, setRoleLoading] = useState(false);
 
   useEffect(() => {
     if (!isNew) {
@@ -54,10 +57,14 @@ const UserEdit: React.FC = () => {
             `${API_URL}/users/${id}`,
             {
               headers: { Authorization: `Bearer ${token}` },
-            }
+            },
           );
           // A backend 'roles' tömbjéből az elsőt vesszük a legördülőhöz
-          setUser({ ...response.data, role: response.data.roles[0] });
+          const currentRoleName =
+            response.data.roles && response.data.roles.length > 0
+              ? response.data.roles[0]
+              : "";
+          setUser({ ...response.data, role: currentRoleName });
         } catch (err) {
           setError(t("errorFetchUserDetails"));
         } finally {
@@ -76,15 +83,33 @@ const UserEdit: React.FC = () => {
     }
   }, [id, isNew]);
 
+  useEffect(() => {
+    const fetchRoles = async () => {
+      setRoleLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get<RoleResponse[]>(`${API_URL}/roles`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setAvailableRoles(response.data);
+      } catch (err) {
+        console.error("Nem sikerült lekérni a szerepköröket", err);
+      } finally {
+        setRoleLoading(false);
+      }
+    };
+    fetchRoles();
+  }, []);
+
   const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     setUser((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleRoleChange = (event: SelectChangeEvent<string>) => {
-    setUser((prev) => ({ ...prev, role: event.target.value as Role }));
+    setUser((prev) => ({ ...prev, role: event.target.value as RoleName }));
   };
 
   const handleSave = async () => {
@@ -93,7 +118,7 @@ const UserEdit: React.FC = () => {
 
     if (!user?.username || !user.email || (isNew && !user.password)) {
       setError(
-        "Felhasználónév, email és (új felhasználónál) jelszó megadása kötelező."
+        "Felhasználónév, email és (új felhasználónál) jelszó megadása kötelező.",
       );
       setSaving(false);
       return;
@@ -225,10 +250,11 @@ const UserEdit: React.FC = () => {
                     value={user.role || ""}
                     label="Szerepkör"
                     onChange={handleRoleChange}
+                    disabled={roleLoading}
                   >
-                    {AVAILABLE_ROLES.map((role) => (
-                      <MenuItem key={role} value={role}>
-                        {role.replace("ROLE_", "")}
+                    {availableRoles.map((role) => (
+                      <MenuItem key={role.id} value={role.name}>
+                        {role.name.replace("ROLE_", "")}
                       </MenuItem>
                     ))}
                   </Select>
