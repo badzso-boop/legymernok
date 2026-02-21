@@ -159,6 +159,8 @@ const resources = {
           approved: "Approved",
           rejected: "Rejected",
         },
+        sectorRegistry: "Sector Registry",
+        missionSpec: "Mission Specifications",
       },
       difficultyType: {
         easy: "Easy",
@@ -355,6 +357,8 @@ const resources = {
           approved: "Elfogadva",
           rejected: "Elutasítva",
         },
+        sectorRegistry: "Szektor Nyilvántartás",
+        missionSpec: "Küldetés Specifikáció",
       },
       difficultyType: {
         easy: "Könnyű",

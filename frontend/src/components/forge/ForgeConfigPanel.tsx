@@ -20,6 +20,7 @@ import type {
 } from "../../types/mission-forge";
 import type { StarSystemResponse } from "../../types/starSystem";
 import "../../styles/RetroUI.css";
+import RetroButton from "../RetroButton";
 
 interface ForgeConfigPanelProps {
   onMissionInitialized: (mission: MissionForgeResponse) => void;
@@ -60,9 +61,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
 
   const selectedStarSystemId = watch("starSystemId");
 
-  const { data: starSystems, isLoading: isLoadingStarSystems } = useQuery<
-    StarSystemResponse[]
-  >({
+  const { data: starSystems } = useQuery<StarSystemResponse[]>({
     queryKey: ["myStarSystems"],
     queryFn: forgeApi.getMyStarSystems,
   });
@@ -107,7 +106,6 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
     initializeMutation.mutate(data);
   };
 
-  // Stílus a fehér terminál bemenetekhez
   const terminalInputSx = {
     "& .MuiInputBase-root": { color: "#fff", fontFamily: "monospace" },
     "& .MuiInputLabel-root": { color: "#888", fontFamily: "monospace" },
@@ -124,13 +122,12 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
         justifyContent: "center",
         alignItems: "center",
         width: "100%",
-        minHeight: "100vh",
       }}
     >
       <div
         className="control-panel-casing"
         style={{
-          width: "80vw",
+          width: "85vw",
           height: "85vh",
           display: "flex",
           flexDirection: "column",
@@ -153,7 +150,6 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
             gap: 3,
           }}
         >
-          {/* FELSŐ 2/3: ADATOK */}
           <Box sx={{ flex: 2, display: "flex", gap: 3 }}>
             {/* BAL OLDAL: SECTOR CONFIG */}
             <Box
@@ -177,7 +173,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                     fontFamily: "monospace",
                   }}
                 >
-                  {">"} SECTOR_CONFIG
+                  {">"} {t("forge.sectorRegistry").toUpperCase()}
                 </Typography>
 
                 {!isNewSystem ? (
@@ -187,12 +183,14 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                       variant="filled"
                       sx={terminalInputSx}
                     >
-                      <InputLabel>SELECT_SECTOR</InputLabel>
+                      <InputLabel>
+                        {t("forge.selectStarSystem").toUpperCase()}
+                      </InputLabel>
                       <Controller
                         name="starSystemId"
                         control={control}
                         render={({ field }) => (
-                          <Select {...field}>
+                          <Select {...field} fullWidth>
                             {starSystems?.map((s) => (
                               <MenuItem key={s.id} value={s.id}>
                                 {s.name.toUpperCase()}
@@ -213,7 +211,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                         fontFamily: "monospace",
                       }}
                     >
-                      [+] REGISTER_NEW_SECTOR_PROTOCOL
+                      [+] {t("newStarSystem").toUpperCase()}
                     </Typography>
                   </Box>
                 ) : (
@@ -227,11 +225,11 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                         fontFamily: "monospace",
                       }}
                     >
-                      [MODE: NEW_DEFINITION]
+                      [MODE: {t("newStarSystemTitle").toUpperCase()}]
                     </Typography>
                     <TextField
                       fullWidth
-                      label="SECTOR_NAME"
+                      label={t("name").toUpperCase()}
                       variant="filled"
                       {...register("newStarSystemName", {
                         required: isNewSystem,
@@ -240,7 +238,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                     />
                     <TextField
                       fullWidth
-                      label="SECTOR_DESCRIPTION"
+                      label={t("description").toUpperCase()}
                       variant="filled"
                       multiline
                       rows={6}
@@ -258,7 +256,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                           fontFamily: "monospace",
                         }}
                       >
-                        {"<"} BACK_TO_REGISTRY
+                        {"<"} {t("starMap.back").toUpperCase()}
                       </Typography>
                     )}
                   </Box>
@@ -267,7 +265,6 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
             </Box>
 
             {/* JOBB OLDAL: MISSION CONFIG */}
-            {/* MISSION CONFIG PANEL - JOBB OLDAL */}
             <Box
               sx={{
                 flex: 1,
@@ -289,19 +286,19 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                     fontFamily: "monospace",
                   }}
                 >
-                  {">"} MISSION_SPEC
+                  {">"} {t("forge.missionSpec").toUpperCase()}
                 </Typography>
 
                 <TextField
                   fullWidth
-                  label="MISSION_NAME"
+                  label={t("forge.missionName").toUpperCase()}
                   variant="filled"
                   {...register("name", { required: true, minLength: 3 })}
                   sx={terminalInputSx}
                 />
                 <TextField
                   fullWidth
-                  label="OBJECTIVES (MARKDOWN)"
+                  label={t("forge.missionDescription").toUpperCase()}
                   variant="filled"
                   multiline
                   rows={4}
@@ -309,7 +306,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                   sx={terminalInputSx}
                 />
 
-                {/* JAVÍTOTT GRID - 2X2 ELOSZTÁS */}
+                {/* 2X2 DROP DOWN GRID */}
                 <Grid container spacing={2} sx={{ width: "100%", m: 0 }}>
                   <Grid size={6}>
                     <FormControl
@@ -317,14 +314,23 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                       variant="filled"
                       sx={terminalInputSx}
                     >
-                      <InputLabel>TYPE</InputLabel>
+                      <InputLabel>
+                        {t("forge.missionType").toUpperCase()}
+                      </InputLabel>
                       <Controller
                         name="missionType"
                         control={control}
                         render={({ field }) => (
                           <Select {...field} fullWidth>
-                            <MenuItem value="CODING">CODING</MenuItem>
-                            <MenuItem value="QUIZ">QUIZ</MenuItem>
+                            <MenuItem value="CODING">
+                              {t("missionTypes.coding").toUpperCase()}
+                            </MenuItem>
+                            <MenuItem value="QUIZ">
+                              {t("missionTypes.quiz").toUpperCase()}
+                            </MenuItem>
+                            <MenuItem value="CHALLENGE">
+                              {t("missionTypes.challenge").toUpperCase()}
+                            </MenuItem>
                           </Select>
                         )}
                       />
@@ -337,14 +343,16 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                       variant="filled"
                       sx={terminalInputSx}
                     >
-                      <InputLabel>LANGUAGE</InputLabel>
+                      <InputLabel>
+                        {t("forge.templateLanguage").toUpperCase()}
+                      </InputLabel>
                       <Controller
                         name="templateLanguage"
                         control={control}
                         render={({ field }) => (
                           <Select {...field} fullWidth>
-                            <MenuItem value="javascript">Javascript</MenuItem>
-                            <MenuItem value="python">Python</MenuItem>
+                            <MenuItem value="javascript">JAVASCRIPT</MenuItem>
+                            <MenuItem value="python">PYTHON</MenuItem>
                           </Select>
                         )}
                       />
@@ -357,15 +365,26 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                       variant="filled"
                       sx={terminalInputSx}
                     >
-                      <InputLabel>DIFFICULTY</InputLabel>
+                      <InputLabel>
+                        {t("forge.difficulty").toUpperCase()}
+                      </InputLabel>
                       <Controller
                         name="difficulty"
                         control={control}
                         render={({ field }) => (
                           <Select {...field} fullWidth>
-                            <MenuItem value="EASY">EASY</MenuItem>
-                            <MenuItem value="MEDIUM">MEDIUM</MenuItem>
-                            <MenuItem value="HARD">HARD</MenuItem>
+                            <MenuItem value="EASY">
+                              {t("difficultyType.easy").toUpperCase()}
+                            </MenuItem>
+                            <MenuItem value="MEDIUM">
+                              {t("difficultyType.medium").toUpperCase()}
+                            </MenuItem>
+                            <MenuItem value="HARD">
+                              {t("difficultyType.hard").toUpperCase()}
+                            </MenuItem>
+                            <MenuItem value="INSANE">
+                              {t("difficultyType.insane").toUpperCase()}
+                            </MenuItem>
                           </Select>
                         )}
                       />
@@ -375,7 +394,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                   <Grid size={6}>
                     <TextField
                       fullWidth
-                      label="ORDER"
+                      label={t("forge.orderInSystem").toUpperCase()}
                       type="number"
                       variant="filled"
                       {...register("orderInSystem")}
@@ -391,49 +410,31 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
           <Box
             sx={{
               flex: 1,
-              border: "2px solid #333",
-              bgcolor: "#1a1a1a",
-              borderRadius: "10px",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
               gap: 10,
             }}
           >
-            <div className="button-group">
-              <button
-                type="button"
-                className="retro-btn yellow"
-                onClick={toggleLanguage}
-              />
-              <div className="label-plate" style={{ color: "#fff" }}>
-                LANG: {i18n.language.toUpperCase()}
-              </div>
-            </div>
+            <RetroButton
+              color="yellow"
+              labelKey="starMap.lang"
+              onClick={toggleLanguage}
+            />
 
-            <div className="button-group">
-              <button
-                type="button"
-                className="retro-btn red"
-                onClick={() => window.history.back()}
-              />
-              <div className="label-plate" style={{ color: "#fff" }}>
-                ABORT
-              </div>
-            </div>
+            <RetroButton
+              color="red"
+              labelKey="starMap.back"
+              onClick={() => window.history.back()}
+            />
 
-            <div className="button-group">
-              <button
-                type="submit"
-                className={`retro-btn green ${initializeMutation.isPending ? "active" : ""}`}
-                disabled={initializeMutation.isPending}
-              />
-              <div className="label-plate" style={{ color: "#fff" }}>
-                {initializeMutation.isPending
-                  ? "INITIALIZING..."
-                  : "START_FORGE"}
-              </div>
-            </div>
+            <RetroButton
+              color="green"
+              labelKey="forge.initializeMission"
+              type="submit"
+              disabled={initializeMutation.isPending}
+              active={initializeMutation.isPending}
+            />
           </Box>
 
           {initializeMutation.isError && (
