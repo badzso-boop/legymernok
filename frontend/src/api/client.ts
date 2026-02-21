@@ -97,3 +97,20 @@ export const forgeApi = {
     return response.data;
   },
 };
+
+export const starSystemApi = {
+  /**
+   * Létrehoz egy új csillagrendszert.
+   */
+  create: async (data: {
+    name: string;
+    description: string;
+    iconUrl?: string;
+  }) => {
+    const response = await apiClient.post<StarSystemResponse>(
+      "/star-systems",
+      data,
+    );
+    return response.data;
+  },
+};

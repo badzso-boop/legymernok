@@ -22,13 +22,9 @@ const MissionForgePage: React.FC = () => {
 
   return (
     <Box sx={{ flexGrow: 1, p: { xs: 1, md: 3 } }}>
-      <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: "bold" }}>
-        {t("forge.title")}
-      </Typography>
-
       {!mission ? (
         /* KEZDETI ÁLLAPOT: Csak a Config Panel látszik középen */
-        <Box sx={{ maxWidth: 600, mx: "auto" }}>
+        <Box sx={{ mx: "auto", pt: 6 }}>
           <ForgeConfigPanel onMissionInitialized={handleMissionInitialized} />
         </Box>
       ) : (

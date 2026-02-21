@@ -1,321 +1,458 @@
 import React, { useState, useEffect } from "react";
 import {
   Box,
-  Button,
   FormControl,
   InputLabel,
   MenuItem,
   Select,
   TextField,
   Typography,
-  CircularProgress,
+  Grid,
   Alert,
-  Snackbar,
-} from "@mui/material";
-import type {
-  SelectChangeEvent, // Import SelectChangeEvent
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import { useForm } from "react-hook-form"; // Controller egyelőre nem kell a minimális JSX-hez
+import { useForm, Controller } from "react-hook-form";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { forgeApi } from "../../api/client";
+import { forgeApi, starSystemApi } from "../../api/client";
 import type {
   CreateMissionInitialRequest,
   MissionForgeResponse,
-  // VerificationStatus, // Nem közvetlenül használatos ebben a panel logikájában
-} from "../../types/mission-forge"; // Helyesbített importálási útvonal a missionForge.ts-hez
+} from "../../types/mission-forge";
 import type { StarSystemResponse } from "../../types/starSystem";
+import "../../styles/RetroUI.css";
 
 interface ForgeConfigPanelProps {
   onMissionInitialized: (mission: MissionForgeResponse) => void;
 }
 
+interface CombinedForgeRequest extends CreateMissionInitialRequest {
+  newStarSystemName?: string;
+  newStarSystemDescription?: string;
+}
+
 const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
   onMissionInitialized,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const [isNewSystem, setIsNewSystem] = useState(false);
 
-  // --- useForm beállítása értelmes alapértelmezett értékekkel ---
   const {
+    control,
     handleSubmit,
     register,
     formState: { errors },
-    reset,
     watch,
     setValue,
-  } = useForm<CreateMissionInitialRequest>({
+  } = useForm<CombinedForgeRequest>({
     defaultValues: {
       starSystemId: "",
       name: "",
       descriptionMarkdown: "",
-      missionType: "CODING", // Javítva: literális stringet használ
-      difficulty: "EASY", // Javítva: literális stringet használ
+      missionType: "CODING",
+      difficulty: "EASY",
       orderInSystem: 1,
       templateLanguage: "javascript",
+      newStarSystemName: "",
+      newStarSystemDescription: "",
     },
   });
 
-  // Állapot a Snackbar visszajelzéshez (egyelőre nincs renderelve, de a logika itt van)
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
-    "success",
-  );
-
-  // --- A kiválasztott starSystemId figyelése az alapértelmezett sorrend frissítéséhez ---
   const selectedStarSystemId = watch("starSystemId");
 
-  // --- Lekérdezés a felhasználó csillagrendszereinek lekéréséhez ---
-  const {
-    data: starSystems,
-    isLoading: isLoadingStarSystems,
-    error: starSystemsError,
-  } = useQuery<StarSystemResponse[], Error, StarSystemResponse[]>({
+  const { data: starSystems, isLoading: isLoadingStarSystems } = useQuery<
+    StarSystemResponse[]
+  >({
     queryKey: ["myStarSystems"],
     queryFn: forgeApi.getMyStarSystems,
-    enabled: true,
   });
 
   useEffect(() => {
-    if (starSystems && starSystems.length > 0 && !watch("starSystemId")) {
-      setValue("starSystemId", starSystems[0].id);
-    }
-  }, [starSystems, watch, setValue]);
-
-  useEffect(() => {
-    if (starSystemsError) {
-      console.error("Failed to fetch star systems:", starSystemsError);
-      let errorMessage = t("forge.errorFetchingStarSystems");
-      if ((starSystemsError as any).response?.data?.message) {
-        errorMessage += `: ${(starSystemsError as any).response.data.message}`;
-      } else {
-        errorMessage += `: ${starSystemsError.message}`;
+    if (starSystems) {
+      if (starSystems.length === 0) {
+        setIsNewSystem(true);
+      } else if (!selectedStarSystemId && !isNewSystem) {
+        setValue("starSystemId", starSystems[0].id);
       }
-      setSnackbarMessage(errorMessage);
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
     }
-  }, [starSystemsError, t]);
+  }, [starSystems, setValue, selectedStarSystemId, isNewSystem]);
 
-  // --- Mutáció egy új misszió inicializálásához ---
-  const initializeMissionMutation = useMutation<
-    MissionForgeResponse,
-    Error, // A hibaobjektum típusa
-    CreateMissionInitialRequest // A mutate-nak átadott változók típusa
-  >({
-    // Egyetlen opciók objektum átadása
-    mutationFn: forgeApi.initializeMission,
+  const initializeMutation = useMutation({
+    mutationFn: async (data: CombinedForgeRequest) => {
+      let targetSystemId = data.starSystemId;
+      if (isNewSystem && data.newStarSystemName) {
+        const newSystem = await starSystemApi.create({
+          name: data.newStarSystemName,
+          description: data.newStarSystemDescription || "",
+        });
+        targetSystemId = newSystem.id;
+      }
+      return forgeApi.initializeMission({
+        ...data,
+        starSystemId: targetSystemId,
+      });
+    },
     onSuccess: (data) => {
       onMissionInitialized(data);
-      setSnackbarMessage(
-        t("forge.missionInitializedSuccess", { missionName: data.name }),
-      );
-      setSnackbarSeverity("success");
-      setSnackbarOpen(true);
-      reset();
-      queryClient.invalidateQueries({ queryKey: ["myStarSystems"] }); // Helyesbített invalidateQueries szintaxis
-    },
-    onError: (error: Error) => {
-      // Explicit módon típusozva az error-t
-      let errorMessage = t("forge.errorInitializingMission");
-      if ((error as any).response?.data?.message) {
-        errorMessage += `: ${(error as any).response.data.message}`;
-      } else {
-        errorMessage += `: ${error.message}`;
-      }
-      setSnackbarMessage(errorMessage);
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
+      queryClient.invalidateQueries({ queryKey: ["myStarSystems"] });
     },
   });
 
-  // --- Űrlap elküldési kezelő ---
-  const onSubmit = (data: CreateMissionInitialRequest) => {
-    initializeMissionMutation.mutate(data);
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === "hu" ? "en" : "hu";
+    i18n.changeLanguage(nextLang);
   };
 
-  // --- Snackbar bezárási kezelő ---
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
+  const onSubmit = (data: CombinedForgeRequest) => {
+    initializeMutation.mutate(data);
   };
 
-  // --- Egyelőre minimális JSX visszatérési érték ---
+  // Stílus a fehér terminál bemenetekhez
+  const terminalInputSx = {
+    "& .MuiInputBase-root": { color: "#fff", fontFamily: "monospace" },
+    "& .MuiInputLabel-root": { color: "#888", fontFamily: "monospace" },
+    "& .MuiFilledInput-underline:before": { borderBottomColor: "#333" },
+    "& .MuiFilledInput-underline:after": { borderBottomColor: "#fff" },
+    bgcolor: "#0a0a0a",
+    mb: 2,
+  };
+
   return (
     <Box
       sx={{
-        p: 3,
-        bgcolor: "background.paper",
-        borderRadius: 2,
-        boxShadow: 3,
-        maxWidth: 500,
-        mx: "auto",
-        mt: 4,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "100%",
+        minHeight: "100vh",
       }}
     >
-      <Typography variant="h5" component="h2" gutterBottom>
-        {t("forge.newMission")}
-      </Typography>
-
-      <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-        {/* Star System kiválasztás */}
-        <FormControl fullWidth margin="normal" error={!!errors.starSystemId}>
-          <InputLabel id="star-system-select-label">
-            {t("forge.selectStarSystem")}
-          </InputLabel>
-          <Select
-            labelId="star-system-select-label"
-            id="starSystemId"
-            label={t("forge.selectStarSystem")}
-            {...register("starSystemId", { required: true })}
-            value={selectedStarSystemId}
-            onChange={(event: SelectChangeEvent) => {
-              setValue("starSystemId", event.target.value);
-            }}
-            disabled={isLoadingStarSystems}
-          >
-            {isLoadingStarSystems && (
-              <MenuItem disabled>
-                <CircularProgress size={20} />
-              </MenuItem>
-            )}
-            {starSystems?.map((system) => (
-              <MenuItem key={system.id} value={system.id}>
-                {system.name}
-              </MenuItem>
-            ))}
-          </Select>
-          {errors.starSystemId && (
-            <Typography color="error" variant="caption">
-              {t("forge.starSystemRequired")}
-            </Typography>
-          )}
-        </FormControl>
-
-        {/* Misszió neve */}
-        <TextField
-          fullWidth
-          margin="normal"
-          label={t("forge.missionName")}
-          {...register("name", { required: true, minLength: 3 })}
-          error={!!errors.name}
-          helperText={
-            errors.name?.type === "required"
-              ? t("forge.missionNameRequired")
-              : errors.name?.type === "minLength"
-                ? t("forge.missionNameMinLength", { count: 3 })
-                : ""
-          }
-        />
-
-        {/* Misszió leírása (Markdown) */}
-        <TextField
-          fullWidth
-          margin="normal"
-          label={t("forge.missionDescription")}
-          multiline
-          rows={4}
-          {...register("descriptionMarkdown")}
-        />
-
-        {/* Nehézség kiválasztás */}
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="difficulty-select-label">
-            {t("forge.difficulty")}
-          </InputLabel>
-          <Select
-            labelId="difficulty-select-label"
-            id="difficulty"
-            label={t("forge.difficulty")}
-            {...register("difficulty")}
-          >
-            {["EASY", "MEDIUM", "HARD", "INSANE"].map((level) => (
-              <MenuItem key={level} value={level}>
-                {t(`difficultyType.${level.toLowerCase()}`)}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {/* Misszió típusa */}
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="mission-type-select-label">
-            {t("forge.missionType")}
-          </InputLabel>
-          <Select
-            labelId="mission-type-select-label"
-            id="missionType"
-            label={t("forge.missionType")}
-            {...register("missionType")}
-          >
-            {["CODING", "QUIZ", "CHALLENGE"].map((type) => (
-              <MenuItem key={type} value={type}>
-                {t(`missionTypes.${type.toLowerCase()}`)}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {/* Sorrend a rendszerben */}
-        <TextField
-          fullWidth
-          margin="normal"
-          label={t("forge.orderInSystem")}
-          type="number"
-          {...register("orderInSystem", { valueAsNumber: true, min: 1 })}
-          error={!!errors.orderInSystem}
-          helperText={
-            errors.orderInSystem?.type === "min"
-              ? t("forge.orderMin", { count: 1 })
-              : ""
-          }
-        />
-
-        {/* Template nyelv kiválasztása */}
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="template-language-select-label">
-            {t("forge.templateLanguage")}
-          </InputLabel>
-          <Select
-            labelId="template-language-select-label"
-            id="templateLanguage"
-            label={t("forge.templateLanguage")}
-            {...register("templateLanguage")}
-          >
-            <MenuItem value="javascript">JavaScript</MenuItem>
-            <MenuItem value="python">Python</MenuItem>
-          </Select>
-        </FormControl>
-
-        <Button
-          type="submit"
-          fullWidth
-          variant="contained"
-          sx={{ mt: 3, mb: 2 }}
-          disabled={initializeMissionMutation.isPending}
-        >
-          {initializeMissionMutation.isPending ? (
-            <CircularProgress size={24} color="inherit" />
-          ) : (
-            t("forge.initializeMission")
-          )}
-        </Button>
-      </Box>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      <div
+        className="control-panel-casing"
+        style={{
+          width: "80vw",
+          height: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          position: "relative",
+          padding: "40px",
+        }}
       >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbarSeverity}
-          sx={{ width: "100%" }}
+        <div className="screw top-left" />
+        <div className="screw top-right" />
+        <div className="screw bottom-left" />
+        <div className="screw bottom-right" />
+
+        <Box
+          component="form"
+          onSubmit={handleSubmit(onSubmit)}
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            gap: 3,
+          }}
         >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+          {/* FELSŐ 2/3: ADATOK */}
+          <Box sx={{ flex: 2, display: "flex", gap: 3 }}>
+            {/* BAL OLDAL: SECTOR CONFIG */}
+            <Box
+              sx={{
+                flex: 1,
+                border: "2px solid #333",
+                bgcolor: "rgba(0,0,0,0.4)",
+                borderRadius: "5px",
+                p: 3,
+              }}
+            >
+              <div
+                className="terminal-content"
+                style={{ color: "#fff", textShadow: "none" }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 3,
+                    borderBottom: "1px solid #333",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {">"} SECTOR_CONFIG
+                </Typography>
+
+                {!isNewSystem ? (
+                  <Box>
+                    <FormControl
+                      fullWidth
+                      variant="filled"
+                      sx={terminalInputSx}
+                    >
+                      <InputLabel>SELECT_SECTOR</InputLabel>
+                      <Controller
+                        name="starSystemId"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field}>
+                            {starSystems?.map((s) => (
+                              <MenuItem key={s.id} value={s.id}>
+                                {s.name.toUpperCase()}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                    <Typography
+                      onClick={() => setIsNewSystem(true)}
+                      sx={{
+                        color: "#666",
+                        cursor: "pointer",
+                        "&:hover": { color: "#fff" },
+                        fontSize: "0.8rem",
+                        mt: 2,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      [+] REGISTER_NEW_SECTOR_PROTOCOL
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "#aaa",
+                        display: "block",
+                        mb: 2,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      [MODE: NEW_DEFINITION]
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      label="SECTOR_NAME"
+                      variant="filled"
+                      {...register("newStarSystemName", {
+                        required: isNewSystem,
+                      })}
+                      sx={terminalInputSx}
+                    />
+                    <TextField
+                      fullWidth
+                      label="SECTOR_DESCRIPTION"
+                      variant="filled"
+                      multiline
+                      rows={6}
+                      {...register("newStarSystemDescription")}
+                      sx={terminalInputSx}
+                    />
+                    {starSystems && starSystems.length > 0 && (
+                      <Typography
+                        onClick={() => setIsNewSystem(false)}
+                        sx={{
+                          color: "#888",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          mt: 2,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {"<"} BACK_TO_REGISTRY
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </div>
+            </Box>
+
+            {/* JOBB OLDAL: MISSION CONFIG */}
+            {/* MISSION CONFIG PANEL - JOBB OLDAL */}
+            <Box
+              sx={{
+                flex: 1,
+                border: "2px solid #333",
+                bgcolor: "rgba(0,0,0,0.4)",
+                borderRadius: "5px",
+                p: 3,
+              }}
+            >
+              <div
+                className="terminal-content"
+                style={{ color: "#fff", textShadow: "none" }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 3,
+                    borderBottom: "1px solid #333",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {">"} MISSION_SPEC
+                </Typography>
+
+                <TextField
+                  fullWidth
+                  label="MISSION_NAME"
+                  variant="filled"
+                  {...register("name", { required: true, minLength: 3 })}
+                  sx={terminalInputSx}
+                />
+                <TextField
+                  fullWidth
+                  label="OBJECTIVES (MARKDOWN)"
+                  variant="filled"
+                  multiline
+                  rows={4}
+                  {...register("descriptionMarkdown")}
+                  sx={terminalInputSx}
+                />
+
+                {/* JAVÍTOTT GRID - 2X2 ELOSZTÁS */}
+                <Grid container spacing={2} sx={{ width: "100%", m: 0 }}>
+                  <Grid size={6}>
+                    <FormControl
+                      fullWidth
+                      variant="filled"
+                      sx={terminalInputSx}
+                    >
+                      <InputLabel>TYPE</InputLabel>
+                      <Controller
+                        name="missionType"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} fullWidth>
+                            <MenuItem value="CODING">CODING</MenuItem>
+                            <MenuItem value="QUIZ">QUIZ</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+
+                  <Grid size={6}>
+                    <FormControl
+                      fullWidth
+                      variant="filled"
+                      sx={terminalInputSx}
+                    >
+                      <InputLabel>LANGUAGE</InputLabel>
+                      <Controller
+                        name="templateLanguage"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} fullWidth>
+                            <MenuItem value="javascript">Javascript</MenuItem>
+                            <MenuItem value="python">Python</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+
+                  <Grid size={6}>
+                    <FormControl
+                      fullWidth
+                      variant="filled"
+                      sx={terminalInputSx}
+                    >
+                      <InputLabel>DIFFICULTY</InputLabel>
+                      <Controller
+                        name="difficulty"
+                        control={control}
+                        render={({ field }) => (
+                          <Select {...field} fullWidth>
+                            <MenuItem value="EASY">EASY</MenuItem>
+                            <MenuItem value="MEDIUM">MEDIUM</MenuItem>
+                            <MenuItem value="HARD">HARD</MenuItem>
+                          </Select>
+                        )}
+                      />
+                    </FormControl>
+                  </Grid>
+
+                  <Grid size={6}>
+                    <TextField
+                      fullWidth
+                      label="ORDER"
+                      type="number"
+                      variant="filled"
+                      {...register("orderInSystem")}
+                      sx={terminalInputSx}
+                    />
+                  </Grid>
+                </Grid>
+              </div>
+            </Box>
+          </Box>
+
+          {/* ALSÓ 1/3: VEZÉRLŐK */}
+          <Box
+            sx={{
+              flex: 1,
+              border: "2px solid #333",
+              bgcolor: "#1a1a1a",
+              borderRadius: "10px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <div className="button-group">
+              <button
+                type="button"
+                className="retro-btn yellow"
+                onClick={toggleLanguage}
+              />
+              <div className="label-plate" style={{ color: "#fff" }}>
+                LANG: {i18n.language.toUpperCase()}
+              </div>
+            </div>
+
+            <div className="button-group">
+              <button
+                type="button"
+                className="retro-btn red"
+                onClick={() => window.history.back()}
+              />
+              <div className="label-plate" style={{ color: "#fff" }}>
+                ABORT
+              </div>
+            </div>
+
+            <div className="button-group">
+              <button
+                type="submit"
+                className={`retro-btn green ${initializeMutation.isPending ? "active" : ""}`}
+                disabled={initializeMutation.isPending}
+              />
+              <div className="label-plate" style={{ color: "#fff" }}>
+                {initializeMutation.isPending
+                  ? "INITIALIZING..."
+                  : "START_FORGE"}
+              </div>
+            </div>
+          </Box>
+
+          {initializeMutation.isError && (
+            <Alert
+              severity="error"
+              sx={{
+                bgcolor: "#200",
+                color: "#f88",
+                fontFamily: "monospace",
+                borderRadius: 0,
+              }}
+            >
+              ERROR:{" "}
+              {(initializeMutation.error as any).response?.data?.message ||
+                initializeMutation.error.message}
+            </Alert>
+          )}
+        </Box>
+      </div>
     </Box>
   );
 };
