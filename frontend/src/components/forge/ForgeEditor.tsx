@@ -2,312 +2,520 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import Editor from "@monaco-editor/react";
 import {
   Box,
-  Button,
   CircularProgress,
   Alert,
   Snackbar,
-  Tabs,
-  Tab,
   Typography,
   Chip,
-  Paper,
+  Tooltip,
 } from "@mui/material";
-import { Save as SaveIcon } from "@mui/icons-material";
+import {
+  FileCode,
+  FileText,
+  Terminal as TerminalIcon,
+  FolderOpen,
+  Info,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react"; // Modern ikonok
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { forgeApi } from "../../api/client";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 import type {
   MissionForgeResponse,
   MissionForgeContentRequest,
   VerificationStatus,
 } from "../../types/mission-forge";
+import { RetroPanel } from "./RetroPanel";
+import RetroButton from "../RetroButton";
 
 interface ForgeEditorProps {
-  mission: MissionForgeResponse;
-  currentFileContents: Record<string, string>;
-  setCurrentFileContents: React.Dispatch<
-    React.SetStateAction<Record<string, string>>
-  >;
-  activeFileName: string | null;
-  setActiveFileName: React.Dispatch<React.SetStateAction<string | null>>;
+  missionId: string;
 }
 
-const ForgeEditor: React.FC<ForgeEditorProps> = ({
-  mission,
-  currentFileContents,
-  setCurrentFileContents,
-  activeFileName,
-  setActiveFileName,
-}) => {
+const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const editorRef = useRef<any>(null);
 
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
-    "success",
-  );
+  // --- State-ek ---
+  const [currentFileContents, setCurrentFileContents] = useState<
+    Record<string, string>
+  >({});
+  const [activeFileName, setActiveFileName] = useState<string | null>(null);
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isTerminalOpen, setTerminalOpen] = useState(true);
+  const [logs, setLogs] = useState<string[]>([]);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const stompClientRef = useRef<Client | null>(null);
 
-  // --- Segédfüggvény a nyelv meghatározásához ---
-  const getLanguageFromFileName = (fileName: string | null) => {
-    if (!fileName) return "javascript";
-    if (fileName.endsWith(".md")) return "markdown";
-    if (fileName.endsWith(".py")) return "python";
-    if (fileName.endsWith(".js") || fileName.endsWith(".ts"))
-      return "javascript";
-    if (fileName.endsWith(".json")) return "json";
-    return "text";
+  const scrollToBottom = () => {
+    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // --- Adatok lekérése a Giteából ---
-  const {
-    data: fetchedFileContents,
-    isLoading: isLoadingFiles,
-    error: filesError,
-  } = useQuery<Record<string, string>, Error>({
-    queryKey: ["missionFiles", mission.id],
-    queryFn: () => forgeApi.getMissionFiles(mission.id),
-    enabled: !!mission.id,
-  });
-
-  // --- Szinkronizáció: Ha megjöttek a fájlok, töltsük be őket a helyi state-be ---
   useEffect(() => {
-    if (fetchedFileContents && Object.keys(currentFileContents).length === 0) {
-      setCurrentFileContents(fetchedFileContents);
+    scrollToBottom();
+  }, [logs]);
 
-      // Ha még nincs aktív fájl, legyen az első a listából
-      const files = Object.keys(fetchedFileContents);
-      if (files.length > 0 && !activeFileName) {
-        setActiveFileName(files[0]);
-      }
+  useEffect(() => {
+    const socketUrl = `${import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:8080"}/ws-mission-logs`;
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(socketUrl),
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+      onConnect: () => {
+        console.log("Connected to Mission Logs WebSocket");
+        client.subscribe(`/topic/mission/${missionId}`, (message) => {
+          setLogs((prev) => {
+            const newLogs = [...prev, message.body];
+            return newLogs.slice(-200); // Csak az utolsó 200 sort tartjuk meg a memóriában
+          });
+        });
+      },
+      onStompError: (frame) => {
+        console.error("STOMP error", frame);
+      },
+    });
+
+    client.activate();
+    stompClientRef.current = client;
+
+    return () => {
+      client.deactivate();
+    };
+  }, [missionId]);
+
+  const clearLogs = () => setLogs([]);
+
+  // Snackbar állapotok
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error",
+  });
+
+  // --- API Hívások ---
+  const { data: mission, isLoading: isLoadingMission } = useQuery({
+    queryKey: ["mission", missionId],
+    queryFn: () => forgeApi.getMissionById(missionId),
+  });
+
+  const { data: fetchedFiles, isLoading: isLoadingFiles } = useQuery({
+    queryKey: ["missionFiles", missionId],
+    queryFn: () => forgeApi.getMissionFiles(missionId),
+  });
+
+  // Szinkronizáció a Gitea fájlokkal
+  useEffect(() => {
+    if (fetchedFiles && Object.keys(currentFileContents).length === 0) {
+      setCurrentFileContents(fetchedFiles);
+      const files = Object.keys(fetchedFiles);
+      if (files.length > 0 && !activeFileName) setActiveFileName(files[0]);
     }
-  }, [
-    fetchedFileContents,
-    currentFileContents,
-    setCurrentFileContents,
-    activeFileName,
-    setActiveFileName,
-  ]);
+  }, [fetchedFiles, currentFileContents, activeFileName]);
 
-  // Dinamikus fájllista a letöltött adatok alapján
-  const fileNames = useMemo(() => {
-    return fetchedFileContents ? Object.keys(fetchedFileContents) : [];
-  }, [fetchedFileContents]);
-
-  // --- Mentés mutáció ---
-  const saveFilesMutation = useMutation<
-    MissionForgeResponse,
-    Error,
-    MissionForgeContentRequest
-  >({
+  const saveMutation = useMutation({
     mutationFn: (data: MissionForgeContentRequest) =>
-      forgeApi.saveMissionFiles(mission.id, data),
+      forgeApi.saveMissionFiles(missionId, data),
     onSuccess: () => {
-      setSnackbarMessage(t("forge.filesSavedSuccess"));
-      setSnackbarSeverity("success");
-      setSnackbarOpen(true);
-      // Frissítjük a misszió adatait (pl. státusz változás miatt)
-      queryClient.invalidateQueries({ queryKey: ["mission", mission.id] });
+      setSnackbar({
+        open: true,
+        message: t("forge.filesSavedSuccess"),
+        severity: "success",
+      });
+      queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
     },
-    onError: (error: any) => {
-      const errMsg = error.response?.data?.message || error.message;
-      setSnackbarMessage(`${t("forge.errorSavingMission")}: ${errMsg}`);
-      setSnackbarSeverity("error");
-      setSnackbarOpen(true);
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: `${t("forge.errorSavingMission")}: ${err.message}`,
+        severity: "error",
+      });
     },
   });
 
-  // --- Kezelők ---
-  const handleEditorChange = (value: string | undefined) => {
-    if (activeFileName && value !== undefined) {
-      setCurrentFileContents((prev) => ({
-        ...prev,
-        [activeFileName]: value,
-      }));
-    }
+  // --- Segédfüggvények ---
+  const getFileIcon = (fileName: string) => {
+    if (fileName.endsWith(".md")) return <FileText size={16} color="#007acc" />;
+    if (fileName.endsWith(".js") || fileName.endsWith(".ts"))
+      return <FileCode size={16} color="#f1e05a" />;
+    if (fileName.endsWith(".py")) return <FileCode size={16} color="#3572A5" />;
+    return <FileCode size={16} color="#ccc" />;
   };
 
-  const handleSave = () => {
-    saveFilesMutation.mutate({
-      missionId: mission.id,
-      files: currentFileContents,
-    });
+  const getStatusColor = (
+    status: VerificationStatus,
+  ): "default" | "warning" | "success" | "error" | "primary" => {
+    const colors: Record<
+      VerificationStatus,
+      "default" | "warning" | "success" | "error" | "primary"
+    > = {
+      DRAFT: "default",
+      PENDING: "warning",
+      APPROVED: "success",
+      SUCCESS: "success",
+      REJECTED: "error",
+      FAILED: "error",
+      REVIEW_NEEDED: "primary",
+    };
+
+    return colors[status] || "primary";
   };
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
-    setActiveFileName(newValue);
-  };
-
-  const getStatusChipColor = (status: VerificationStatus) => {
-    switch (status) {
-      case "DRAFT":
-        return "default";
-      case "PENDING":
-        return "warning";
-      case "APPROVED":
-        return "success";
-      case "REJECTED":
-        return "error";
-      default:
-        return "primary";
-    }
-  };
-
-  // --- Renderelési állapotok ---
-  if (isLoadingFiles) {
+  if (isLoadingMission || isLoadingFiles || !mission) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100%",
-          gap: 2,
-        }}
-      >
-        <CircularProgress />
-        <Typography>{t("forge.loadingFiles")}</Typography>
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
+        <CircularProgress color="inherit" />
       </Box>
     );
   }
 
-  if (filesError) {
-    return (
-      <Alert severity="error">
-        {t("forge.errorFetchingFiles")}: {filesError.message}
-      </Alert>
-    );
-  }
-
   return (
-    <Paper
-      elevation={3}
+    <RetroPanel
+      title={`ENGINEERING_STATION // ${mission.name.toUpperCase()}`}
       sx={{
+        width: "98vw",
+        height: "92vh",
         display: "flex",
         flexDirection: "column",
-        height: "calc(100vh - 200px)", // Dinamikus magasság
-        bgcolor: "#1e1e1e",
-        color: "#fff",
+        p: 0,
         overflow: "hidden",
-        borderRadius: 2,
-        border: "1px solid #333",
       }}
     >
-      {/* Eszköztár (Toolbar) */}
+      {/* 1. TOP TOOLBAR */}
       <Box
         sx={{
-          p: 2,
+          p: 1.5,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           borderBottom: "1px solid #333",
+          bgcolor: "#1a1a1a",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Typography variant="h6" sx={{ color: "#fff" }}>
-            {mission.name}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, ml: 2 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: "#888", fontFamily: "monospace" }}
+          >
+            {t("forge.statusWord")}:
           </Typography>
           <Chip
             label={t(
               `forge.status.${mission.verificationStatus.toLowerCase()}`,
             )}
-            color={getStatusChipColor(mission.verificationStatus) as any}
+            color={getStatusColor(mission.verificationStatus)}
             size="small"
+            sx={{
+              borderRadius: 0,
+              fontWeight: "bold",
+              fontFamily: "monospace",
+            }}
           />
         </Box>
 
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={
-            saveFilesMutation.isPending ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              <SaveIcon />
-            )
-          }
-          onClick={handleSave}
-          disabled={saveFilesMutation.isPending}
-        >
-          {t("forge.saveButton")}
-        </Button>
+        <Box sx={{ display: "flex", gap: 3, mr: 2 }}>
+          <RetroButton
+            color="red"
+            labelKey="starMap.back"
+            size="small"
+            onClick={() => window.history.back()}
+          />
+          <RetroButton
+            color="green"
+            labelKey="forge.saveButton"
+            size="small"
+            onClick={() =>
+              saveMutation.mutate({ missionId, files: currentFileContents })
+            }
+            disabled={saveMutation.isPending}
+            active={saveMutation.isPending}
+          />
+        </Box>
       </Box>
 
-      {/* Fájl választó lapok */}
-      <Box sx={{ bgcolor: "#252526" }}>
-        <Tabs
-          value={activeFileName}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
+      {/* 2. MAIN WORKSPACE AREA */}
+      <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
+        {/* ACTIVITY BAR (Ikonok a bal szélen) */}
+        <Box
           sx={{
-            minHeight: 40,
-            "& .MuiTab-root": {
-              color: "#969696",
-              textTransform: "none",
-              minHeight: 40,
-              px: 2,
-              "&.Mui-selected": { color: "#fff", bgcolor: "#1e1e1e" },
-            },
-            "& .MuiTabs-indicator": { backgroundColor: "#007acc" },
+            width: "50px",
+            flexShrink: 0,
+            bgcolor: "#0a0a0a",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            py: 2,
+            gap: 3,
+            borderRight: "1px solid #222",
           }}
         >
-          {fileNames.map((name) => (
-            <Tab key={name} value={name} label={name} />
-          ))}
-        </Tabs>
-      </Box>
+          <Tooltip title="Explorer" placement="right">
+            <FolderOpen
+              size={24}
+              color={isSidebarOpen ? "#fff" : "#444"}
+              style={{ cursor: "pointer" }}
+              onClick={() => setSidebarOpen(!isSidebarOpen)}
+            />
+          </Tooltip>
+          <Tooltip title="Terminal" placement="right">
+            <TerminalIcon
+              size={24}
+              color={isTerminalOpen ? "#fff" : "#444"}
+              style={{ cursor: "pointer" }}
+              onClick={() => setTerminalOpen(!isTerminalOpen)}
+            />
+          </Tooltip>
+        </Box>
 
-      {/* Monaco Editor terület */}
-      <Box sx={{ flexGrow: 1, position: "relative" }}>
-        {activeFileName ? (
-          <Editor
-            height="100%"
-            theme="vs-dark"
-            language={getLanguageFromFileName(activeFileName)}
-            value={currentFileContents[activeFileName] || ""}
-            onChange={handleEditorChange}
-            onMount={(editor) => {
-              editorRef.current = editor;
-            }}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              wordWrap: "on",
-              automaticLayout: true,
-              scrollBeyondLastLine: false,
-              padding: { top: 10 },
-            }}
-          />
-        ) : (
+        {/* SIDEBAR (Fájlböngésző) */}
+        {isSidebarOpen && (
           <Box
             sx={{
+              width: "220px",
+              minWidth: "220px",
+              flexShrink: 0,
+              bgcolor: "#111",
+              borderRight: "1px solid #222",
               display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "100%",
+              flexDirection: "column",
             }}
           >
-            <Typography color="textSecondary">
-              {t("forge.selectFileToEdit")}
+            <Typography
+              variant="caption"
+              sx={{
+                p: 1.5,
+                color: "#666",
+                fontWeight: "bold",
+                borderBottom: "1px solid #222",
+              }}
+            >
+              EXPLORER: PROJECT_FILES
             </Typography>
+            <Box sx={{ py: 1 }}>
+              {Object.keys(currentFileContents).map((name) => (
+                <Box
+                  key={name}
+                  onClick={() => setActiveFileName(name)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    px: 2,
+                    py: 0.8,
+                    cursor: "pointer",
+                    bgcolor: activeFileName === name ? "#222" : "transparent",
+                    borderLeft:
+                      activeFileName === name
+                        ? "2px solid #fff"
+                        : "2px solid transparent",
+                    "&:hover": { bgcolor: "#1a1a1a" },
+                  }}
+                >
+                  {getFileIcon(name)}
+                  <Typography
+                    sx={{
+                      color: activeFileName === name ? "#fff" : "#aaa",
+                      fontSize: "0.85rem",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {name}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
           </Box>
         )}
+
+        {/* EDITOR ÉS TERMINAL TERÜLET */}
+        <Box
+          sx={{
+            flexGrow: 1,
+            display: "flex",
+            flexDirection: "column",
+            bgcolor: "#000",
+            minWidth: 0,
+            minHeight: 0,
+          }}
+        >
+          {/* EDITOR */}
+          <Box sx={{ flexGrow: 1, position: "relative", minHeight: 0 }}>
+            {activeFileName ? (
+              <Editor
+                height="100%"
+                theme="vs-dark"
+                language={
+                  activeFileName.endsWith(".md") ? "markdown" : "javascript"
+                }
+                value={currentFileContents[activeFileName] || ""}
+                onChange={(val) =>
+                  activeFileName &&
+                  val !== undefined &&
+                  setCurrentFileContents((prev) => ({
+                    ...prev,
+                    [activeFileName]: val,
+                  }))
+                }
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  fontFamily: "monospace",
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false,
+                  padding: { top: 10 },
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: "100%",
+                }}
+              >
+                <Typography sx={{ color: "#333", fontFamily: "monospace" }}>
+                  SELECT_FILE_TO_BEGIN
+                </Typography>
+              </Box>
+            )}
+          </Box>
+
+          {/* TERMINAL */}
+          {isTerminalOpen && (
+            <Box
+              sx={{
+                height: "250px",
+                flexShrink: 0,
+                bgcolor: "#050505",
+                borderTop: "2px solid #333",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Terminál Fejléc */}
+              <Box
+                sx={{
+                  p: 0.5,
+                  px: 2,
+                  bgcolor: "#111",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <TerminalIcon size={14} color="#aaa" />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#aaa",
+                      fontFamily: "monospace",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    TERMINAL // GITEA_ACTIONS_STREAM
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  <Typography
+                    variant="caption"
+                    onClick={clearLogs}
+                    sx={{
+                      color: "#666",
+                      cursor: "pointer",
+                      "&:hover": { color: "#fff" },
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    [CLEAR_LOGS]
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#0f0", fontFamily: "monospace" }}
+                  >
+                    ONLINE
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Log Sorok */}
+              <Box
+                sx={{
+                  p: 2,
+                  flexGrow: 1,
+                  overflowY: "auto",
+                  fontFamily: "'Courier New', monospace",
+                  color: "#ddd",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.4,
+                }}
+              >
+                {logs.length === 0 && (
+                  <Typography variant="caption" sx={{ color: "#444" }}>
+                    {">"} WAITING_FOR_STDOUT...
+                  </Typography>
+                )}
+
+                {logs.map((log, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      marginBottom: "2px",
+                      wordBreak: "break-all",
+                      color: log.includes("ERROR")
+                        ? "#ff5555"
+                        : log.includes("SUCCESS")
+                          ? "#55ff55"
+                          : "#ddd",
+                    }}
+                  >
+                    <span style={{ color: "#555", marginRight: "8px" }}>
+                      [{new Date().toLocaleTimeString()}]
+                    </span>
+                    {log}
+                  </div>
+                ))}
+
+                {/* Automatikus görgetés célpontja */}
+                <div ref={terminalEndRef} />
+
+                {/* Villogó kurzor csak akkor, ha nincs hiba */}
+                <div
+                  className="blinking-cursor"
+                  style={{
+                    display: "inline-block",
+                    width: "8px",
+                    height: "15px",
+                    background: "#fff",
+                    marginLeft: "4px",
+                  }}
+                ></div>
+              </Box>
+            </Box>
+          )}
+        </Box>
       </Box>
 
-      {/* Visszajelzés */}
       <Snackbar
-        open={snackbarOpen}
+        open={snackbar.open}
         autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert severity={snackbarSeverity} variant="filled">
-          {snackbarMessage}
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ fontFamily: "monospace" }}
+        >
+          {snackbar.message.toUpperCase()}
         </Alert>
       </Snackbar>
-    </Paper>
+    </RetroPanel>
   );
 };
 

@@ -1,50 +1,45 @@
-import React, { useState } from "react";
-import { Box, Typography, Button } from "@mui/material";
-import { useTranslation } from "react-i18next";
+import React from "react";
+import { Box } from "@mui/material";
+import { useParams, useNavigate } from "react-router-dom";
 import ForgeConfigPanel from "../../components/forge/ForgeConfigPanel";
 import ForgeEditor from "../../components/forge/ForgeEditor";
 import type { MissionForgeResponse } from "../../types/mission-forge";
 
 const MissionForgePage: React.FC = () => {
-  const { t } = useTranslation();
-  const [mission, setMission] = useState<MissionForgeResponse | null>(null);
-  const [currentFileContents, setCurrentFileContents] = useState<
-    Record<string, string>
-  >({});
-  const [activeFileName, setActiveFileName] = useState<string | null>(null);
+  // 1. Paraméter lekérése az URL-ből (pl. /forge/123-456)
+  const { missionId } = useParams<{ missionId: string }>();
+  const navigate = useNavigate();
 
+  /**
+   * Ez a függvény fut le, amikor a ForgeConfigPanel-ben
+   * sikeresen létrejött a misszió a Giteában és az adatbázisban is.
+   */
   const handleMissionInitialized = (
     initializedMission: MissionForgeResponse,
   ) => {
-    setMission(initializedMission);
-    // Opcionálisan ide tölthetnénk be a kezdeti fájlokat, vagy hagyhatjuk a ForgeEditorre
+    // Átnavigálunk az editor nézetre az új misszió ID-jával
+    navigate(`/forge/${initializedMission.id}`);
   };
 
   return (
-    <Box sx={{ flexGrow: 1, p: { xs: 1, md: 3 } }}>
-      {!mission ? (
-        /* KEZDETI ÁLLAPOT: Csak a Config Panel látszik középen */
-        <Box sx={{ mx: "auto", pt: 6 }}>
-          <ForgeConfigPanel onMissionInitialized={handleMissionInitialized} />
-        </Box>
+    <Box
+      sx={{
+        width: "100%",
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        p: { xs: 1, md: 3 },
+        bgcolor: "#121212", // Sötét háttér az egész oldalnak
+      }}
+    >
+      {/* 2. Logikai elágazás az URL paraméter alapján */}
+      {!missionId ? (
+        /* HA NINCS ID: Megmutatjuk az inicializáló panelt */
+        <ForgeConfigPanel onMissionInitialized={handleMissionInitialized} />
       ) : (
-        /* SZERKESZTŐ ÁLLAPOT: A teljes szélességet kitölti az editor */
-        <Box sx={{ width: "100%" }}>
-          <ForgeEditor
-            mission={mission}
-            currentFileContents={currentFileContents}
-            setCurrentFileContents={setCurrentFileContents}
-            activeFileName={activeFileName}
-            setActiveFileName={setActiveFileName}
-          />
-          <Button
-            variant="text"
-            onClick={() => setMission(null)}
-            sx={{ mt: 2, color: "text.secondary" }}
-          >
-            ← {t("forge.backToInitialization")}
-          </Button>
-        </Box>
+        /* HA VAN ID: Megnyitjuk a Monaco Editort */
+        <ForgeEditor missionId={missionId} />
       )}
     </Box>
   );

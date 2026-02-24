@@ -96,6 +96,13 @@ export const forgeApi = {
     );
     return response.data;
   },
+
+  getMissionById: async (id: string) => {
+    const response = await apiClient.get<MissionForgeResponse>(
+      `/missions/${id}`,
+    );
+    return response.data;
+  },
 };
 
 export const starSystemApi = {

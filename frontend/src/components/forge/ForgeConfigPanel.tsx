@@ -21,6 +21,7 @@ import type {
 import type { StarSystemResponse } from "../../types/starSystem";
 import "../../styles/RetroUI.css";
 import RetroButton from "../RetroButton";
+import { RetroPanel } from "./RetroPanel";
 
 interface ForgeConfigPanelProps {
   onMissionInitialized: (mission: MissionForgeResponse) => void;
@@ -38,26 +39,20 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
   const queryClient = useQueryClient();
   const [isNewSystem, setIsNewSystem] = useState(false);
 
-  const {
-    control,
-    handleSubmit,
-    register,
-    formState: { errors },
-    watch,
-    setValue,
-  } = useForm<CombinedForgeRequest>({
-    defaultValues: {
-      starSystemId: "",
-      name: "",
-      descriptionMarkdown: "",
-      missionType: "CODING",
-      difficulty: "EASY",
-      orderInSystem: 1,
-      templateLanguage: "javascript",
-      newStarSystemName: "",
-      newStarSystemDescription: "",
-    },
-  });
+  const { control, handleSubmit, register, watch, setValue } =
+    useForm<CombinedForgeRequest>({
+      defaultValues: {
+        starSystemId: "",
+        name: "",
+        descriptionMarkdown: "",
+        missionType: "CODING",
+        difficulty: "EASY",
+        orderInSystem: 1,
+        templateLanguage: "javascript",
+        newStarSystemName: "",
+        newStarSystemDescription: "",
+      },
+    });
 
   const selectedStarSystemId = watch("starSystemId");
 
@@ -124,22 +119,15 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
         width: "100%",
       }}
     >
-      <div
-        className="control-panel-casing"
-        style={{
+      <RetroPanel
+        sx={{
           width: "85vw",
           height: "85vh",
           display: "flex",
           flexDirection: "column",
-          position: "relative",
           padding: "40px",
         }}
       >
-        <div className="screw top-left" />
-        <div className="screw top-right" />
-        <div className="screw bottom-left" />
-        <div className="screw bottom-right" />
-
         <Box
           component="form"
           onSubmit={handleSubmit(onSubmit)}
@@ -306,7 +294,6 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                   sx={terminalInputSx}
                 />
 
-                {/* 2X2 DROP DOWN GRID */}
                 <Grid container spacing={2} sx={{ width: "100%", m: 0 }}>
                   <Grid size={6}>
                     <FormControl
@@ -410,6 +397,9 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
           <Box
             sx={{
               flex: 1,
+              border: "2px solid #333",
+              bgcolor: "#1a1a1a",
+              borderRadius: "10px",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -421,13 +411,11 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
               labelKey="starMap.lang"
               onClick={toggleLanguage}
             />
-
             <RetroButton
               color="red"
               labelKey="starMap.back"
               onClick={() => window.history.back()}
             />
-
             <RetroButton
               color="green"
               labelKey="forge.initializeMission"
@@ -453,7 +441,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
             </Alert>
           )}
         </Box>
-      </div>
+      </RetroPanel>
     </Box>
   );
 };

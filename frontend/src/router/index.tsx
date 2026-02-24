@@ -115,7 +115,11 @@ export const router = createHashRouter([
     ],
   },
   {
-    path: "forge", // Vagy "mission-forge" az egyértelműség kedvéért
+    path: "forge",
+    element: <MissionForgePage />,
+  },
+  {
+    path: "forge/:missionId",
     element: <MissionForgePage />,
   },
 
