@@ -4,6 +4,57 @@ Ez a dokumentum a LégyMérnök.hu projekt fejlesztésének történetét örök
 
 ---
 
+## 🛠️ Bejegyzés #17: A Küldetés-Kohó Alapkövei (Mission Forge - Initial Phase)
+
+**Stardate:** 2026.02.24
+**Status:** Fejlesztés Alatt (Beta)
+
+Elkezdtük a projekt eddigi legambiciózusabb moduljának, a Küldetés-Kohónak (Mission Forge) az építését. Ez a felület lehetővé teszi, hogy a kadétok ne csak megoldják, hanem maguk is alkossák a küldetéseket.
+Integráltuk a Monaco Editor-t a böngészőbe, kiépítettük a valós idejű kommunikációt a Gitea Action-ök és a frontend között, és lefektettük az automatizált küldetés-verifikáció alapjait.
+
+- **Technikai részletek:**
+  - **Mission Forge UI:** Monaco Editor integráció (`@monaco-editor/react`) és egy komplex konfigurációs panel a küldetések paraméterezéséhez.
+  - **Real-time Comms:** WebSocket kapcsolat kiépítése a Gitea események (tesztfutások) és a frontend között az azonnali visszajelzéshez.
+  - **Gitea Backend:** Automatikus repository inicializálás és fájlmásolás template-ek alapján (JavaScript/Python támogatás).
+  - **Workflow:** Fájlok mentése Giteába -> Gitea Action automatikus futtatás -> Callback a backendnek -> Státuszfrissítés a UI-on.
+
+---
+
+## 🛡️ Bejegyzés #16: Pajzsellenőrzés és Automatizált Karbantartás (CI/CD & Testing)
+
+**Stardate:** 2026.02.18
+**Status:** Dokkrendszer Optimalizálva
+
+A biztonság és stabilitás jegyében megerősítettük az automatizált ellenőrző folyamatainkat. A GitHub Actions pipeline-unkat finomhangoltuk, szétválasztva az egységteszteket és a kontroller teszteket a
+gyorsabb visszajelzés érdekében. A backend tesztlefedettsége jelentősen javult, különös tekintettel a jogosultságkezelésre és a küldetéslogikára. Beüzemeltük a Gitea Runner infrastruktúrát is, ami a jövőbel
+automatizált kódellenőrzések alapköve.
+
+- **Technikai részletek:**
+  - **CI Pipeline:** `ci.yml` frissítése, párhuzamos tesztfuttatás és szétválasztott riportolás.
+  - **Backend Testing:** Controller tesztek implementálása a Roles, Permissions és Missions modulokhoz (közel 100%-os lefedettség a kritikus utakon).
+  - **Gitea Runner:** Saját runner konfiguráció (`runner-config.yaml`) és Docker integráció a tesztkörnyezetek izolálásához.
+  - **E2E Fixes:** Cypress tesztek stabilizálása és a tesztadat-generálás javítása.
+
+---
+
+## 🌌 Bejegyzés #15: A Vizuális Motor Frissítése (Landing, Map & Control Panel)
+
+**Stardate:** 2026.02.10
+**Status:** Navigációs Rendszer Élesítve
+
+Az űrhajó külső és belső megjelenése jelentős ráncfelvarráson esett át. Elindítottuk az új Landing Page-et, ahol egy interaktív űrállomás fogadja az érkezőket. A Galaxis Térkép (Star Map) segítségével most
+már vizuálisan navigálhatunk a csillagrendszerek között, a Parancsnoki Panel (Control Panel) pedig készen áll a robotok irányítására. A mobil-első (PWA) szemlélet jegyében minden felületet érintésbaráttá és
+reszponzívvá tettünk.
+
+- **Technikai részletek:**
+  - **Frontend Landing:** `SpaceStationCanvas` (Three.js/React Three Fiber) és animált bemutatkozó felület.
+  - **Star Map:** Dinamikus, gráf-alapú navigáció a csillagrendszerek között (`StarMapCanvas`).
+  - **Control Panel:** Irányítókonzol a robotparancsok és a küldetés-állapot vizualizációjához.
+  - **Star System Detail:** Új információs oldalak a rendszerek és küldetések részletes adataihoz.
+  - **Styling:** Tailwind CSS és Material UI v6/v7 szinkronizálása a modern, "űrhajós" esztétikáért.
+
+---
+
 ## 📡 Bejegyzés #14: A Fekete Doboz Élesítése (System Logs & WebSocket)
 
 **Stardate:** 2026.01.24
