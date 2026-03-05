@@ -207,51 +207,100 @@ public class GiteaService {
      * @throws ExternalServiceException Ha hiba történik a másolás során.
      */
     public void copyRepositoryContents(String sourceOwner, String sourceRepoName, String targetRepoName) {
-        log.info("Copying contents from {}/{} to admin's {}", sourceOwner, sourceRepoName, targetRepoName);
-        try {
-            List<GiteaContent> contents = getRepoContents(sourceOwner, sourceRepoName, "");
+        log.info("Collecting contents from {}/{} to copy to admin's {}", sourceOwner, sourceRepoName, targetRepoName);
+        Map<String, String> allFiles = new HashMap<>();
+        collectFilesRecursive(sourceOwner, sourceRepoName, "", allFiles);
 
-            for (GiteaContent content : contents) {
-                if ("file".equals(content.getType())) {
-                    String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
-                    log.info("File content from {}/{}/{}: {}", sourceOwner, sourceRepoName, content.getPath(), fileContent);
-                    if (fileContent != null) {
-                        uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
-                    }
-                } else if ("dir".equals(content.getType())) {
-                    log.info("Dir content from {}/{}: {}", sourceOwner, sourceRepoName, content.getPath());
-                    copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath());
-                }
-            }
-            log.info("Successfully copied contents from {}/{} to admin's {}.", sourceOwner, sourceRepoName, targetRepoName);
-        } catch (Exception e) {
-            log.error("Failed to copy repository contents from {}/{} to {}. Error: {}", sourceOwner, sourceRepoName, targetRepoName, e.getMessage());
-            throw new ExternalServiceException("Gitea", "Failed to copy repository contents: " + e.getMessage());
-        }
+        // Egyetlen nagy commit az összes fájllal
+        uploadFiles(adminUsername, targetRepoName, allFiles, "Initial template copy", null);
     }
 
-    /**
-     * Segédmetódus mappák rekurzív másolására.
-     */
-    private void copyDirectory(String sourceOwner, String sourceRepoName, String targetRepoName, String currentPath) {
-        List<GiteaContent> contents = getRepoContents(sourceOwner, sourceRepoName, currentPath);
-        log.info("Content: {}", contents);
+    private void collectFilesRecursive(String owner, String repoName, String path, Map<String, String> collection) {
+        List<GiteaContent> contents = getRepoContents(owner, repoName, path);
         for (GiteaContent content : contents) {
-            log.info("File type: {}", content.getType());
             if ("file".equals(content.getType())) {
-                String fileContent = getFileContent(sourceOwner, sourceRepoName, content.getPath());
+                String fileContent = getFileContent(owner, repoName, content.getPath());
                 if (fileContent != null) {
-                    uploadFile(adminUsername, targetRepoName, content.getPath(), fileContent);
+                    collection.put(content.getPath(), fileContent);
                 }
             } else if ("dir".equals(content.getType())) {
-                log.info("Dir type: {}", content.getType());
-                copyDirectory(sourceOwner, sourceRepoName, targetRepoName, content.getPath());
+                collectFilesRecursive(owner, repoName, content.getPath(), collection);
             }
         }
     }
 
     public String uploadFile(String repoOwner, String repoName, String filePath, String content) {
         return uploadFile(repoOwner, repoName, filePath, content, null);
+    }
+
+    /**
+     * Feltölt több fájlt egyetlen commit-ban.
+     * @param files Egy Map, ahol a kulcs a fájl útvonala, az érték a tartalom.
+     * @param "operation" "create" vagy "update" (Gitea API-tól függően).
+     */
+    public void uploadFiles(String repoOwner, String repoName, Map<String, String> files, String commitMessage, Cadet user) {
+        if (files == null || files.isEmpty()) return;
+
+        // 1. Lekérjük a jelenlegi fájlokat, hogy tudjuk az SHA-kat (ha léteznek)
+        // Ez fontos, mert a Batch API nem tud "upsert"-et (create or update), nekünk kell megmondani
+        Map<String, String> currentShas = new HashMap<>();
+        try {
+            // Végigmegyünk a gyökérkönyvtáron (és rekurzívan ha kell, de egyszerűség kedvéért a főbb fájlokra)
+            List<GiteaContent> contents = getRepoContents(repoOwner, repoName, "");
+            for (GiteaContent c : contents) {
+                if ("file".equals(c.getType())) currentShas.put(c.getPath(), c.getSha());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch current SHAs, assuming new repository.");
+        }
+
+        List<Map<String, Object>> fileActions = new ArrayList<>();
+        for (Map.Entry<String, String> entry : files.entrySet()) {
+            String path = entry.getKey();
+            String content = Base64.getEncoder().encodeToString(entry.getValue().getBytes(StandardCharsets.UTF_8));
+
+            Map<String, Object> action = new HashMap<>();
+            action.put("path", path);
+            action.put("content", content);
+
+            // Ha van már ilyen fájl, UPDATE + SHA, ha nincs, CREATE
+            if (currentShas.containsKey(path)) {
+                action.put("operation", "update");
+                action.put("sha", currentShas.get(path));
+            } else {
+                action.put("operation", "create");
+            }
+            fileActions.add(action);
+        }
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("files", fileActions);
+        requestBody.put("message", commitMessage);
+        requestBody.put("branch", "main"); // Mindig a main-re commitolunk
+
+        // Szerző beállítása...
+        String authorName = (user != null) ? user.getUsername() : adminUsername;
+        String authorEmail = (user != null && user.getEmail() != null) ? user.getEmail() : adminUsername + "@legymernok.hu";
+        Map<String, String> identity = new HashMap<>();
+        identity.put("name", authorName);
+        identity.put("email", authorEmail);
+        requestBody.put("author", identity);
+        requestBody.put("committer", identity);
+
+        log.info("Request body: {}", requestBody);
+
+        try {
+            restClient.post()
+                    .uri("/repos/{owner}/{repo}/contents", repoOwner, repoName)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Successfully batch committed {} files to {}/{}", files.size(), repoOwner, repoName);
+        } catch (Exception e) {
+            log.error("Batch upload failed: {}", e.getMessage());
+            throw new ExternalServiceException("Gitea", "Batch upload failed: " + e.getMessage());
+        }
     }
 
     /**
@@ -476,6 +525,7 @@ public class GiteaService {
     public static class GiteaContent {
         private String name;
         private String path;
+        private String sha;
         private String type; // "file" vagy "dir"
         private String content; // Base64
         private String download_url;

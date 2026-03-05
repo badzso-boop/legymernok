@@ -70,10 +70,20 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
       onConnect: () => {
         console.log("Connected to Mission Logs WebSocket");
         client.subscribe(`/topic/mission/${missionId}`, (message) => {
-          setLogs((prev) => {
-            const newLogs = [...prev, message.body];
-            return newLogs.slice(-200); // Csak az utolsó 200 sort tartjuk meg a memóriában
-          });
+          const body = message.body;
+          console.log(body);
+
+          if (body.startsWith("[STATUS_UPDATED]:")) {
+            queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+
+            setLogs((prev) => [
+              ...prev,
+              `\n--- [SYSTEM] VERIFICATION PROCESS COMPLETED ---`,
+            ]);
+          } else {
+            // Sima log sor
+            setLogs((prev) => [...prev, body].slice(-200));
+          }
         });
       },
       onStompError: (frame) => {

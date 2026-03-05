@@ -48,6 +48,8 @@ public class MissionVerificationController {
 
         missionService.updateMissionVerificationStatus(missionId, verificationStatus);
 
+        missionLogService.sendMissionLog(missionId, "[STATUS_UPDATED]:" + verificationStatus);
+
         return ResponseEntity.ok().build();
     }
 

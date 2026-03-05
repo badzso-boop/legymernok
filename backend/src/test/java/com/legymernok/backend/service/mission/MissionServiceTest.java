@@ -283,8 +283,8 @@ class MissionServiceTest {
                 .build();
 
         List<GiteaService.GiteaContent> giteaContents = Arrays.asList(
-                new GiteaService.GiteaContent("solution.js", "solution.js", "file", "encoded", "url"),
-                new GiteaService.GiteaContent("README.md", "README.md", "file", "encoded", "url")
+                new GiteaService.GiteaContent("solution.js", "solution.js", "dummy-sha", "file", "encoded", "url"),
+                new GiteaService.GiteaContent("README.md", "README.md", "dummy-sha", "file", "encoded", "url")
         );
 
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
@@ -338,7 +338,7 @@ class MissionServiceTest {
         mockUserAuthorities("mission:read"); // Adminnak van read joga
 
         List<GiteaService.GiteaContent> giteaContents = Arrays.asList(
-                new GiteaService.GiteaContent("solution.js", "solution.js", "file", "encoded", "url")
+                new GiteaService.GiteaContent("solution.js", "solution.js", "dummy-sha", "file", "encoded", "url")
         );
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
         when(giteaService.getAdminUsername()).thenReturn("legymernok_admin"); // This one remains here as it's used directly in the test's stubbing
@@ -479,8 +479,8 @@ class MissionServiceTest {
 
         // Fájlok lekéréséhez szükséges mock-ok (ez szimulálja a template tartalmát)
         List<GiteaService.GiteaContent> initialGiteaContents = Arrays.asList(
-                new GiteaService.GiteaContent("solution.js", "solution.js", "file", "encoded", "url"),
-                new GiteaService.GiteaContent("README.md", "README.md", "file", "encoded", "url")
+                new GiteaService.GiteaContent("solution.js", "solution.js", "dummy-sha", "file", "encoded", "url"),
+                new GiteaService.GiteaContent("README.md", "README.md", "dummy-sha", "file", "encoded", "url")
         );
         // A getMissionFiles hívja a getRepoContents-t és a getFileContent-et
         when(giteaService.getRepoContents(eq("legymernok_admin"), anyString(), eq(""))).thenReturn(initialGiteaContents);

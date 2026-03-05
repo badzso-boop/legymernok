@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -151,11 +152,8 @@ public class MissionService {
 
         // Fájlok feltöltése/frissítése a Gitea repóban
         if (request.getFiles() != null && !request.getFiles().isEmpty()) {
-            for (Map.Entry<String, String> entry : request.getFiles().entrySet()) {
-                String fileName = entry.getKey();
-                String content = entry.getValue();
-                giteaService.uploadFile(repoOwner, repoName, fileName, content, currentUser);
-            }
+            String commitMsg = "Forge Update - " + OffsetDateTime.now().toString();
+            giteaService.uploadFiles(repoOwner, repoName, request.getFiles(), commitMsg, currentUser);
         } else {
             log.warn("Mission '{}' content saved without any files. Mission ID: {}", mission.getName(), mission.getId());
         }
