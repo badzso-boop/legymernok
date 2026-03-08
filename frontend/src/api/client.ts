@@ -4,7 +4,7 @@ import type {
   MissionForgeContentRequest,
   MissionForgeResponse,
 } from "../types/mission-forge";
-import type { StarSystemResponse } from "../types/starSystem";
+import type { MissionResponse, StarSystemResponse } from "../types/starSystem";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -100,6 +100,16 @@ export const forgeApi = {
   getMissionById: async (id: string) => {
     const response = await apiClient.get<MissionForgeResponse>(
       `/missions/${id}`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Lekéri a jelenlegi felhasználó saját misszióit.
+   */
+  getMyMissions: async () => {
+    const response = await apiClient.get<MissionResponse[]>(
+      "/missions/my-missions",
     );
     return response.data;
   },

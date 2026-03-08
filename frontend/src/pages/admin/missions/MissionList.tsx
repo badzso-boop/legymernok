@@ -20,6 +20,7 @@ import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { MissionResponse } from "../../../types/mission";
 import type { StarSystemResponse } from "../../../types/starSystem";
+import MissionTable from "../../../components/mission/MissionTable";
 
 // API URL (env-ből vagy fallback)
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
@@ -164,7 +165,7 @@ const MissionList: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ height: 650, width: "100%" }}>
+    <Box sx={{ p: 3 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
           {t("manageMissions")}
@@ -184,36 +185,15 @@ const MissionList: React.FC = () => {
         </Alert>
       )}
 
-      <DataGrid
-        rows={missions}
-        columns={columns}
+      {/* 2. HASZNÁLD A KOMPONENST */}
+      <MissionTable
+        missions={missions}
+        starSystems={starSystems} // Átadjuk a rendszereket a nevek miatt
         loading={loading}
-        slots={{
-          loadingOverlay: LoadingOverlay, // A fenti wrapper használata
-          toolbar: GridToolbar,
-        }}
-        slotProps={{
-          toolbar: {
-            showQuickFilter: true, // Keresőmező
-          },
-        }}
-        localeText={huHU.components.MuiDataGrid.defaultProps.localeText} // Magyarítás
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10 } },
-          // Csoportosítás helyett alapból rendezzük Rendszer majd Sorszám szerint
-          sorting: {
-            sortModel: [{ field: "starSystemId", sort: "asc" }],
-          },
-        }}
-        pageSizeOptions={[5, 10, 25, 100]}
-        disableRowSelectionOnClick
-        sx={{
-          bgcolor: "background.paper",
-          boxShadow: 3,
-          borderRadius: 2,
-          border: "none",
-          "& .MuiDataGrid-cell:focus": { outline: "none" },
-        }}
+        isAdminView={true} // Admin nézet: látjuk a tulajdonost is
+        onEdit={(id) => navigate(`/admin/missions/${id}`)}
+        onDelete={handleDelete}
+        onForge={(id) => navigate(`/forge/${id}`)} // Itt navigálunk a Monaco-hoz
       />
     </Box>
   );

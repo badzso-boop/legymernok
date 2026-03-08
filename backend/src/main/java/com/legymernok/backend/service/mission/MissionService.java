@@ -343,6 +343,14 @@ public class MissionService {
         missionRepository.save(mission);
     }
 
+    @Transactional(readOnly = true)
+    public List<MissionResponse> getMissionsByCurrentUser() {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        return missionRepository.findAllByOwnerId(currentUser.getId()).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public void deleteMission(UUID id) {
         Cadet currentUser = getCurrentAuthenticatedUser();

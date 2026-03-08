@@ -105,4 +105,10 @@ public class MissionController {
         String repoUrl = missionService.startMission(id, username);
         return ResponseEntity.ok(repoUrl);
     }
+
+    @GetMapping("/my-missions")
+    @PreAuthorize("hasAuthority('mission:read')")
+    public ResponseEntity<List<MissionResponse>> getMyMissions() {
+        return ResponseEntity.ok(missionService.getMissionsByCurrentUser());
+    }
 }

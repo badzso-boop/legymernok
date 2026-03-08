@@ -12,6 +12,7 @@ import {
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { StarSystemResponse } from "../../../types/starSystem";
+import StarSystemTable from "../../../components/star-system/StarSystemTable";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
@@ -125,7 +126,7 @@ const StarSystemList: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ height: 650, width: "100%" }}>
+    <Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
           {t("starSystems")}
@@ -139,28 +140,14 @@ const StarSystemList: React.FC = () => {
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {error && <Alert severity="error">{error}</Alert>}
 
-      <DataGrid
-        rows={starSystems}
-        columns={columns}
+      <StarSystemTable
+        systems={starSystems}
         loading={loading}
-        slots={{ loadingOverlay: LoadingOverlay, toolbar: GridToolbar }}
-        slotProps={{ toolbar: { showQuickFilter: true } }}
-        localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-        pageSizeOptions={[5, 10, 25]}
-        disableRowSelectionOnClick
-        sx={{
-          bgcolor: "background.paper",
-          boxShadow: 3,
-          borderRadius: 2,
-          border: "none",
-        }}
+        variant="modern" // Itt a kék admin dizájn marad
+        onEdit={(id) => navigate(`/admin/star-systems/${id}`)}
+        onDelete={handleDelete}
       />
     </Box>
   );

@@ -21,6 +21,7 @@ import LogList from "../pages/admin/adminlogs/LogList";
 import MissionForgePage from "../pages/mission-forge/MissionForgePage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
+import MyForgePage from "../pages/mission-forge/MyForgePage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -121,6 +122,10 @@ export const router = createHashRouter([
   {
     path: "forge/:missionId",
     element: <MissionForgePage />,
+  },
+  {
+    path: "/my-forge",
+    element: <MyForgePage />,
   },
 
   {
