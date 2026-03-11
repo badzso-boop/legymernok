@@ -49,14 +49,16 @@ const MissionTable: React.FC<MissionTableProps> = ({
       flex: 1,
       minWidth: 200,
       renderCell: (params) => (
-        <Typography
-          sx={{
-            fontFamily: isRetro ? "'Share Tech Mono', monospace" : "inherit",
-            fontWeight: isRetro ? "bold" : "normal",
-          }}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+          <Typography
+            sx={{
+              fontFamily: isRetro ? "'Share Tech Mono', monospace" : "inherit",
+              fontWeight: isRetro ? "bold" : "normal",
+            }}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     {
@@ -105,12 +107,14 @@ const MissionTable: React.FC<MissionTableProps> = ({
       headerName: t("missionType").toUpperCase(),
       width: 150,
       renderCell: (params) => (
-        <Typography
-          variant="body2"
-          sx={{ fontFamily: isRetro ? "monospace" : "inherit" }}
-        >
-          {t(params.value.toString().toLowerCase()).toUpperCase()}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+          <Typography
+            variant="body2"
+            sx={{ fontFamily: isRetro ? "monospace" : "inherit" }}
+          >
+            {t(params.value.toString().toLowerCase()).toUpperCase()}
+          </Typography>
+        </Box>
       ),
     },
     ...(isAdminView
@@ -180,6 +184,11 @@ const MissionTable: React.FC<MissionTableProps> = ({
     borderRadius: 2,
     border: "none",
     "& .MuiDataGrid-cell:focus": { outline: "none" },
+    "& .MuiDataGrid-cell": {
+      display: "flex",
+      alignItems: "center",
+      outline: "none !important",
+    },
   };
 
   const retroSx = {
@@ -189,11 +198,15 @@ const MissionTable: React.FC<MissionTableProps> = ({
     fontFamily: "monospace",
     "& .MuiDataGrid-main": { borderBottom: "1px solid #333" },
     "& .MuiDataGrid-cell": {
+      display: "flex",
+      alignItems: "center",
       borderBottom: "1px solid #222",
       color: "#eee",
       fontFamily: "monospace",
     },
     "& .MuiDataGrid-columnHeaders": {
+      display: "flex",
+      alignItems: "center",
       bgcolor: "#1a1a1a",
       color: "#fff",
       borderBottom: "2px solid #fff",
@@ -227,7 +240,10 @@ const MissionTable: React.FC<MissionTableProps> = ({
         initialState={{
           pagination: { paginationModel: { pageSize: 10 } },
           sorting: {
-            sortModel: [{ field: "starSystemId", sort: "asc" }],
+            sortModel: [
+              { field: "starSystemId", sort: "asc" },
+              { field: "orderInSystem", sort: "asc" },
+            ],
           },
         }}
         pageSizeOptions={[5, 10, 25, 100]}

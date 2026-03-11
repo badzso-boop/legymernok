@@ -41,14 +41,16 @@ const StarSystemTable: React.FC<StarSystemTableProps> = ({
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
-        <Typography
-          sx={{
-            fontFamily: isRetro ? "'Share Tech Mono', monospace" : "inherit",
-            fontWeight: isRetro ? "bold" : "normal",
-          }}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+          <Typography
+            sx={{
+              fontFamily: isRetro ? "'Share Tech Mono', monospace" : "inherit",
+              fontWeight: isRetro ? "bold" : "normal",
+            }}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     {
