@@ -31,6 +31,9 @@ public class DataInitializer implements CommandLineRunner {
         Permission missionEditAny = createPermissionIfNotFound("mission:edit_any", "Bármely küldetés szerkesztése");
         Permission missionDeleteAny = createPermissionIfNotFound("mission:delete_any", "Bármely küldetés törlése");
         Permission missionCreateAnySystem = createPermissionIfNotFound("mission:create_any_system", "Küldetés létrehozása bármely rendszerbe");
+        // Quiz jogok
+        Permission quizViewResults = createPermissionIfNotFound("quiz:view_results", "Saját kvízeredmények megtekintése");
+        Permission quizManage = createPermissionIfNotFound("quiz:manage", "Kvízek javítása és pontozása");
 
         // StarSystem jogok
         Permission starSystemRead = createPermissionIfNotFound("starsystem:read", "Csillagrendszer megtekintése");
@@ -60,6 +63,7 @@ public class DataInitializer implements CommandLineRunner {
         Set<Permission> cadetPermissions = new HashSet<>();
         cadetPermissions.add(missionRead);
         cadetPermissions.add(missionStart);
+        cadetPermissions.add(quizViewResults);
         cadetPermissions.add(starSystemRead);
         cadetPermissions.add(starSystemCreate);
         cadetPermissions.add(missionCreate);
@@ -75,6 +79,8 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(missionDelete);
         adminPermissions.add(missionEditAny);
         adminPermissions.add(missionDeleteAny);
+        adminPermissions.add(quizViewResults);
+        adminPermissions.add(quizManage);
         adminPermissions.add(missionCreateAnySystem);
         // StarSystem
         adminPermissions.add(starSystemRead);
