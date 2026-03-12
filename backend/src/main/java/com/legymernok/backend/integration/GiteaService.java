@@ -2,6 +2,7 @@ package com.legymernok.backend.integration;
 
 import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.mission.MissionType;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,8 @@ public class GiteaService {
     private final String jsTemplateRepoName;
     private final String pythonTemplateRepoOwner;
     private final String pythonTemplateRepoName;
+    private final String quizTemplateRepoOwner;
+    private final String quizTemplateRepoName;
     private final String verificationSecretValue;
 
     public GiteaService(
@@ -45,6 +48,8 @@ public class GiteaService {
             @Value("${gitea.template.js.repo}") String jsTemplateRepoName,
             @Value("${gitea.template.python.owner}") String pythonTemplateRepoOwner,
             @Value("${gitea.template.python.repo}") String pythonTemplateRepoName,
+            @Value("${gitea.template.quiz.owner}") String quizTemplateRepoOwner,
+            @Value("${gitea.template.quiz.repo}")String quizTemplateRepoName,
             @Value("${mission.verification.secret}") String verificationSecretValue) {
 
         this.adminUsername = adminUsername;
@@ -53,6 +58,8 @@ public class GiteaService {
         this.jsTemplateRepoName = jsTemplateRepoName;
         this.pythonTemplateRepoOwner = pythonTemplateRepoOwner;
         this.pythonTemplateRepoName = pythonTemplateRepoName;
+        this.quizTemplateRepoOwner = quizTemplateRepoOwner;
+        this.quizTemplateRepoName = quizTemplateRepoName;
         this.verificationSecretValue = verificationSecretValue;
 
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
@@ -463,14 +470,17 @@ public class GiteaService {
      * @return Az új repository klónozási URL-je.
      * @throws ExternalServiceException Ha hiba történik a Gitea műveletek során.
      */
-    public String createMissionRepository(String missionIdString, String templateLanguage, Cadet user) {
+    public String createMissionRepository(String missionIdString, String templateLanguage, Cadet user, MissionType type) {
         log.info("Creating mission repository for user '{}' from '{}' template.", user.getUsername(), templateLanguage);
 
         String sourceOwner;
         String sourceRepoName;
         String newRepoName = missionIdString;
 
-        if ("javascript".equalsIgnoreCase(templateLanguage)) {
+        if (type == MissionType.QUIZ) {
+            sourceOwner = quizTemplateRepoOwner;
+            sourceRepoName = quizTemplateRepoName;
+        } else if ("javascript".equalsIgnoreCase(templateLanguage)) {
             sourceOwner = jsTemplateRepoOwner;
             sourceRepoName = jsTemplateRepoName;
         } else if ("python".equalsIgnoreCase(templateLanguage)) {

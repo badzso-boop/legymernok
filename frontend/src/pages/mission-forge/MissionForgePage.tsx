@@ -1,25 +1,36 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, CircularProgress } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { forgeApi } from "../../api/client";
 import ForgeConfigPanel from "../../components/forge/ForgeConfigPanel";
 import ForgeEditor from "../../components/forge/ForgeEditor";
+import QuizEditor from "../../components/forge/quiz/QuizEditor";
 import type { MissionForgeResponse } from "../../types/mission-forge";
 
 const MissionForgePage: React.FC = () => {
-  // 1. Paraméter lekérése az URL-ből (pl. /forge/123-456)
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
 
-  /**
-   * Ez a függvény fut le, amikor a ForgeConfigPanel-ben
-   * sikeresen létrejött a misszió a Giteában és az adatbázisban is.
-   */
+  const { data: mission, isLoading } = useQuery({
+    queryKey: ["mission", missionId],
+    queryFn: () => (missionId ? forgeApi.getMissionById(missionId) : null),
+    enabled: !!missionId,
+  });
+
   const handleMissionInitialized = (
     initializedMission: MissionForgeResponse,
   ) => {
-    // Átnavigálunk az editor nézetre az új misszió ID-jával
     navigate(`/forge/${initializedMission.id}`);
   };
+
+  if (missionId && isLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
+        <CircularProgress color="#ffb000" />
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -30,15 +41,14 @@ const MissionForgePage: React.FC = () => {
         justifyContent: "center",
         alignItems: "center",
         p: { xs: 1, md: 3 },
-        bgcolor: "#121212", // Sötét háttér az egész oldalnak
+        bgcolor: "#121212",
       }}
     >
-      {/* 2. Logikai elágazás az URL paraméter alapján */}
       {!missionId ? (
-        /* HA NINCS ID: Megmutatjuk az inicializáló panelt */
         <ForgeConfigPanel onMissionInitialized={handleMissionInitialized} />
+      ) : mission?.missionType === "QUIZ" ? (
+        <QuizEditor missionId={missionId} />
       ) : (
-        /* HA VAN ID: Megnyitjuk a Monaco Editort */
         <ForgeEditor missionId={missionId} />
       )}
     </Box>

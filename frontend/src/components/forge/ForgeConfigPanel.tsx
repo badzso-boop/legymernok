@@ -87,7 +87,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
       });
     },
     onSuccess: (data) => {
-      onMissionInitialized(data);
+      //onMissionInitialized(data);
       queryClient.invalidateQueries({ queryKey: ["myStarSystems"] });
     },
   });
@@ -325,25 +325,27 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                   </Grid>
 
                   <Grid size={6}>
-                    <FormControl
-                      fullWidth
-                      variant="filled"
-                      sx={terminalInputSx}
-                    >
-                      <InputLabel>
-                        {t("forge.templateLanguage").toUpperCase()}
-                      </InputLabel>
-                      <Controller
-                        name="templateLanguage"
-                        control={control}
-                        render={({ field }) => (
-                          <Select {...field} fullWidth>
-                            <MenuItem value="javascript">JAVASCRIPT</MenuItem>
-                            <MenuItem value="python">PYTHON</MenuItem>
-                          </Select>
-                        )}
-                      />
-                    </FormControl>
+                    {watch("missionType") !== "QUIZ" && (
+                      <FormControl
+                        fullWidth
+                        variant="filled"
+                        sx={terminalInputSx}
+                      >
+                        <InputLabel>
+                          {t("forge.templateLanguage").toUpperCase()}
+                        </InputLabel>
+                        <Controller
+                          name="templateLanguage"
+                          control={control}
+                          render={({ field }) => (
+                            <Select {...field} fullWidth>
+                              <MenuItem value="javascript">JAVASCRIPT</MenuItem>
+                              <MenuItem value="python">PYTHON</MenuItem>
+                            </Select>
+                          )}
+                        />
+                      </FormControl>
+                    )}
                   </Grid>
 
                   <Grid size={6}>

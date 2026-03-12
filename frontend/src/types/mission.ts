@@ -1,4 +1,4 @@
-export type MissionType = "CODING" | "CIRCUIT_SIMULATION";
+export type MissionType = "CODING" | "CIRCUIT_SIMULATION" | "QUIZ";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
 export interface MissionResponse {

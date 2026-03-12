@@ -107,7 +107,8 @@ public class MissionService {
             String templateRepositoryUrl = giteaService.createMissionRepository(
                     newRepoName,
                     request.getTemplateLanguage(),
-                    currentUser
+                    currentUser,
+                    savedMission.getMissionType()
             );
 
             // 3. Frissítsük a rekordot a valódi Gitea URL-lel

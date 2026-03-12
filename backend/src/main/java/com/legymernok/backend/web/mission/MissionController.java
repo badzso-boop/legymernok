@@ -1,7 +1,9 @@
 package com.legymernok.backend.web.mission;
 
 import com.legymernok.backend.dto.mission.*;
+import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.service.mission.MissionService;
+import com.legymernok.backend.service.quiz.QuizService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,7 @@ import java.util.UUID;
 public class MissionController {
 
     private final MissionService missionService;
+    private final QuizService quizService;
 
     /**
      * Inicializál egy új missziót a Mission Forge-on keresztül (létrehozza az adatbázis rekordot és a Gitea repót).
