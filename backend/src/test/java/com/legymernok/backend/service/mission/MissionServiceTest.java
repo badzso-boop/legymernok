@@ -1,7 +1,11 @@
 package com.legymernok.backend.service.mission;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.dto.mission.*;
+import com.legymernok.backend.dto.quiz.QuizDefinition;
+import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.auth.Permission;
@@ -21,11 +25,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.util.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -36,11 +43,28 @@ class MissionServiceTest {
     @Mock private StarSystemRepository starSystemRepository;
     @Mock private GiteaService giteaService;
     @Mock private CadetRepository cadetRepository;
+    @Spy  private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private MissionService missionService;
 
     private Cadet testUser;
     private StarSystem testStarSystem;
-    @Mock private Authentication mockAuthentication; // Keep as @Mock, will be injected by Mockito
+    @Mock private Authentication mockAuthentication;
+
+    // Minta quiz JSON helyes válaszokkal – több teszthez is felhasználjuk
+    private static final String SAMPLE_QUIZ_JSON = """
+            {
+              "config": {"timeLimitSeconds": 300, "allowNavigation": true, "showSolutions": false},
+              "questions": [{
+                "id": "q1",
+                "text": "Mi 2+2?",
+                "points": 10,
+                "options": [
+                  {"id": "o1", "text": "3", "isCorrect": false},
+                  {"id": "o2", "text": "4", "isCorrect": true}
+                ]
+              }]
+            }
+            """;
 
     @BeforeEach
     void setUp() {
@@ -54,11 +78,9 @@ class MissionServiceTest {
         testStarSystem.setOwner(testUser);
         testStarSystem.setName("TestSystem");
 
-        // Removed authentication setup from here
         lenient().when(giteaService.getAdminUsername()).thenReturn("legymernok_admin");
     }
 
-    // Helper method for authentication setup
     private void setupAuthentication(Cadet user) {
         SecurityContext securityContext = mock(SecurityContext.class);
         when(securityContext.getAuthentication()).thenReturn(mockAuthentication);
@@ -74,17 +96,19 @@ class MissionServiceTest {
             p.setName(authName);
             permissions.add(p);
         }
-
         Role mockRole = new Role();
         mockRole.setName("MOCK_ROLE");
         mockRole.setPermissions(permissions);
-
         testUser.setRoles(Set.of(mockRole));
     }
 
+    // =========================================================================
+    // initializeForgeMission tesztek
+    // =========================================================================
+
     @Test
     void initializeForgeMission_whenUserIsOwnerOfStarSystem_shouldSucceedAndCreateGiteaRepo() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         CreateMissionInitialRequest request = new CreateMissionInitialRequest();
         request.setStarSystemId(testStarSystem.getId());
@@ -97,8 +121,7 @@ class MissionServiceTest {
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
-
-        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(request.getMissionType()))).thenReturn("http://gitea/repo.git");
+        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING))).thenReturn("http://gitea/repo.git");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
             if (m.getId() == null) m.setId(UUID.randomUUID());
@@ -109,19 +132,19 @@ class MissionServiceTest {
 
         assertNotNull(response);
         assertEquals(VerificationStatus.DRAFT, response.getVerificationStatus());
-        verify(giteaService).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(request.getMissionType()));
+        verify(giteaService).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING));
         verify(missionRepository, times(2)).save(any(Mission.class));
     }
 
     @Test
     void initializeForgeMission_inAnotherUsersSystemWithoutPermission_shouldThrowUnauthorized() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         StarSystem anotherUsersSystem = new StarSystem();
         anotherUsersSystem.setId(UUID.randomUUID());
         Cadet anotherCadet = new Cadet();
         anotherCadet.setId(UUID.randomUUID());
-        anotherUsersSystem.setOwner(anotherCadet); // Másé a rendszer
+        anotherUsersSystem.setOwner(anotherCadet);
 
         CreateMissionInitialRequest request = new CreateMissionInitialRequest();
         request.setStarSystemId(anotherUsersSystem.getId());
@@ -134,12 +157,12 @@ class MissionServiceTest {
         when(starSystemRepository.findById(anotherUsersSystem.getId())).thenReturn(Optional.of(anotherUsersSystem));
 
         assertThrows(UnauthorizedAccessException.class, () -> missionService.initializeForgeMission(request));
-        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()));
+        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), any());
     }
 
     @Test
     void initializeForgeMission_withDuplicateName_shouldThrowConflict() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         CreateMissionInitialRequest request = new CreateMissionInitialRequest();
         request.setStarSystemId(testStarSystem.getId());
@@ -153,12 +176,12 @@ class MissionServiceTest {
         when(missionRepository.existsByStarSystemIdAndName(testStarSystem.getId(), "Duplicate Mission")).thenReturn(true);
 
         assertThrows(ResourceConflictException.class, () -> missionService.initializeForgeMission(request));
-        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()));
+        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), any());
     }
 
     @Test
     void initializeForgeMission_withSmartInsert_shouldShiftOthers() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         CreateMissionInitialRequest request = new CreateMissionInitialRequest();
         request.setStarSystemId(testStarSystem.getId());
@@ -170,7 +193,7 @@ class MissionServiceTest {
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(testStarSystem.getId(), 2)).thenReturn(true);
-        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()))).thenReturn("http://gitea/repo.url");
+        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any())).thenReturn("http://gitea/repo.url");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
             if (m.getId() == null) m.setId(UUID.randomUUID());
@@ -181,13 +204,73 @@ class MissionServiceTest {
 
         verify(missionRepository).shiftOrdersUp(testStarSystem.getId(), 2);
         verify(missionRepository).flush();
-        verify(missionRepository).save(any(Mission.class));
+        // FIX: a service kétszer hív save()-t (1. PENDING_INITIALIZATION URL-lel, 2. valódi URL-lel)
+        verify(missionRepository, times(2)).save(any(Mission.class));
     }
 
     @Test
+    void initializeForgeMission_withQuizType_shouldCallCreateWithQuizType() {
+        setupAuthentication(testUser);
+
+        CreateMissionInitialRequest request = new CreateMissionInitialRequest();
+        request.setStarSystemId(testStarSystem.getId());
+        request.setName("Quiz Mission");
+        request.setTemplateLanguage("quiz");
+        request.setDifficulty(Difficulty.MEDIUM);
+        request.setMissionType(MissionType.QUIZ);
+        request.setOrderInSystem(1);
+
+        when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
+        when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(giteaService.createMissionRepository(anyString(), eq("quiz"), eq(testUser), eq(MissionType.QUIZ))).thenReturn("http://gitea/quiz-repo.git");
+        when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
+            Mission m = i.getArgument(0);
+            if (m.getId() == null) m.setId(UUID.randomUUID());
+            return m;
+        });
+
+        MissionResponse response = missionService.initializeForgeMission(request);
+
+        assertNotNull(response);
+        // A QUIZ típussal kell meghívni a createMissionRepository-t
+        verify(giteaService).createMissionRepository(anyString(), eq("quiz"), eq(testUser), eq(MissionType.QUIZ));
+    }
+
+    @Test
+    void initializeForgeMission_whenGiteaFails_shouldThrowExternalServiceException() {
+        setupAuthentication(testUser);
+
+        CreateMissionInitialRequest request = new CreateMissionInitialRequest();
+        request.setStarSystemId(testStarSystem.getId());
+        request.setName("Failing Mission");
+        request.setTemplateLanguage("javascript");
+        request.setDifficulty(Difficulty.EASY);
+        request.setMissionType(MissionType.CODING);
+        request.setOrderInSystem(1);
+
+        when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
+        when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
+            Mission m = i.getArgument(0);
+            if (m.getId() == null) m.setId(UUID.randomUUID());
+            return m;
+        });
+        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any()))
+                .thenThrow(new RuntimeException("Gitea connection refused"));
+
+        assertThrows(ExternalServiceException.class, () -> missionService.initializeForgeMission(request));
+    }
+
+    // =========================================================================
+    // saveForgeMissionContent tesztek
+    // =========================================================================
+
+    @Test
     void saveForgeMissionContent_byOwner_shouldSucceedAndUploadFiles() {
-        setupAuthentication(testUser); // Added authentication setup
-        
+        setupAuthentication(testUser);
+
         UUID missionId = UUID.randomUUID();
         Mission mission = Mission.builder()
                 .id(missionId)
@@ -201,31 +284,29 @@ class MissionServiceTest {
         request.setFiles(Map.of("solution.js", "new code", "README.md", "updated readme"));
 
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
-        when(giteaService.uploadFile(anyString(), anyString(), anyString(), anyString())).thenReturn("http://gitea/file.js");
-        when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
-            Mission m = i.getArgument(0);
-            return m;
-        });
+        // FIX: a service uploadFiles()-t hív (batch), nem uploadFile()-t (egyedi)
+        doNothing().when(giteaService).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any(Cadet.class));
+        when(missionRepository.save(any(Mission.class))).thenAnswer(i -> i.getArgument(0));
 
         MissionResponse response = missionService.saveForgeMissionContent(request);
 
         assertNotNull(response);
         assertEquals(VerificationStatus.PENDING, response.getVerificationStatus());
-        verify(giteaService, times(2)).uploadFile(eq("legymernok_admin"), eq(missionId.toString()), anyString(), anyString()); // Fixed verification
-        verify(giteaService, times(1)).getAdminUsername(); // Explicit verification
+        verify(giteaService, times(1)).uploadFiles(eq("legymernok_admin"), eq(missionId.toString()), anyMap(), anyString(), eq(testUser));
+        verify(giteaService, times(1)).getAdminUsername();
         verify(missionRepository).save(mission);
     }
 
     @Test
     void saveForgeMissionContent_byNonOwnerWithoutPermission_shouldThrowUnauthorized() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         UUID missionId = UUID.randomUUID();
         Cadet anotherUser = new Cadet();
         anotherUser.setId(UUID.randomUUID());
         Mission mission = Mission.builder()
                 .id(missionId)
-                .owner(anotherUser) // Másé a misszió
+                .owner(anotherUser)
                 .starSystem(testStarSystem)
                 .build();
 
@@ -236,44 +317,77 @@ class MissionServiceTest {
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
 
         assertThrows(UnauthorizedAccessException.class, () -> missionService.saveForgeMissionContent(request));
-        verify(giteaService, never()).uploadFile(anyString(), anyString(), anyString(), anyString());
+        verify(giteaService, never()).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any(Cadet.class));
     }
 
     @Test
     void saveForgeMissionContent_byAdminWithEditAnyPermission_shouldSucceed() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         UUID missionId = UUID.randomUUID();
         Cadet anotherUser = new Cadet();
         anotherUser.setId(UUID.randomUUID());
         Mission mission = Mission.builder()
                 .id(missionId)
-                .owner(anotherUser) // Másé a misszió
+                .owner(anotherUser)
                 .starSystem(testStarSystem)
                 .verificationStatus(VerificationStatus.DRAFT)
                 .build();
 
-        mockUserAuthorities("mission:edit_any"); // Jogosultság hozzáadása
+        mockUserAuthorities("mission:edit_any");
 
         MissionForgeContentRequest request = new MissionForgeContentRequest();
         request.setMissionId(missionId);
         request.setFiles(Map.of("solution.js", "new code"));
 
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
-        when(giteaService.uploadFile(anyString(), anyString(), anyString(), anyString())).thenReturn("http://gitea/file.js");
+        // FIX: batch upload hívás
+        doNothing().when(giteaService).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any(Cadet.class));
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> i.getArgument(0));
 
         MissionResponse response = missionService.saveForgeMissionContent(request);
 
         assertNotNull(response);
         assertEquals(VerificationStatus.PENDING, response.getVerificationStatus());
-        verify(giteaService, times(1)).uploadFile(eq("legymernok_admin"), eq(missionId.toString()), eq("solution.js"), eq("new code"));
+        verify(giteaService, times(1)).uploadFiles(eq("legymernok_admin"), eq(missionId.toString()), anyMap(), anyString(), eq(testUser));
         verify(missionRepository).save(mission);
     }
 
     @Test
+    void saveForgeMissionContent_withEmptyFiles_shouldUpdateStatusWithoutUpload() {
+        setupAuthentication(testUser);
+
+        UUID missionId = UUID.randomUUID();
+        Mission mission = Mission.builder()
+                .id(missionId)
+                .owner(testUser)
+                .starSystem(testStarSystem)
+                .verificationStatus(VerificationStatus.DRAFT)
+                .build();
+
+        MissionForgeContentRequest request = new MissionForgeContentRequest();
+        request.setMissionId(missionId);
+        request.setFiles(Map.of()); // üres fájllista
+
+        when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
+        when(missionRepository.save(any(Mission.class))).thenAnswer(i -> i.getArgument(0));
+
+        MissionResponse response = missionService.saveForgeMissionContent(request);
+
+        assertNotNull(response);
+        assertEquals(VerificationStatus.PENDING, response.getVerificationStatus());
+        // Üres fájlokkal nem hívódik Gitea
+        verify(giteaService, never()).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any(Cadet.class));
+        verify(missionRepository).save(mission);
+    }
+
+    // =========================================================================
+    // getMissionFiles tesztek
+    // =========================================================================
+
+    @Test
     void getMissionFiles_byOwner_shouldReturnFilesContent() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         UUID missionId = UUID.randomUUID();
         Mission mission = Mission.builder()
@@ -288,7 +402,6 @@ class MissionServiceTest {
         );
 
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
-        when(giteaService.getAdminUsername()).thenReturn("legymernok_admin"); // This one remains here as it's used directly in the test's stubbing
         when(giteaService.getRepoContents(eq("legymernok_admin"), eq(missionId.toString()), eq(""))).thenReturn(giteaContents);
         when(giteaService.getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("solution.js"))).thenReturn("function add(){}");
         when(giteaService.getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("README.md"))).thenReturn("# Readme");
@@ -300,12 +413,12 @@ class MissionServiceTest {
         assertTrue(files.containsKey("solution.js"));
         assertTrue(files.containsKey("README.md"));
         assertEquals("function add(){}", files.get("solution.js"));
-        verify(giteaService, times(1)).getAdminUsername(); // explicit verification
+        verify(giteaService, times(1)).getAdminUsername();
     }
 
     @Test
     void getMissionFiles_byNonOwnerWithoutPermission_shouldThrowUnauthorized() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         UUID missionId = UUID.randomUUID();
         Cadet anotherUser = new Cadet();
@@ -324,7 +437,7 @@ class MissionServiceTest {
 
     @Test
     void getMissionFiles_byAdminWithReadAuthority_shouldReturnFilesContent() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         UUID missionId = UUID.randomUUID();
         Cadet anotherUser = new Cadet();
@@ -335,13 +448,12 @@ class MissionServiceTest {
                 .starSystem(testStarSystem)
                 .build();
 
-        mockUserAuthorities("mission:read"); // Adminnak van read joga
+        mockUserAuthorities("mission:read");
 
-        List<GiteaService.GiteaContent> giteaContents = Arrays.asList(
+        List<GiteaService.GiteaContent> giteaContents = List.of(
                 new GiteaService.GiteaContent("solution.js", "solution.js", "dummy-sha", "file", "encoded", "url")
         );
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
-        when(giteaService.getAdminUsername()).thenReturn("legymernok_admin"); // This one remains here as it's used directly in the test's stubbing
         when(giteaService.getRepoContents(anyString(), anyString(), anyString())).thenReturn(giteaContents);
         when(giteaService.getFileContent(anyString(), anyString(), anyString())).thenReturn("code");
 
@@ -350,12 +462,115 @@ class MissionServiceTest {
         assertNotNull(files);
         assertEquals(1, files.size());
         assertEquals("code", files.get("solution.js"));
-        verify(giteaService, times(1)).getAdminUsername(); // explicit verification
+        verify(giteaService, times(1)).getAdminUsername();
     }
 
     @Test
+    void getMissionFiles_forQuizMission_byNonOwner_shouldStripAnswers() throws Exception {
+        setupAuthentication(testUser);
+        mockUserAuthorities("mission:read"); // van olvasási joga, de nem owner és nem admin
+
+        UUID missionId = UUID.randomUUID();
+        Cadet owner = new Cadet();
+        owner.setId(UUID.randomUUID());
+
+        Mission mission = Mission.builder()
+                .id(missionId)
+                .owner(owner)
+                .missionType(MissionType.QUIZ)
+                .starSystem(testStarSystem)
+                .build();
+
+        List<GiteaService.GiteaContent> giteaContents = List.of(
+                new GiteaService.GiteaContent("quiz.json", "quiz.json", "sha", "file", "encoded", "url")
+        );
+
+        when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
+        when(giteaService.getRepoContents(eq("legymernok_admin"), eq(missionId.toString()), eq(""))).thenReturn(giteaContents);
+        when(giteaService.getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("quiz.json"))).thenReturn(SAMPLE_QUIZ_JSON);
+
+        Map<String, String> files = missionService.getMissionFiles(missionId);
+
+        assertTrue(files.containsKey("quiz.json"));
+        QuizDefinition returnedQuiz = objectMapper.readValue(files.get("quiz.json"), QuizDefinition.class);
+        // Nem-owner nem láthatja a helyes válaszokat
+        returnedQuiz.getQuestions().forEach(q ->
+                q.getOptions().forEach(o -> assertNull(o.getIsCorrect(),
+                        "isCorrect mezőnek null-nak kell lennie nem-owner számára"))
+        );
+    }
+
+    @Test
+    void getMissionFiles_forQuizMission_byOwner_shouldKeepAnswers() throws Exception {
+        setupAuthentication(testUser); // testUser az owner
+
+        UUID missionId = UUID.randomUUID();
+        Mission mission = Mission.builder()
+                .id(missionId)
+                .owner(testUser) // owner!
+                .missionType(MissionType.QUIZ)
+                .starSystem(testStarSystem)
+                .build();
+
+        List<GiteaService.GiteaContent> giteaContents = List.of(
+                new GiteaService.GiteaContent("quiz.json", "quiz.json", "sha", "file", "encoded", "url")
+        );
+
+        when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
+        when(giteaService.getRepoContents(anyString(), anyString(), eq(""))).thenReturn(giteaContents);
+        when(giteaService.getFileContent(anyString(), anyString(), eq("quiz.json"))).thenReturn(SAMPLE_QUIZ_JSON);
+
+        Map<String, String> files = missionService.getMissionFiles(missionId);
+
+        assertTrue(files.containsKey("quiz.json"));
+        QuizDefinition returnedQuiz = objectMapper.readValue(files.get("quiz.json"), QuizDefinition.class);
+        // Owner látja a helyes válaszokat
+        boolean hasCorrectAnswer = returnedQuiz.getQuestions().get(0).getOptions().stream()
+                .anyMatch(o -> Boolean.TRUE.equals(o.getIsCorrect()));
+        assertTrue(hasCorrectAnswer, "Ownernek látnia kell a helyes válaszokat");
+    }
+
+    @Test
+    void getMissionFiles_forQuizMission_byAdminWithEditAny_shouldKeepAnswers() throws Exception {
+        setupAuthentication(testUser);
+        mockUserAuthorities("mission:edit_any"); // admin
+
+        UUID missionId = UUID.randomUUID();
+        Cadet owner = new Cadet();
+        owner.setId(UUID.randomUUID());
+
+        Mission mission = Mission.builder()
+                .id(missionId)
+                .owner(owner)
+                .missionType(MissionType.QUIZ)
+                .starSystem(testStarSystem)
+                .build();
+
+        List<GiteaService.GiteaContent> giteaContents = List.of(
+                new GiteaService.GiteaContent("quiz.json", "quiz.json", "sha", "file", "encoded", "url")
+        );
+
+        when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
+        when(giteaService.getRepoContents(anyString(), anyString(), eq(""))).thenReturn(giteaContents);
+        when(giteaService.getFileContent(anyString(), anyString(), eq("quiz.json"))).thenReturn(SAMPLE_QUIZ_JSON);
+
+        Map<String, String> files = missionService.getMissionFiles(missionId);
+
+        assertTrue(files.containsKey("quiz.json"));
+        QuizDefinition returnedQuiz = objectMapper.readValue(files.get("quiz.json"), QuizDefinition.class);
+        // Admin (mission:edit_any) látja a helyes válaszokat
+        boolean hasCorrectAnswer = returnedQuiz.getQuestions().get(0).getOptions().stream()
+                .anyMatch(o -> Boolean.TRUE.equals(o.getIsCorrect()));
+        assertTrue(hasCorrectAnswer, "Adminnak látnia kell a helyes válaszokat");
+    }
+
+    // =========================================================================
+    // deleteMission tesztek
+    // =========================================================================
+
+    @Test
     void deleteMission_byOwner_shouldSucceed() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         Mission mission = Mission.builder()
                 .id(UUID.randomUUID())
@@ -365,7 +580,7 @@ class MissionServiceTest {
                 .build();
 
         when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
-        doNothing().when(giteaService).deleteAdminRepository(anyString()); 
+        doNothing().when(giteaService).deleteAdminRepository(anyString());
 
         missionService.deleteMission(mission.getId());
 
@@ -375,18 +590,18 @@ class MissionServiceTest {
 
     @Test
     void deleteMission_byAdminWithPermission_shouldSucceed() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         Cadet anotherUser = new Cadet();
         anotherUser.setId(UUID.randomUUID());
         Mission mission = Mission.builder()
                 .id(UUID.randomUUID())
-                .owner(anotherUser) // Másé a misszió
+                .owner(anotherUser)
                 .starSystem(testStarSystem)
                 .templateRepositoryUrl("http://gitea:3000/legymernok_admin/another-mission-repo")
                 .build();
 
-        mockUserAuthorities("mission:delete_any"); // Jogosultság hozzáadása
+        mockUserAuthorities("mission:delete_any");
 
         when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
         doNothing().when(giteaService).deleteAdminRepository(anyString());
@@ -399,18 +614,17 @@ class MissionServiceTest {
 
     @Test
     void deleteMission_whenUserIsNotOwnerAndNoPermission_shouldThrowUnauthorized() {
-        setupAuthentication(testUser); // Added authentication setup
+        setupAuthentication(testUser);
 
         Cadet anotherUser = new Cadet();
         anotherUser.setId(UUID.randomUUID());
         Mission mission = Mission.builder()
                 .id(UUID.randomUUID())
-                .owner(anotherUser) // Másé a misszió
+                .owner(anotherUser)
                 .starSystem(testStarSystem)
                 .templateRepositoryUrl("http://gitea:3000/legymernok_admin/other-mission-repo")
                 .build();
 
-        // Nincs delete_any joga a testUser-nek
         mockUserAuthorities();
 
         when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
@@ -418,18 +632,37 @@ class MissionServiceTest {
         assertThrows(UnauthorizedAccessException.class, () -> missionService.deleteMission(mission.getId()));
         verify(missionRepository, never()).delete(any());
         verify(giteaService, never()).deleteAdminRepository(anyString());
-        // verify(giteaService, never()).getAdminUsername(); // The service calls it before throwing Unauthorized.
-        // It's better to verify if the service actually calls it or not in this flow.
-        // In this case, `extractRepoNameFromUrl` which is called in `deleteMission` uses `giteaService.getAdminUsername()` implicitly or explicitly.
-        // Let's recheck the service's deleteMission method.
-        // It calls `extractRepoNameFromUrl(repoUrl);`
-        // `extractRepoNameFromUrl` does NOT call `giteaService.getAdminUsername()`. So `never()` is appropriate here.
         verify(giteaService, never()).getAdminUsername();
     }
 
     @Test
+    void deleteMission_whenGiteaDeleteFails_shouldStillDeleteFromDb() {
+        // Dokumentálja a jelenlegi viselkedést: a Gitea hiba el van nyelve,
+        // a DB törlés mégis megtörténik. (Ismert technikai adósság.)
+        setupAuthentication(testUser);
+
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .owner(testUser)
+                .starSystem(testStarSystem)
+                .templateRepositoryUrl("http://gitea:3000/legymernok_admin/failing-repo")
+                .build();
+
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+        doThrow(new RuntimeException("Gitea unavailable")).when(giteaService).deleteAdminRepository(anyString());
+
+        // Nem dob kivételt – a Gitea hiba el van nyelve
+        assertDoesNotThrow(() -> missionService.deleteMission(mission.getId()));
+        // A DB rekord mégis törlődik
+        verify(missionRepository).delete(mission);
+    }
+
+    // =========================================================================
+    // updateMissionVerificationStatus tesztek
+    // =========================================================================
+
+    @Test
     void updateMissionVerificationStatus_shouldUpdateStatus() {
-        // This test does NOT require authentication setup, as previously determined.
         UUID missionId = UUID.randomUUID();
         Mission mission = Mission.builder().id(missionId).verificationStatus(VerificationStatus.PENDING).build();
 
@@ -443,11 +676,23 @@ class MissionServiceTest {
     }
 
     @Test
-    void shouldSuccessfullyCompleteMissionForgeWorkflow() {
-        // --- 1. Rendszerezés (Arrange) ---
-        setupAuthentication(testUser); // Autentikáció beállítása
+    void updateMissionVerificationStatus_whenMissionNotFound_shouldThrowNotFound() {
+        UUID missionId = UUID.randomUUID();
+        when(missionRepository.findById(missionId)).thenReturn(Optional.empty());
 
-        // Mission Initializáláshoz szükséges mock-ok
+        assertThrows(ResourceNotFoundException.class,
+                () -> missionService.updateMissionVerificationStatus(missionId, VerificationStatus.SUCCESS));
+        verify(missionRepository, never()).save(any());
+    }
+
+    // =========================================================================
+    // Teljes workflow integrációs teszt
+    // =========================================================================
+
+    @Test
+    void shouldSuccessfullyCompleteMissionForgeWorkflow() {
+        setupAuthentication(testUser);
+
         CreateMissionInitialRequest initialRequest = new CreateMissionInitialRequest();
         initialRequest.setStarSystemId(testStarSystem.getId());
         initialRequest.setName("New Full Workflow Mission");
@@ -459,47 +704,33 @@ class MissionServiceTest {
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
-        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(initialRequest.getMissionType()))).thenReturn("http://gitea/init_repo.git");
+        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING))).thenReturn("http://gitea/init_repo.git");
 
-        // FONTOS: Láncolt thenAnswer a missionRepository.save() hívásokhoz
-        // Az első hívás (initializeForgeMission-ből) generál egy ID-t.
-        // A második hívás (saveForgeMissionContent-ből) egyszerűen visszaadja a frissített missziót.
         when(missionRepository.save(any(Mission.class)))
                 .thenAnswer(invocation -> {
-                    Mission savedMission = invocation.getArgument(0);
-                    if (savedMission.getId() == null) {
-                        savedMission.setId(UUID.randomUUID()); // Generálunk egy ID-t az inicializáláshoz
-                    }
-                    return savedMission;
+                    Mission m = invocation.getArgument(0);
+                    if (m.getId() == null) m.setId(UUID.randomUUID());
+                    return m;
                 })
-                .thenAnswer(invocation -> {
-                    Mission updatedMission = invocation.getArgument(0);
-                    return updatedMission;
-                });
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // Fájlok lekéréséhez szükséges mock-ok (ez szimulálja a template tartalmát)
         List<GiteaService.GiteaContent> initialGiteaContents = Arrays.asList(
                 new GiteaService.GiteaContent("solution.js", "solution.js", "dummy-sha", "file", "encoded", "url"),
                 new GiteaService.GiteaContent("README.md", "README.md", "dummy-sha", "file", "encoded", "url")
         );
-        // A getMissionFiles hívja a getRepoContents-t és a getFileContent-et
         when(giteaService.getRepoContents(eq("legymernok_admin"), anyString(), eq(""))).thenReturn(initialGiteaContents);
         when(giteaService.getFileContent(eq("legymernok_admin"), anyString(), eq("solution.js"))).thenReturn("console.log('initial code');");
         when(giteaService.getFileContent(eq("legymernok_admin"), anyString(), eq("README.md"))).thenReturn("# Initial Readme");
 
-        // Fájlok mentéséhez szükséges mock-ok
-        when(giteaService.uploadFile(eq("legymernok_admin"), anyString(), anyString(), anyString())).thenReturn("http://gitea/uploaded_file.js");
+        // FIX: batch upload mock
+        doNothing().when(giteaService).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any(Cadet.class));
 
-        // --- 2. Végrehajtás (Act) ---
-
-        // 1. Mission inicializálása
+        // 1. Inicializálás
         MissionResponse initialResponse = missionService.initializeForgeMission(initialRequest);
         assertNotNull(initialResponse);
         UUID missionId = initialResponse.getId();
         assertNotNull(missionId);
 
-        // A MissionService.getMissionFiles és saveForgeMissionContent hívja a missionRepository.findById-t.
-        // Beállítjuk, hogy az inicializált missziót adja vissza.
         Mission missionAfterInit = Mission.builder()
                 .id(missionId)
                 .owner(testUser)
@@ -507,59 +738,50 @@ class MissionServiceTest {
                 .templateRepositoryUrl(initialResponse.getTemplateRepositoryUrl())
                 .name(initialResponse.getName())
                 .verificationStatus(initialResponse.getVerificationStatus())
+                .missionType(MissionType.CODING)
                 .build();
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(missionAfterInit));
 
-        // 2. Fájlok betöltésének szimulálása (MissionService.getMissionFiles)
+        // 2. Fájlok betöltése
         Map<String, String> loadedFiles = missionService.getMissionFiles(missionId);
         assertNotNull(loadedFiles);
         assertEquals(2, loadedFiles.size());
         assertTrue(loadedFiles.containsKey("solution.js"));
         assertEquals("console.log('initial code');", loadedFiles.get("solution.js"));
 
-        // 3. Fájlok mentésének szimulálása (MissionService.saveForgeMissionContent)
+        // 3. Fájlok mentése
         MissionForgeContentRequest saveRequest = new MissionForgeContentRequest();
         saveRequest.setMissionId(missionId);
         saveRequest.setFiles(Map.of("solution.js", "console.log('updated code');", "new_file.txt", "This is a new file."));
 
         MissionResponse finalResponse = missionService.saveForgeMissionContent(saveRequest);
 
-        // --- 3. Ellenőrzés (Assert) ---
-
-        // initializeForgeMission ellenőrzések
-        verify(giteaService, times(1)).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(initialRequest.getMissionType()));
-
-        // Fájl betöltés ellenőrzések
-        verify(missionRepository, times(2)).findById(missionId); // Kétszer hívódott: getMissionFiles és saveForgeMissionContent
+        // Assert – Gitea hívások
+        verify(giteaService, times(1)).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING));
         verify(giteaService, times(1)).getRepoContents(eq("legymernok_admin"), eq(missionId.toString()), eq(""));
         verify(giteaService, times(1)).getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("solution.js"));
         verify(giteaService, times(1)).getFileContent(eq("legymernok_admin"), eq(missionId.toString()), eq("README.md"));
-
-        // saveForgeMissionContent ellenőrzések
-        verify(giteaService, times(2)).uploadFile(eq("legymernok_admin"), eq(missionId.toString()), anyString(), anyString()); // Két fájl került feltöltésre
-
-        // GiteaService.getAdminUsername() meghívásának ellenőrzése
-        // createMissionRepository: 1x (belsőleg hívja)
-        // getMissionFiles: 1x
-        // saveForgeMissionContent: 1x
+        // FIX: batch upload verify – 1 hívás a teljes map-pel
+        verify(giteaService, times(1)).uploadFiles(eq("legymernok_admin"), eq(missionId.toString()), anyMap(), anyString(), eq(testUser));
+        // getMissionFiles: 1x, saveForgeMissionContent: 1x
         verify(giteaService, times(2)).getAdminUsername();
 
-        // missionRepository.save() hívások ellenőrzése ArgumentCaptorral
+        // Assert – repository hívások
+        verify(missionRepository, times(2)).findById(missionId);
+
         ArgumentCaptor<Mission> missionCaptor = ArgumentCaptor.forClass(Mission.class);
-        verify(missionRepository, times(2)).save(missionCaptor.capture());
-
+        verify(missionRepository, times(3)).save(missionCaptor.capture());
         List<Mission> capturedMissions = missionCaptor.getAllValues();
-        assertEquals(2, capturedMissions.size());
 
-        Mission firstSavedMission = capturedMissions.get(0);
-        assertNotNull(firstSavedMission.getId());
-        assertEquals("New Full Workflow Mission", firstSavedMission.getName());
-        assertEquals(VerificationStatus.DRAFT, firstSavedMission.getVerificationStatus());
-        assertNotNull(firstSavedMission.getTemplateRepositoryUrl());
+        Mission firstSaved = capturedMissions.get(0);
+        assertNotNull(firstSaved.getId());
+        assertEquals("New Full Workflow Mission", firstSaved.getName());
+        assertEquals(VerificationStatus.DRAFT, firstSaved.getVerificationStatus());
+        assertNotNull(firstSaved.getTemplateRepositoryUrl());
 
-        Mission secondSavedMission = capturedMissions.get(1);
-        assertEquals(missionId, secondSavedMission.getId());
-        assertEquals(VerificationStatus.PENDING, secondSavedMission.getVerificationStatus());
+        Mission secondSaved = capturedMissions.get(1);
+        assertEquals(missionId, secondSaved.getId());
+        assertEquals(VerificationStatus.DRAFT, secondSaved.getVerificationStatus());
 
         assertNotNull(finalResponse);
         assertEquals(VerificationStatus.PENDING, finalResponse.getVerificationStatus());

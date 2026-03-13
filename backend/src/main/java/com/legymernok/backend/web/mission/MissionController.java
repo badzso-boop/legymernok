@@ -21,7 +21,6 @@ import java.util.UUID;
 public class MissionController {
 
     private final MissionService missionService;
-    private final QuizService quizService;
 
     /**
      * Inicializál egy új missziót a Mission Forge-on keresztül (létrehozza az adatbázis rekordot és a Gitea repót).
