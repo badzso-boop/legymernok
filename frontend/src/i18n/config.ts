@@ -199,7 +199,8 @@ const resources = {
         data: "DATA",
         lang: "LANGUAGE",
       },
-      quiz: {
+      quiz: "Quiz",
+      quizEditor: {
         editorTitle: "QUIZ_CONTROL_CENTER",
         addQuestion: "ADD_NEW_QUESTION",
         questionText: "QUESTION_TEXT",
@@ -415,7 +416,8 @@ const resources = {
         data: "ADAT",
         lang: "NYELV",
       },
-      quiz: {
+      quiz: "Kvíz", // Visszaállítva szövegre
+      quizEditor: {
         editorTitle: "KVÍZ_VEZÉRLŐ_KÖZPONT",
         addQuestion: "ÚJ_KÉRDÉS_HOZZÁADÁSA",
         questionText: "KÉRDÉS_SZÖVEGE",

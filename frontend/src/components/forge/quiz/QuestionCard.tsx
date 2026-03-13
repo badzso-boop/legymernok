@@ -30,7 +30,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
 
   const handleOptionChange = (optionId: string, updated: QuizOption) => {
     const newOptions = question.options.map((o) =>
-      o.id === optionId ? updated : o
+      o.id === optionId ? updated : o,
     );
     onChange({ ...question, options: newOptions });
   };
@@ -80,7 +80,11 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
           <GripVertical size={16} color="#444" />
           <Typography
             variant="caption"
-            sx={{ color: "#ffb000", fontFamily: "monospace", fontWeight: "bold" }}
+            sx={{
+              color: "#ffb000",
+              fontFamily: "monospace",
+              fontWeight: "bold",
+            }}
           >
             [QUESTION_{String(index + 1).padStart(2, "0")}]
           </Typography>
@@ -92,7 +96,9 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               fontSize: "0.7rem",
             }}
           >
-            {correctCount > 1 ? "MULTI_SELECTION_MODE" : "SINGLE_SELECTION_MODE"}
+            {correctCount > 1
+              ? "MULTI_SELECTION_MODE"
+              : "SINGLE_SELECTION_MODE"}
           </Typography>
         </Box>
         <IconButton
@@ -112,13 +118,19 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               fullWidth
               multiline
               rows={2}
-              label={t("quiz.questionText").toUpperCase()}
+              label={t("quizEditor.questionText").toUpperCase()}
               variant="filled"
               value={question.text}
               onChange={(e) => onChange({ ...question, text: e.target.value })}
               sx={{
-                "& .MuiInputBase-root": { color: "#fff", fontFamily: "monospace" },
-                "& .MuiInputLabel-root": { color: "#888", fontFamily: "monospace" },
+                "& .MuiInputBase-root": {
+                  color: "#fff",
+                  fontFamily: "monospace",
+                },
+                "& .MuiInputLabel-root": {
+                  color: "#888",
+                  fontFamily: "monospace",
+                },
                 bgcolor: "#050505",
               }}
             />
@@ -127,7 +139,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
             <TextField
               fullWidth
               type="number"
-              label={t("quiz.points").toUpperCase()}
+              label={t("quizEditor.points").toUpperCase()}
               variant="filled"
               value={question.points}
               onChange={(e) =>
@@ -139,7 +151,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                   fontFamily: "monospace",
                   textAlign: "center",
                 },
-                "& .MuiInputLabel-root": { color: "#888", fontFamily: "monospace" },
+                "& .MuiInputLabel-root": {
+                  color: "#888",
+                  fontFamily: "monospace",
+                },
                 bgcolor: "#050505",
               }}
             />
@@ -150,7 +165,8 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               variant="caption"
               sx={{ color: "#555", mb: 2, display: "block" }}
             >
-              {t("quiz.options").toUpperCase()} ({question.options.length}/5)
+              {t("quizEditor.options").toUpperCase()} ({question.options.length}
+              /5)
             </Typography>
 
             {question.options.map((opt) => (
@@ -182,7 +198,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
                 }}
               >
                 <Plus size={14} />
-                {t("quiz.addOption").toUpperCase()}
+                {t("quizEditor.addOption").toUpperCase()}
               </Box>
             )}
           </Grid>

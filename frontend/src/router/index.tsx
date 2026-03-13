@@ -19,6 +19,7 @@ import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
 import MissionForgePage from "../pages/mission-forge/MissionForgePage";
+import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 import MyForgePage from "../pages/mission-forge/MyForgePage";
@@ -126,6 +127,14 @@ export const router = createHashRouter([
   {
     path: "/my-forge",
     element: <MyForgePage />,
+  },
+  {
+    path: "/play/quiz/:missionId",
+    element: (
+      <ProtectedRoute>
+        <QuizPlayerPage />
+      </ProtectedRoute>
+    ),
   },
 
   {

@@ -39,7 +39,7 @@ const OptionRow: React.FC<OptionRowProps> = ({
         transition: "all 0.2s ease",
       }}
     >
-      <Tooltip title={t("quiz.isCorrect").toUpperCase()}>
+      <Tooltip title={t("quizEditor.isCorrect").toUpperCase()}>
         <Checkbox
           checked={option.isCorrect}
           onChange={(e) => onChange({ ...option, isCorrect: e.target.checked })}
@@ -56,7 +56,7 @@ const OptionRow: React.FC<OptionRowProps> = ({
       <TextField
         fullWidth
         size="small"
-        placeholder={t("quiz.addOption").toUpperCase()}
+        placeholder={t("quizEditor.addOption").toUpperCase()}
         value={option.text}
         onChange={(e) => onChange({ ...option, text: e.target.value })}
         sx={{
@@ -72,7 +72,10 @@ const OptionRow: React.FC<OptionRowProps> = ({
         }}
       />
 
-      <IconButton onClick={onDelete} sx={{ color: "#666", "&:hover": { color: "#ff4444" } }}>
+      <IconButton
+        onClick={onDelete}
+        sx={{ color: "#666", "&:hover": { color: "#ff4444" } }}
+      >
         <Trash2 size={16} />
       </IconButton>
     </Box>

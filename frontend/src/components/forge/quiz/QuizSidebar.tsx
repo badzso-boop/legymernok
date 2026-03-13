@@ -60,7 +60,7 @@ const QuizSidebar: React.FC<QuizSidebarProps> = ({ config, onChange }) => {
       </Typography>
 
       <TextField
-        label={t("quiz.timeLimit").toUpperCase()}
+        label={t("quizEditor.timeLimit").toUpperCase()}
         type="number"
         variant="outlined"
         size="small"
@@ -93,7 +93,7 @@ const QuizSidebar: React.FC<QuizSidebarProps> = ({ config, onChange }) => {
               fontSize: "0.8rem",
             }}
           >
-            {t("quiz.allowBack").toUpperCase()}
+            {t("quizEditor.allowBack").toUpperCase()}
           </Typography>
         }
         sx={{ mb: 1 }}
@@ -118,7 +118,7 @@ const QuizSidebar: React.FC<QuizSidebarProps> = ({ config, onChange }) => {
               fontSize: "0.8rem",
             }}
           >
-            {t("quiz.showResults").toUpperCase()}
+            {t("quizEditor.showResults").toUpperCase()}
           </Typography>
         }
       />

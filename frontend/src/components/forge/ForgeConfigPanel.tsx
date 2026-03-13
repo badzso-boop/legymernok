@@ -87,7 +87,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
       });
     },
     onSuccess: (data) => {
-      //onMissionInitialized(data);
+      onMissionInitialized(data);
       queryClient.invalidateQueries({ queryKey: ["myStarSystems"] });
     },
   });

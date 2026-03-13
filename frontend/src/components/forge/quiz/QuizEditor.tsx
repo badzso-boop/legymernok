@@ -18,6 +18,7 @@ import { RetroPanel } from "../RetroPanel";
 import RetroButton from "../../RetroButton";
 import QuizSidebar from "./QuizSidebar";
 import QuestionCard from "./QuestionCard";
+import QuizPlayer from "./QuizPlayer";
 import { Plus, Eye, Save, ArrowLeft } from "lucide-react";
 
 interface QuizEditorProps {
@@ -70,7 +71,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
     onSuccess: () => {
       setSnackbar({
         open: true,
-        message: t("quiz.saveSuccess"),
+        message: t("quizEditor.saveSuccess"),
         severity: "success",
       });
       queryClient.invalidateQueries({ queryKey: ["missionFiles", missionId] });
@@ -125,7 +126,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
 
   return (
     <RetroPanel
-      title={t("quiz.editorTitle")}
+      title={t("quizEditor.editorTitle")}
       sx={{
         width: "98vw",
         height: "92vh",
@@ -202,7 +203,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
                 }}
               >
                 <Typography sx={{ color: "#444", fontFamily: "monospace" }}>
-                  {t("quiz.noQuestions").toUpperCase()}
+                  {t("quizEditor.noQuestions").toUpperCase()}
                 </Typography>
               </Box>
             ) : (
@@ -217,7 +218,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
               ))
             )}
 
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 4, mb: 10 }}>
+            <Box
+              sx={{ display: "flex", justifyContent: "center", mt: 4, mb: 10 }}
+            >
               <RetroButton
                 color="yellow"
                 labelKey="quiz.addQuestion"
@@ -231,27 +234,25 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
       {/* PREVIEW DIALOG */}
       <Dialog
         fullWidth
-        maxWidth="md"
+        maxWidth="lg"
         open={isPreviewOpen}
         onClose={() => setPreviewOpen(false)}
         PaperProps={{
-          sx: { bgcolor: "#111", border: "2px solid #ffb000", borderRadius: 0 },
+          sx: {
+            bgcolor: "#000",
+            border: "2px solid #ffb000",
+            borderRadius: 0,
+            height: "80vh",
+          },
         }}
       >
-        <DialogTitle sx={{ color: "#ffb000", fontFamily: "monospace", borderBottom: '1px solid #333' }}>
-          [PREVIEW_MODE]
-        </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
-           <Typography sx={{ color: '#888', mb: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}>
-             SYSTEM_NOTE: This is a visual preview only. Answers are not saved.
-           </Typography>
-           <pre style={{ color: '#aaa', fontSize: '0.7rem' }}>
-             {JSON.stringify(quizData, null, 2)}
-           </pre>
+        <DialogContent sx={{ p: 0, overflow: "hidden" }}>
+          <QuizPlayer
+            data={quizData}
+            isPreview={true}
+            onClose={() => setPreviewOpen(false)}
+          />
         </DialogContent>
-        <DialogActions sx={{ p: 3, borderTop: '1px solid #333' }}>
-           <RetroButton color="red" labelKey="cancel" size="small" onClick={() => setPreviewOpen(false)} />
-        </DialogActions>
       </Dialog>
 
       <Snackbar
