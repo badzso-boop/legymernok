@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.UUID;
 
 @RestController
@@ -29,20 +31,34 @@ public class MissionVerificationController {
     @Value("${mission.verification.secret}")
     private String verificationSecret;
 
+    private static final int MAX_LOG_LINES = 200;
+    private static final int MAX_LINE_LENGTH = 500;
+    private static final String RESERVED_LOG_PREFIX = "[STATUS_UPDATED]";
+
+    private boolean isValidSecret(String secret) {
+        return MessageDigest.isEqual(
+                verificationSecret.getBytes(StandardCharsets.UTF_8),
+                secret.getBytes(StandardCharsets.UTF_8));
+    }
+
     @PostMapping("/{missionId}/callback")
     public ResponseEntity<Void> handleVerificationCallback(
             @PathVariable UUID missionId,
             @RequestParam String status,
             @RequestHeader("X-Verification-Secret") String secret) {
 
-        if (!verificationSecret.equals(secret)) {
+        if (!isValidSecret(secret)) {
             log.warn("Unauthorized access to mission verification callback for mission ID: {}. Invalid secret.", missionId);
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
 
-        VerificationStatus verificationStatus = "SUCCESS".equalsIgnoreCase(status)
-                ? VerificationStatus.SUCCESS
-                : VerificationStatus.FAILED;
+        VerificationStatus verificationStatus;
+        try {
+            verificationStatus = VerificationStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid verification status '{}' received for mission {}", status, missionId);
+            return ResponseEntity.badRequest().build();
+        }
 
         log.info("Received verification callback for mission {}: {}", missionId, verificationStatus);
 
@@ -59,13 +75,25 @@ public class MissionVerificationController {
             @RequestHeader("X-Verification-Secret") String secret,
             HttpServletRequest request) {
 
-        if (!verificationSecret.equals(secret)) {
+        if (!isValidSecret(secret)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(request.getInputStream()))) {
             String line;
+            int lineCount = 0;
             while ((line = reader.readLine()) != null) {
+                if (++lineCount > MAX_LOG_LINES) {
+                    log.warn("Log stream exceeded max line limit ({}) for mission {}", MAX_LOG_LINES, missionId);
+                    break;
+                }
+                if (line.startsWith(RESERVED_LOG_PREFIX)) {
+                    log.warn("Filtered reserved log prefix '{}' in stream for mission {}", RESERVED_LOG_PREFIX, missionId);
+                    continue;
+                }
+                if (line.length() > MAX_LINE_LENGTH) {
+                    line = line.substring(0, MAX_LINE_LENGTH) + "...[TRUNCATED]";
+                }
                 missionLogService.sendMissionLog(missionId, line);
             }
         } catch (IOException e) {

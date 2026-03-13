@@ -1,6 +1,8 @@
 package com.legymernok.backend.service.mission;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.dto.mission.*;
+import com.legymernok.backend.dto.quiz.QuizDefinition;
 import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
@@ -10,6 +12,7 @@ import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionStatus;
+import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
@@ -41,6 +44,7 @@ public class MissionService {
     private final CadetMissionRepository cadetMissionRepository;
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
+    private final ObjectMapper objectMapper;
 
     @Value("${gitea.template.js.owner}")
     private String jsTemplateRepoOwner;
@@ -208,6 +212,25 @@ public class MissionService {
                 }
             }
         }
+
+        // QUIZ típusú missziónál a quiz.json helyes válaszait le kell szűrni,
+        // ha a kérelmező nem az owner és nem admin – különben a megoldókulcs kiszivárog.
+        boolean isOwner = mission.getOwner().getId().equals(currentUser.getId());
+        boolean isAdmin = hasAuthority(currentUser, "mission:edit_any");
+        if (mission.getMissionType() == MissionType.QUIZ && !isOwner && !isAdmin) {
+            String quizJson = filesContent.get("quiz.json");
+            if (quizJson != null) {
+                try {
+                    QuizDefinition quizDef = objectMapper.readValue(quizJson, QuizDefinition.class);
+                    quizDef.getQuestions().forEach(q ->
+                            q.getOptions().forEach(o -> o.setIsCorrect(null)));
+                    filesContent.put("quiz.json", objectMapper.writeValueAsString(quizDef));
+                } catch (Exception e) {
+                    log.error("Failed to strip answers from quiz.json for mission {}", missionId, e);
+                }
+            }
+        }
+
         log.info("Files for mission '{}' (ID: {}) fetched for user '{}'.", mission.getName(), mission.getId(), currentUser.getUsername());
         return filesContent;
     }

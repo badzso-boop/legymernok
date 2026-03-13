@@ -33,8 +33,17 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
     return () => clearInterval(timer);
   }, [timeLeft]);
 
+  // AUTO-SUBMIT: ha lejár az idő, automatikusan beküldi az aktuális válaszokat
+  useEffect(() => {
+    if (timeLeft === 0 && !isPreview && onSubmit) {
+      onSubmit(answers);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft]);
+
   const currentQuestion = data.questions[currentIndex];
   const progress = ((currentIndex + 1) / data.questions.length) * 100;
+  const isTimeUp = timeLeft <= 0 && !isPreview;
 
   const handleOptionToggle = (optionId: string) => {
     const qId = currentQuestion.id;
@@ -153,7 +162,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
           color="blue"
           labelKey="quiz.prev"
           onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-          disabled={currentIndex === 0 || !data.config.allowNavigation}
+          disabled={currentIndex === 0 || !data.config.allowNavigation || isTimeUp}
         />
 
         {currentIndex < data.questions.length - 1 ? (
@@ -161,12 +170,14 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             color="yellow"
             labelKey="quiz.next"
             onClick={() => setCurrentIndex((prev) => prev + 1)}
+            disabled={isTimeUp}
           />
         ) : (
           <RetroButton
             color="green"
             labelKey="quiz.finish"
             onClick={() => onSubmit?.(answers)}
+            disabled={isTimeUp}
           />
         )}
 

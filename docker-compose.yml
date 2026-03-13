@@ -70,6 +70,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: postgres
       # Automatikus séma frissítés (fejlesztéshez)
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # Secrets - .env fájlból töltődnek be
+      GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
+      GITEA_ADMIN_TOKEN: ${GITEA_ADMIN_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
+      MISSION_VERIFICATION_SECRET: ${MISSION_VERIFICATION_SECRET}
     ports:
       - "8080:8080"
     depends_on:

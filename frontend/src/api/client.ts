@@ -138,7 +138,7 @@ export const quizApi = {
   // Kvíz indítása vagy folytatása
   startQuiz: async (missionId: string): Promise<QuizDefinition> => {
     const response = await apiClient.post<QuizDefinition>(
-      `/api/quiz/${missionId}/start`,
+      `/quiz/${missionId}/start`,
     );
     return response.data;
   },
@@ -148,7 +148,7 @@ export const quizApi = {
     missionId: string,
     answers: Record<string, string[]>,
   ): Promise<void> => {
-    await apiClient.put(`/api/quiz/${missionId}/sync`, answers);
+    await apiClient.put(`/quiz/${missionId}/sync`, answers);
   },
 
   // Végleges beküldés és javítás
@@ -157,7 +157,7 @@ export const quizApi = {
     answers: Record<string, string[]>,
   ): Promise<MissionResult> => {
     const response = await apiClient.post<MissionResult>(
-      `/api/quiz/${missionId}/submit`,
+      `/quiz/${missionId}/submit`,
       answers,
     );
     return response.data;
@@ -166,7 +166,7 @@ export const quizApi = {
   // (Opcionális) Korábbi eredmények lekérése
   getResults: async (missionId: string): Promise<MissionResult[]> => {
     const response = await apiClient.get<MissionResult[]>(
-      `/api/quiz/${missionId}/results`,
+      `/quiz/${missionId}/results`,
     );
     return response.data;
   },

@@ -264,6 +264,7 @@ public class GiteaService {
         List<Map<String, Object>> fileActions = new ArrayList<>();
         for (Map.Entry<String, String> entry : files.entrySet()) {
             String path = entry.getKey();
+            validateFilePath(path);
             String content = Base64.getEncoder().encodeToString(entry.getValue().getBytes(StandardCharsets.UTF_8));
 
             Map<String, Object> action = new HashMap<>();
@@ -539,6 +540,19 @@ public class GiteaService {
         private String type; // "file" vagy "dir"
         private String content; // Base64
         private String download_url;
+    }
+
+    /**
+     * Validálja, hogy a fájl path nem tartalmaz path traversal kísérletet.
+     * Csak alfanumerikus karaktereket, pontot, kötőjelet, aláhúzást és perjelet enged meg.
+     */
+    private void validateFilePath(String path) {
+        if (path == null || path.isBlank()
+                || path.contains("..")
+                || path.startsWith("/")
+                || !path.matches("[a-zA-Z0-9._\\-/]+")) {
+            throw new IllegalArgumentException("Invalid file path: " + path);
+        }
     }
 
     /**

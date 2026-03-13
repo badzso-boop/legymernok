@@ -154,7 +154,8 @@ public class QuizService {
                 .maxScore(maxPossibleScore)
                 .percentage(percentage)
                 .detailedAnswers(objectMapper.writeValueAsString(userAnswers))
-                .isLate(isLate) // Új flag a MissionResult-ban!
+                .submissionHash(submissionHash)
+                .isLate(isLate)
                 .build();
 
         missionResultRepository.save(result);

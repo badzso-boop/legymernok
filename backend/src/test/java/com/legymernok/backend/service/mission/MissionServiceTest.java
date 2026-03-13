@@ -98,7 +98,7 @@ class MissionServiceTest {
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
 
-        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), request.getMissionType())).thenReturn("http://gitea/repo.git");
+        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(request.getMissionType()))).thenReturn("http://gitea/repo.git");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
             if (m.getId() == null) m.setId(UUID.randomUUID());
@@ -109,8 +109,8 @@ class MissionServiceTest {
 
         assertNotNull(response);
         assertEquals(VerificationStatus.DRAFT, response.getVerificationStatus());
-        verify(giteaService).createMissionRepository(anyString(), eq("javascript"), eq(testUser), request.getMissionType());
-        verify(missionRepository).save(any(Mission.class));
+        verify(giteaService).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(request.getMissionType()));
+        verify(missionRepository, times(2)).save(any(Mission.class));
     }
 
     @Test
@@ -134,7 +134,7 @@ class MissionServiceTest {
         when(starSystemRepository.findById(anotherUsersSystem.getId())).thenReturn(Optional.of(anotherUsersSystem));
 
         assertThrows(UnauthorizedAccessException.class, () -> missionService.initializeForgeMission(request));
-        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), request.getMissionType());
+        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()));
     }
 
     @Test
@@ -153,7 +153,7 @@ class MissionServiceTest {
         when(missionRepository.existsByStarSystemIdAndName(testStarSystem.getId(), "Duplicate Mission")).thenReturn(true);
 
         assertThrows(ResourceConflictException.class, () -> missionService.initializeForgeMission(request));
-        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), request.getMissionType());
+        verify(giteaService, never()).createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()));
     }
 
     @Test
@@ -170,7 +170,7 @@ class MissionServiceTest {
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(testStarSystem.getId(), 2)).thenReturn(true);
-        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), request.getMissionType())).thenReturn("http://gitea/repo.url");
+        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), eq(request.getMissionType()))).thenReturn("http://gitea/repo.url");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
             if (m.getId() == null) m.setId(UUID.randomUUID());
@@ -459,7 +459,7 @@ class MissionServiceTest {
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
         when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
-        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), initialRequest.getMissionType())).thenReturn("http://gitea/init_repo.git");
+        when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(initialRequest.getMissionType()))).thenReturn("http://gitea/init_repo.git");
 
         // FONTOS: Láncolt thenAnswer a missionRepository.save() hívásokhoz
         // Az első hívás (initializeForgeMission-ből) generál egy ID-t.
@@ -527,7 +527,7 @@ class MissionServiceTest {
         // --- 3. Ellenőrzés (Assert) ---
 
         // initializeForgeMission ellenőrzések
-        verify(giteaService, times(1)).createMissionRepository(anyString(), eq("javascript"), eq(testUser), initialRequest.getMissionType());
+        verify(giteaService, times(1)).createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(initialRequest.getMissionType()));
 
         // Fájl betöltés ellenőrzések
         verify(missionRepository, times(2)).findById(missionId); // Kétszer hívódott: getMissionFiles és saveForgeMissionContent
