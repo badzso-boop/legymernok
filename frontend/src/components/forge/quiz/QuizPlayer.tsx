@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { QuizDefinition } from "../../../types/quiz";
 import QuestionCardView from "./QuestionCardView";
 import RetroButton from "../../RetroButton";
-import { Clock, ChevronLeft, ChevronRight, Send } from "lucide-react";
+import { Clock } from "lucide-react";
 
 interface QuizPlayerProps {
   data: QuizDefinition;
@@ -40,8 +40,11 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
     const qId = currentQuestion.id;
     const currentAnswers = answers[qId] || [];
 
-    // Megszámoljuk a helyes válaszokat a sablonban (ha van)
-    const correctCount = currentQuestion.options.filter(o => o.isCorrect).length;
+    // Megszámoljuk a helyes válaszokat a sablonban (ha van - pl. preview-nál)
+    // Megjegyzés: Production játék módban ez a logika finomításra szorul (isMultiSelect flag kell a backendről)
+    const correctCount = currentQuestion.options.filter(
+      (o) => o.isCorrect,
+    ).length;
     const isMulti = correctCount > 1;
 
     if (isMulti) {
@@ -61,7 +64,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
   };
 
   if (!currentQuestion) {
-    return <Typography color="error">NO QUESTIONS DATA AVAILABLE</Typography>;
+    return <Typography color="error">{t("quiz.noQuestionsData")}</Typography>;
   }
 
   return (
@@ -87,8 +90,12 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             mb: 2,
           }}
         >
-          <Typography variant="caption" sx={{ fontFamily: "monospace", color: "#888" }}>
-            [MISSION_PROGRESS: {currentIndex + 1} / {data.questions.length}]
+          <Typography
+            variant="caption"
+            sx={{ fontFamily: "monospace", color: "#888" }}
+          >
+            [{t("quizEditor.progress")}: {currentIndex + 1} /{" "}
+            {data.questions.length}]
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Clock size={16} color={timeLeft < 60 ? "#ff4444" : "#ffb000"} />
@@ -116,7 +123,14 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
       </Box>
 
       {/* MAIN CONTENT: QUESTION CARD */}
-      <Box sx={{ flexGrow: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <QuestionCardView
           question={currentQuestion}
           selectedOptions={answers[currentQuestion.id] || []}
@@ -137,7 +151,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
       >
         <RetroButton
           color="blue"
-          labelKey="PREV"
+          labelKey="quiz.prev"
           onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
           disabled={currentIndex === 0 || !data.config.allowNavigation}
         />
@@ -145,19 +159,23 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
         {currentIndex < data.questions.length - 1 ? (
           <RetroButton
             color="yellow"
-            labelKey="NEXT"
+            labelKey="quiz.next"
             onClick={() => setCurrentIndex((prev) => prev + 1)}
           />
         ) : (
           <RetroButton
             color="green"
-            labelKey="FINISH"
+            labelKey="quiz.finish"
             onClick={() => onSubmit?.(answers)}
           />
         )}
 
         {isPreview && (
-          <RetroButton color="red" labelKey="CLOSE_PREVIEW" onClick={onClose} />
+          <RetroButton
+            color="red"
+            labelKey="quiz.closePreview"
+            onClick={onClose}
+          />
         )}
       </Box>
 
@@ -172,7 +190,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             fontFamily: "monospace",
           }}
         >
-          PREVIEW_MODE // NO_DATA_RECORDED
+          {t("quizEditor.noDataRecorded")}
         </Typography>
       )}
     </Box>

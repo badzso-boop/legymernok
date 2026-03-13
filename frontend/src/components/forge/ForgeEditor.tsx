@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import {
   Box,
@@ -14,17 +14,14 @@ import {
   FileText,
   Terminal as TerminalIcon,
   FolderOpen,
-  Info,
-  ChevronRight,
-  ChevronDown,
-} from "lucide-react"; // Modern ikonok
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { forgeApi } from "../../api/client";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import type {
-  MissionForgeResponse,
   MissionForgeContentRequest,
   VerificationStatus,
 } from "../../types/mission-forge";
@@ -36,9 +33,9 @@ interface ForgeEditorProps {
 }
 
 const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const editorRef = useRef<any>(null);
 
   // --- State-ek ---
   const [currentFileContents, setCurrentFileContents] = useState<
@@ -50,6 +47,11 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
   const [logs, setLogs] = useState<string[]>([]);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const stompClientRef = useRef<Client | null>(null);
+
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === "hu" ? "en" : "hu";
+    i18n.changeLanguage(nextLang);
+  };
 
   const scrollToBottom = () => {
     terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -68,20 +70,15 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
       onConnect: () => {
-        console.log("Connected to Mission Logs WebSocket");
         client.subscribe(`/topic/mission/${missionId}`, (message) => {
           const body = message.body;
-          console.log(body);
-
           if (body.startsWith("[STATUS_UPDATED]:")) {
             queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
-
             setLogs((prev) => [
               ...prev,
-              `\n--- [SYSTEM] VERIFICATION PROCESS COMPLETED ---`,
+              `\n--- ${t("forge.verificationCompleted")} ---`,
             ]);
           } else {
-            // Sima log sor
             setLogs((prev) => [...prev, body].slice(-200));
           }
         });
@@ -97,7 +94,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
     return () => {
       client.deactivate();
     };
-  }, [missionId]);
+  }, [missionId, queryClient, t]);
 
   const clearLogs = () => setLogs([]);
 
@@ -186,7 +183,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
 
   return (
     <RetroPanel
-      title={`ENGINEERING_STATION // ${mission.name.toUpperCase()}`}
+      title={`${t("forge.engineeringStation")} // ${mission.name.toUpperCase()}`}
       sx={{
         width: "98vw",
         height: "92vh",
@@ -230,10 +227,16 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
 
         <Box sx={{ display: "flex", gap: 3, mr: 2 }}>
           <RetroButton
+            color="blue"
+            labelKey="starMap.lang"
+            size="small"
+            onClick={toggleLanguage}
+          />
+          <RetroButton
             color="red"
             labelKey="starMap.back"
             size="small"
-            onClick={() => window.history.back()}
+            onClick={() => navigate(-1)}
           />
           <RetroButton
             color="green"
@@ -264,7 +267,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
             borderRight: "1px solid #222",
           }}
         >
-          <Tooltip title="Explorer" placement="right">
+          <Tooltip title={t("forge.explorer")} placement="right">
             <FolderOpen
               size={24}
               color={isSidebarOpen ? "#fff" : "#444"}
@@ -272,7 +275,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
               onClick={() => setSidebarOpen(!isSidebarOpen)}
             />
           </Tooltip>
-          <Tooltip title="Terminal" placement="right">
+          <Tooltip title={t("forge.terminal")} placement="right">
             <TerminalIcon
               size={24}
               color={isTerminalOpen ? "#fff" : "#444"}
@@ -304,7 +307,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
                 borderBottom: "1px solid #222",
               }}
             >
-              EXPLORER: PROJECT_FILES
+              {t("forge.explorerFiles").toUpperCase()}
             </Typography>
             <Box sx={{ py: 1 }}>
               {Object.keys(currentFileContents).map((name) => (
@@ -390,7 +393,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
                 }}
               >
                 <Typography sx={{ color: "#333", fontFamily: "monospace" }}>
-                  SELECT_FILE_TO_BEGIN
+                  {t("forge.selectFileToBegin")}
                 </Typography>
               </Box>
             )}
@@ -429,7 +432,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
                       fontWeight: "bold",
                     }}
                   >
-                    TERMINAL // GITEA_ACTIONS_STREAM
+                    {t("forge.terminalTitle")}
                   </Typography>
                 </Box>
                 <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
@@ -443,13 +446,13 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
                       fontFamily: "monospace",
                     }}
                   >
-                    [CLEAR_LOGS]
+                    [{t("forge.clearLogs")}]
                   </Typography>
                   <Typography
                     variant="caption"
                     sx={{ color: "#0f0", fontFamily: "monospace" }}
                   >
-                    ONLINE
+                    {t("forge.online").toUpperCase()}
                   </Typography>
                 </Box>
               </Box>
@@ -468,7 +471,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
               >
                 {logs.length === 0 && (
                   <Typography variant="caption" sx={{ color: "#444" }}>
-                    {">"} WAITING_FOR_STDOUT...
+                    {">"} {t("forge.waitingForStdout")}
                   </Typography>
                 )}
 

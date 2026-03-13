@@ -6,12 +6,11 @@ import {
   Snackbar,
   Alert,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { forgeApi } from "../../../api/client";
 import type { QuizDefinition, QuizQuestion } from "../../../types/quiz";
 import { RetroPanel } from "../RetroPanel";
@@ -19,7 +18,6 @@ import RetroButton from "../../RetroButton";
 import QuizSidebar from "./QuizSidebar";
 import QuestionCard from "./QuestionCard";
 import QuizPlayer from "./QuizPlayer";
-import { Plus, Eye, Save, ArrowLeft } from "lucide-react";
 
 interface QuizEditorProps {
   missionId: string;
@@ -35,7 +33,8 @@ const DEFAULT_QUIZ: QuizDefinition = {
 };
 
 const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [quizData, setQuizData] = useState<QuizDefinition>(DEFAULT_QUIZ);
   const [isPreviewOpen, setPreviewOpen] = useState(false);
@@ -44,6 +43,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
     message: "",
     severity: "success" as "success" | "error",
   });
+
+  const toggleLanguage = () => {
+    const nextLang = i18n.language === "hu" ? "en" : "hu";
+    i18n.changeLanguage(nextLang);
+  };
 
   // 1. ADATOK LEKÉRÉSE
   const { data: fetchedFiles, isLoading } = useQuery({
@@ -152,7 +156,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
             color="red"
             labelKey="starMap.back"
             size="small"
-            onClick={() => window.history.back()}
+            onClick={() => navigate(-1)}
+          />
+          <RetroButton
+            color="blue"
+            labelKey="starMap.lang"
+            size="small"
+            onClick={toggleLanguage}
           />
         </Box>
 
