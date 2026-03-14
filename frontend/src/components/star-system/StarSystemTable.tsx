@@ -95,6 +95,7 @@ const StarSystemTable: React.FC<StarSystemTableProps> = ({
               color="error"
               onClick={() => onDelete(params.row.id, params.row.name)}
               sx={{ minWidth: "30px", p: 0.5, borderRadius: isRetro ? 0 : 1 }}
+              aria-label="delete"
             >
               <DeleteIcon fontSize="small" />
             </Button>
