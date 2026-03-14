@@ -165,7 +165,6 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               <OptionRow
                 key={opt.id}
                 option={opt}
-                isMulti={correctCount > 1}
                 onChange={(updated) => handleOptionChange(opt.id, updated)}
                 onDelete={() => deleteOption(opt.id)}
               />

@@ -167,6 +167,8 @@ const MissionTable: React.FC<MissionTableProps> = ({
               variant={isRetro ? "contained" : "text"}
               color="error"
               onClick={() => onDelete(params.row.id)}
+              data-cy="delete-mission-btn"
+              aria-label="delete-mission"
               sx={{ minWidth: "30px", p: 0.5, borderRadius: isRetro ? 0 : 1 }}
             >
               <DeleteIcon fontSize="small" />

@@ -8,7 +8,6 @@ interface OptionRowProps {
   option: QuizOption;
   onChange: (updated: QuizOption) => void;
   onDelete: () => void;
-  isMulti: boolean;
 }
 
 const OptionRow: React.FC<OptionRowProps> = ({

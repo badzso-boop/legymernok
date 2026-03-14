@@ -247,7 +247,7 @@ const UserEdit: React.FC = () => {
                   <InputLabel id="role-select-label">Szerepkör</InputLabel>
                   <Select
                     labelId="role-select-label"
-                    value={user.role || ""}
+                    value={roleLoading ? "" : (user.role || "")}
                     label="Szerepkör"
                     onChange={handleRoleChange}
                     disabled={roleLoading}

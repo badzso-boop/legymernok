@@ -213,7 +213,7 @@ const MissionEdit: React.FC = () => {
                 <InputLabel>{t("starSystem")}</InputLabel>
                 <Select
                   name="starSystemId"
-                  value={mission.starSystemId}
+                  value={starSystems.length === 0 ? "" : mission.starSystemId}
                   label="Csillagrendszer"
                   onChange={handleSystemChange}
                 >

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import RoleList from "../roles/RoleList";
 import axios from "axios";
@@ -70,7 +70,13 @@ describe("RoleList Component", () => {
   it("handles delete action", async () => {
     vi.spyOn(window, "confirm").mockImplementation(() => true);
     mockedAxios.delete.mockResolvedValue({});
-    mockedAxios.get.mockResolvedValue({ data: [] }); // Újratöltéskor üres
+
+    // Első GET: van adat; második GET (törlés után): üres
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: [{ id: "1", name: "DeleteMe", permissions: [] }],
+      })
+      .mockResolvedValueOnce({ data: [] });
 
     render(
       <MemoryRouter>
@@ -78,15 +84,20 @@ describe("RoleList Component", () => {
       </MemoryRouter>,
     );
 
-    // Először be kell töltenie az adatot (az előző teszt miatt lehet, hogy újra be kell állítani a mockot, de itt most egyszerűsítünk)
-    // A DataGrid mock miatt a gomb "Delete" szövegű
-    // De a legbiztosabb, ha a setupban megadjuk az adatot
-    mockedAxios.get.mockResolvedValueOnce({
-      data: [{ id: "1", name: "DeleteMe", permissions: [] }],
+    // Megvárjuk a betöltést és a Delete gomb megjelenését
+    await waitFor(() => {
+      expect(screen.getByText("DeleteMe")).toBeInTheDocument();
     });
 
-    // ... render újra ...
+    // A DataGrid mock a "Delete" feliratú gombot rendereli
+    const deleteButton = screen.getByText("Delete");
+    fireEvent.click(deleteButton);
 
-    // (Ezt a részt élesben finomítani kell a DataGrid mock miatt)
+    await waitFor(() => {
+      expect(mockedAxios.delete).toHaveBeenCalledWith(
+        expect.stringContaining("/roles/1"),
+        expect.any(Object),
+      );
+    });
   });
 });
