@@ -63,6 +63,48 @@ describe("Admin Star System Management (Mocked Backend)", () => {
     cy.url().should("include", "/#/admin/star-systems");
   });
 
+  it("should delete a star system", () => {
+    cy.intercept("DELETE", "**/api/star-systems/system-1", {
+      statusCode: 204,
+    }).as("deleteSystem");
+
+    cy.intercept("GET", "**/api/star-systems", {
+      statusCode: 200,
+      body: [
+        {
+          id: "system-1",
+          name: "Coruscant",
+          description: "City planet",
+          createdAt: "2024-01-01T10:00:00Z",
+          updatedAt: "2024-01-01T10:00:00Z",
+        },
+      ],
+    }).as("getSystemsInitial");
+
+    cy.visit("/#/admin/star-systems", {
+      onBeforeLoad(win) {
+        win.localStorage.setItem("token", token);
+        cy.stub(win, "confirm").returns(true);
+      },
+    });
+
+    cy.wait("@getMe");
+    cy.wait("@getSystemsInitial");
+    cy.contains("Coruscant").should("be.visible");
+
+    cy.intercept("GET", "**/api/star-systems", {
+      statusCode: 200,
+      body: [],
+    }).as("getSystemsEmpty");
+
+    cy.get('button[aria-label="delete"]').first().click({ force: true });
+
+    cy.wait("@deleteSystem");
+    cy.wait("@getSystemsEmpty");
+
+    cy.contains("Coruscant").should("not.exist");
+  });
+
   it("should edit an existing star system", () => {
     cy.intercept("GET", "**/api/star-systems/system-1/with-missions", {
       statusCode: 200,

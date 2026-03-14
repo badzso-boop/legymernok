@@ -242,10 +242,7 @@ const MissionTable: React.FC<MissionTableProps> = ({
         initialState={{
           pagination: { paginationModel: { pageSize: 10 } },
           sorting: {
-            sortModel: [
-              { field: "starSystemId", sort: "asc" },
-              { field: "orderInSystem", sort: "asc" },
-            ],
+            sortModel: [{ field: "orderInSystem", sort: "asc" }],
           },
         }}
         pageSizeOptions={[5, 10, 25, 100]}
