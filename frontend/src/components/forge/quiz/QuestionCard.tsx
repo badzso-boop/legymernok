@@ -1,17 +1,9 @@
 import React from "react";
-import {
-  Box,
-  Typography,
-  TextField,
-  IconButton,
-  Grid,
-  Tooltip,
-} from "@mui/material";
+import { Box, Typography, TextField, IconButton, Grid } from "@mui/material";
 import { Trash2, Plus, GripVertical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { QuizQuestion, QuizOption } from "../../../types/quiz";
 import OptionRow from "./OptionRow";
-import RetroButton from "../../RetroButton";
 
 interface QuestionCardProps {
   question: QuizQuestion;

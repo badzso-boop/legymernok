@@ -123,7 +123,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress color="#ffb000" />
+        <CircularProgress />
       </Box>
     );
   }

@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Typography, Button, LinearProgress, Alert } from "@mui/material";
-import { DataGrid, GridToolbar } from "@mui/x-data-grid";
-import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
-import { huHU } from "@mui/x-data-grid/locales";
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-} from "@mui/icons-material";
+import { Box, Typography, Button, Alert } from "@mui/material";
+import { Add as AddIcon } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { StarSystemResponse } from "../../../types/starSystem";
@@ -56,74 +49,6 @@ const StarSystemList: React.FC = () => {
       }
     }
   };
-
-  const LoadingOverlay = () => (
-    <Box sx={{ position: "absolute", top: 0, width: "100%" }}>
-      <LinearProgress />
-    </Box>
-  );
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("hu-HU", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const columns: GridColDef[] = [
-    { field: "name", headerName: t("name"), flex: 1, minWidth: 150 },
-    {
-      field: "description",
-      headerName: t("description"),
-      flex: 2,
-      minWidth: 200,
-    },
-    {
-      field: "createdAt",
-      headerName: t("createdAt"),
-      width: 180,
-      valueFormatter: (value: any) => formatDate(value as string),
-    },
-    {
-      field: "updatedAt",
-      headerName: t("updatedAt"),
-      width: 180,
-      valueFormatter: (value: any) => formatDate(value as string),
-    },
-    {
-      field: "actions",
-      headerName: t("actions"),
-      width: 120,
-      sortable: false,
-      filterable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <Button
-            size="small"
-            color="primary"
-            onClick={() => navigate(`/admin/star-systems/${params.row.id}`)}
-            style={{ minWidth: "30px", padding: "5px" }}
-            aria-label={t("edit")}
-          >
-            <EditIcon fontSize="small" />
-          </Button>
-          <Button
-            size="small"
-            color="error"
-            onClick={() => handleDelete(params.row.id, params.row.name)}
-            style={{ minWidth: "30px", padding: "5px" }}
-            aria-label={t("delete")}
-          >
-            <DeleteIcon fontSize="small" />
-          </Button>
-        </Box>
-      ),
-    },
-  ];
 
   return (
     <Box>

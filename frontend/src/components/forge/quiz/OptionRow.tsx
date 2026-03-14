@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  Box,
-  TextField,
-  Checkbox,
-  IconButton,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Box, TextField, Checkbox, IconButton, Tooltip } from "@mui/material";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { QuizOption } from "../../../types/quiz";
@@ -22,7 +15,6 @@ const OptionRow: React.FC<OptionRowProps> = ({
   option,
   onChange,
   onDelete,
-  isMulti,
 }) => {
   const { t } = useTranslation();
 

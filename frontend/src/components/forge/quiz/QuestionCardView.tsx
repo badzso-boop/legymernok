@@ -21,7 +21,6 @@ const QuestionCardView: React.FC<QuestionCardViewProps> = ({
   question,
   selectedOptions,
   onOptionToggle,
-  showResults = false,
 }) => {
   // Megszámoljuk hány jó válasz van (ha a kérdésben benne van a megoldás - pl. előnézetnél)
   const correctCount = question.options.filter((o) => o.isCorrect).length;
@@ -75,7 +74,9 @@ const QuestionCardView: React.FC<QuestionCardViewProps> = ({
                   <Typography
                     sx={{
                       fontFamily: "monospace",
-                      color: selectedOptions.includes(opt.id) ? "#ffb000" : "#aaa",
+                      color: selectedOptions.includes(opt.id)
+                        ? "#ffb000"
+                        : "#aaa",
                     }}
                   >
                     {opt.text}
@@ -111,7 +112,9 @@ const QuestionCardView: React.FC<QuestionCardViewProps> = ({
                   <Typography
                     sx={{
                       fontFamily: "monospace",
-                      color: selectedOptions.includes(opt.id) ? "#ffb000" : "#aaa",
+                      color: selectedOptions.includes(opt.id)
+                        ? "#ffb000"
+                        : "#aaa",
                     }}
                   >
                     {opt.text}

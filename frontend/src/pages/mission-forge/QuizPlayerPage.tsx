@@ -13,7 +13,11 @@ const QuizPlayerPage: React.FC = () => {
   const [result, setResult] = useState<any>(null);
 
   // 1. Kvíz betöltése
-  const { data: quiz, isLoading, error } = useQuery({
+  const {
+    data: quiz,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["quiz", missionId],
     queryFn: () => quizApi.startQuiz(missionId!),
     enabled: !!missionId,
@@ -38,7 +42,7 @@ const QuizPlayerPage: React.FC = () => {
   if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress color="#ffb000" />
+        <CircularProgress />
       </Box>
     );
   }
@@ -47,7 +51,11 @@ const QuizPlayerPage: React.FC = () => {
     return (
       <Box sx={{ p: 4, textAlign: "center" }}>
         <Typography color="error">ERROR_LOADING_MISSION_DATA</Typography>
-        <RetroButton sx={{ mt: 2 }} color="red" labelKey="starMap.back" onClick={() => navigate(-1)} />
+        <RetroButton
+          color="red"
+          labelKey="starMap.back"
+          onClick={() => navigate(-1)}
+        />
       </Box>
     );
   }
@@ -65,8 +73,14 @@ const QuizPlayerPage: React.FC = () => {
           bgcolor: "#121212",
         }}
       >
-        <RetroPanel title="MISSION_REPORT" sx={{ width: "500px", textAlign: "center" }}>
-          <Typography variant="h4" sx={{ color: "#32cd32", mb: 2, fontFamily: "monospace" }}>
+        <RetroPanel
+          title="MISSION_REPORT"
+          sx={{ width: "500px", textAlign: "center" }}
+        >
+          <Typography
+            variant="h4"
+            sx={{ color: "#32cd32", mb: 2, fontFamily: "monospace" }}
+          >
             MISSION_ACCOMPLISHED
           </Typography>
           <Typography sx={{ color: "#aaa", mb: 4, fontFamily: "monospace" }}>
@@ -80,11 +94,18 @@ const QuizPlayerPage: React.FC = () => {
               mb: 4,
             }}
           >
-            <Typography variant="h2" sx={{ color: "#ffb000", fontFamily: "monospace" }}>
+            <Typography
+              variant="h2"
+              sx={{ color: "#ffb000", fontFamily: "monospace" }}
+            >
               {Math.round(result.percentage)}%
             </Typography>
           </Box>
-          <RetroButton color="blue" labelKey="starMap.back" onClick={() => navigate(-1)} />
+          <RetroButton
+            color="blue"
+            labelKey="starMap.back"
+            onClick={() => navigate(-1)}
+          />
         </RetroPanel>
       </Box>
     );

@@ -27,7 +27,7 @@ const MissionForgePage: React.FC = () => {
   if (missionId && isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress color="#ffb000" />
+        <CircularProgress />
       </Box>
     );
   }
