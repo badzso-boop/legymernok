@@ -1,19 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Button,
-  LinearProgress,
-  Alert,
-  Chip,
-} from "@mui/material";
-import type { GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-} from "@mui/icons-material";
+import { Box, Typography, Button, Alert } from "@mui/material";
+import { Add as AddIcon } from "@mui/icons-material";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { MissionResponse } from "../../../types/mission";
@@ -57,11 +45,6 @@ const MissionList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Segédfüggvény: ID alapján név keresése
-  const getSystemName = (id: string) => {
-    return starSystems.find((s) => s.id === id)?.name || id;
-  };
 
   const handleDelete = async (id: string) => {
     if (window.confirm(t("deleteMissionConfirm"))) {
