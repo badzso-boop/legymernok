@@ -236,7 +236,8 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
             color="red"
             labelKey="starMap.back"
             size="small"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/my-forge")}
+            data-cy="forge-back-btn"
           />
           <RetroButton
             color="green"
@@ -247,6 +248,7 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
             }
             disabled={saveMutation.isPending}
             active={saveMutation.isPending}
+            data-cy="forge-save-btn"
           />
         </Box>
       </Box>

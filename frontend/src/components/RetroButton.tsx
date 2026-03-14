@@ -10,6 +10,7 @@ interface RetroButtonProps {
   disabled?: boolean;
   active?: boolean;
   size?: "small" | "medium";
+  "data-cy"?: string;
 }
 
 const RetroButton: React.FC<RetroButtonProps> = ({
@@ -20,6 +21,7 @@ const RetroButton: React.FC<RetroButtonProps> = ({
   disabled = false,
   active = false,
   size = "medium",
+  "data-cy": dataCy,
 }) => {
   const { t } = useTranslation();
 
@@ -30,6 +32,7 @@ const RetroButton: React.FC<RetroButtonProps> = ({
         className={`retro-btn ${color} ${size === "small" ? "small" : ""} ${active ? "active" : ""}`}
         onClick={onClick}
         disabled={disabled}
+        data-cy={dataCy}
       />
       <div
         className="label-plate"

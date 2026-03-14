@@ -147,6 +147,7 @@ const MissionTable: React.FC<MissionTableProps> = ({
               variant={isRetro ? "contained" : "text"}
               color="secondary"
               onClick={() => onForge(params.row.id)}
+              data-cy="forge-btn"
               sx={{ minWidth: "30px", p: 0.5, borderRadius: isRetro ? 0 : 1 }}
             >
               <ForgeIcon fontSize="small" />

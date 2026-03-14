@@ -34,6 +34,7 @@ interface NavControl {
   labelKey: string; // Fordításhoz
   color: "red" | "blue" | "yellow" | "green";
   path: string;
+  disabled?: boolean;
 }
 
 export const mainNavigationControls: NavControl[] = [
@@ -44,22 +45,24 @@ export const mainNavigationControls: NavControl[] = [
     path: "/star-map",
   },
   {
-    id: "YOUR_BASE",
-    labelKey: "controlPanel.pilotData", // Vagy 'controlPanel.base'
+    id: "MY_FORGE",
+    labelKey: "controlPanel.myForge",
     color: "blue",
-    path: "/base", // Későbbi oldal
+    path: "/my-forge",
   },
   {
     id: "LOBBY",
     labelKey: "controlPanel.lobby",
     color: "yellow",
-    path: "/lobby", // Későbbi oldal
+    path: "/lobby",
+    disabled: true,
   },
   {
     id: "ARENA",
     labelKey: "controlPanel.arena",
     color: "green",
-    path: "/arena", // Későbbi oldal
+    path: "/arena",
+    disabled: true,
   },
 ];
 
@@ -118,15 +121,27 @@ export const router = createHashRouter([
   },
   {
     path: "forge",
-    element: <MissionForgePage />,
+    element: (
+      <ProtectedRoute>
+        <MissionForgePage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "forge/:missionId",
-    element: <MissionForgePage />,
+    element: (
+      <ProtectedRoute>
+        <MissionForgePage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/my-forge",
-    element: <MyForgePage />,
+    element: (
+      <ProtectedRoute>
+        <MyForgePage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/play/quiz/:missionId",

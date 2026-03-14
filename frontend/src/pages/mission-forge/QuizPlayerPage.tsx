@@ -64,6 +64,7 @@ const QuizPlayerPage: React.FC = () => {
   if (result) {
     return (
       <Box
+        data-cy="quiz-result"
         sx={{
           width: "100vw",
           height: "100vh",

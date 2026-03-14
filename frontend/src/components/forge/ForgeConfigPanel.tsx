@@ -141,6 +141,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
           <Box sx={{ flex: 2, display: "flex", gap: 3 }}>
             {/* BAL OLDAL: SECTOR CONFIG */}
             <Box
+              data-cy="sector-registry-panel"
               sx={{
                 flex: 1,
                 border: "2px solid #333",
@@ -254,6 +255,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
 
             {/* JOBB OLDAL: MISSION CONFIG */}
             <Box
+              data-cy="mission-spec-panel"
               sx={{
                 flex: 1,
                 border: "2px solid #333",
@@ -424,6 +426,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
               type="submit"
               disabled={initializeMutation.isPending}
               active={initializeMutation.isPending}
+              data-cy="forge-submit-btn"
             />
           </Box>
 

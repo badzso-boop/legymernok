@@ -54,9 +54,13 @@ const MainLayout: React.FC = () => {
             🚀 LÉGYMÉRNÖK.HU
           </Typography>
 
-          <Box sx={{ display: "flex", gap: 1 }}>
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
             <Button color="inherit" onClick={toggleLanguage}>
               {i18n.language.toUpperCase()}
+            </Button>
+
+            <Button color="inherit" onClick={() => navigate("/changelog")}>
+              {t("nav.changelog")}
             </Button>
 
             {!isAuthenticated ? (
@@ -74,6 +78,12 @@ const MainLayout: React.FC = () => {
               </>
             ) : (
               <>
+                <Button color="inherit" onClick={() => navigate("/star-map")}>
+                  {t("nav.starMap")}
+                </Button>
+                <Button color="inherit" onClick={() => navigate("/my-forge")}>
+                  {t("nav.myForge")}
+                </Button>
                 {hasRole("ROLE_ADMIN") && (
                   <Button
                     color="secondary"
@@ -84,7 +94,7 @@ const MainLayout: React.FC = () => {
                   </Button>
                 )}
                 <Button color="inherit" onClick={logout}>
-                  Logout
+                  {t("logout")}
                 </Button>
               </>
             )}

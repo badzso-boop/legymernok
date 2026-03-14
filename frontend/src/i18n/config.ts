@@ -28,6 +28,8 @@ const resources = {
       alreadyHaveAccount: "Already have an account?",
       errorRegister: "An error occurred during registration",
       errorUserExists: "Username or email is already taken",
+      logout: "Logout",
+      adminDashboard: "Admin",
 
       // Admin panel
       adminPanel: "ADMIN PANEL",
@@ -199,9 +201,18 @@ const resources = {
         loadingAssets: "LOADING ASSETS...",
         redirecting: "REDIRECTING...",
         starSystems: "STAR SYSTEMS",
-        specialOps: "SPECIAL OPS",
-        monthlyQuest: "MONTHLY QUEST",
-        pilotData: "PILOT DATA",
+        myForge: "MY FORGE",
+        lobby: "LOBBY",
+        arena: "ARENA",
+        wipMessage: "COMING SOON // UNDER CONSTRUCTION...",
+      },
+      // NAV
+      nav: {
+        starMap: "Star Map",
+        myForge: "My Forge",
+        changelog: "Changelog",
+        back: "Back",
+        language: "Language",
       },
       // STAR MAP
       starMap: {
@@ -274,6 +285,8 @@ const resources = {
       alreadyHaveAccount: "Van már fiókod?",
       errorRegister: "Hiba történt a regisztráció során.",
       errorUserExists: "A felhasználónév vagy email már foglalt.",
+      logout: "Kilépés",
+      adminDashboard: "Admin",
 
       // Admin panel
       adminPanel: "ADMIN PANEL",
@@ -447,9 +460,18 @@ const resources = {
         loadingAssets: "ADATOK BETÖLTÉSE...",
         redirecting: "ÁTIRÁNYÍTÁS...",
         starSystems: "CSILLAG RENDSZER",
-        specialOps: "SPEC KÜLDETÉS",
-        monthlyQuest: "HAVI KÜLDETÉS",
-        pilotData: "PILÓTA ADATOK",
+        myForge: "FORGE-JAIM",
+        lobby: "LOBBY",
+        arena: "ARÉNA",
+        wipMessage: "HAMAROSAN // FEJLESZTÉS ALATT...",
+      },
+      // NAV
+      nav: {
+        starMap: "Csillagtérkép",
+        myForge: "Forge-jaim",
+        changelog: "Változásnapló",
+        back: "Vissza",
+        language: "Nyelv",
       },
       // STAR MAP
       starMap: {

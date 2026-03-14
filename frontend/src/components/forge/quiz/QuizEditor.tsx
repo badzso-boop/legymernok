@@ -180,6 +180,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
             onClick={() => saveMutation.mutate(quizData)}
             disabled={saveMutation.isPending}
             active={saveMutation.isPending}
+            data-cy="quiz-save-btn"
           />
         </Box>
       </Box>
@@ -235,6 +236,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
                 color="yellow"
                 labelKey="quiz.addQuestion"
                 onClick={addNewQuestion}
+                data-cy="quiz-add-question-btn"
               />
             </Box>
           </Box>
