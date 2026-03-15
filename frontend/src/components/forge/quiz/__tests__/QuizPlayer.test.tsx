@@ -117,7 +117,7 @@ describe("QuizPlayer", () => {
 
     it("az első kérdésnél a Prev gomb disabled", () => {
       render(<QuizPlayer data={twoQuestionQuiz} />);
-      expect(getRetroBtn("quiz.prev")).toBeDisabled();
+      expect(getRetroBtn("quizEditor.prev")).toBeDisabled();
     });
 
     it("több kérdésnél Next gomb jelenik meg (nem Finish)", () => {
@@ -152,7 +152,7 @@ describe("QuizPlayer", () => {
 
       expect(screen.getByText("What is 2+2?")).toBeInTheDocument();
 
-      fireEvent.click(getRetroBtn("quiz.next"));
+      fireEvent.click(getRetroBtn("quizEditor.next"));
 
       expect(screen.getByText("Capital of France?")).toBeInTheDocument();
       expect(screen.queryByText("What is 2+2?")).not.toBeInTheDocument();
@@ -161,7 +161,7 @@ describe("QuizPlayer", () => {
     it("az utolsó kérdésnél Next helyett Finish gomb van", () => {
       render(<QuizPlayer data={twoQuestionQuiz} />);
 
-      fireEvent.click(getRetroBtn("quiz.next"));
+      fireEvent.click(getRetroBtn("quizEditor.next"));
 
       expect(screen.getByText("quizEditor.finish")).toBeInTheDocument();
       expect(screen.queryByText("quizEditor.next")).not.toBeInTheDocument();
@@ -170,10 +170,10 @@ describe("QuizPlayer", () => {
     it("Prev gomb visszavisz az előző kérdésre", () => {
       render(<QuizPlayer data={twoQuestionQuiz} />);
 
-      fireEvent.click(getRetroBtn("quiz.next"));
+      fireEvent.click(getRetroBtn("quizEditor.next"));
       expect(screen.getByText("Capital of France?")).toBeInTheDocument();
 
-      fireEvent.click(getRetroBtn("quiz.prev"));
+      fireEvent.click(getRetroBtn("quizEditor.prev"));
       expect(screen.getByText("What is 2+2?")).toBeInTheDocument();
     });
 
@@ -181,7 +181,7 @@ describe("QuizPlayer", () => {
       render(<QuizPlayer data={twoQuestionQuiz} />);
 
       // Prev disabled az első kérdésnél → kattintás nem navigál
-      fireEvent.click(getRetroBtn("quiz.prev"));
+      fireEvent.click(getRetroBtn("quizEditor.prev"));
 
       expect(screen.getByText("What is 2+2?")).toBeInTheDocument();
     });
@@ -243,7 +243,7 @@ describe("QuizPlayer", () => {
       render(<QuizPlayer data={singleQuestionQuiz} onSubmit={mockSubmit} />);
 
       fireEvent.click(screen.getByDisplayValue("o1"));
-      fireEvent.click(getRetroBtn("quiz.finish"));
+      fireEvent.click(getRetroBtn("quizEditor.finish"));
 
       expect(mockSubmit).toHaveBeenCalledTimes(1);
       expect(mockSubmit).toHaveBeenCalledWith({ q1: ["o1"] });
@@ -253,7 +253,7 @@ describe("QuizPlayer", () => {
       const mockSubmit = vi.fn();
       render(<QuizPlayer data={singleQuestionQuiz} onSubmit={mockSubmit} />);
 
-      fireEvent.click(getRetroBtn("quiz.finish"));
+      fireEvent.click(getRetroBtn("quizEditor.finish"));
 
       expect(mockSubmit).toHaveBeenCalledWith({});
     });
@@ -286,7 +286,7 @@ describe("QuizPlayer", () => {
         vi.advanceTimersByTime(3000);
       });
 
-      expect(getRetroBtn("quiz.finish")).toBeDisabled();
+      expect(getRetroBtn("quizEditor.finish")).toBeDisabled();
     });
 
     it("preview módban az időzítő lejártakor NEM hívódik meg onSubmit", async () => {
@@ -314,7 +314,7 @@ describe("QuizPlayer", () => {
         <QuizPlayer data={shortTimerQuiz} isPreview onClose={mockClose} />,
       );
 
-      fireEvent.click(getRetroBtn("quiz.closePreview"));
+      fireEvent.click(getRetroBtn("quizEditor.closePreview"));
 
       expect(mockClose).toHaveBeenCalledTimes(1);
     });
