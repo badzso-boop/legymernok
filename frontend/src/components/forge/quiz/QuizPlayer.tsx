@@ -162,6 +162,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
           disabled={
             currentIndex === 0 || !data.config.allowNavigation || isTimeUp
           }
+          data-cy="quiz-prev-btn"
         />
 
         {currentIndex < data.questions.length - 1 ? (
@@ -170,6 +171,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             labelKey="quizEditor.next"
             onClick={() => setCurrentIndex((prev) => prev + 1)}
             disabled={isTimeUp}
+            data-cy="quiz-next-btn"
           />
         ) : (
           <RetroButton
@@ -177,6 +179,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             labelKey="quizEditor.finish"
             onClick={() => onSubmit?.(answers)}
             disabled={isTimeUp}
+            data-cy="quiz-finish-btn"
           />
         )}
 

@@ -107,14 +107,14 @@ describe("Cadet Quiz Player Page", () => {
     cy.wait("@startQuiz");
 
     // Az első kérdésnél a Previous disabled
-    cy.contains("VISSZA").should("be.disabled");
+    cy.get('[data-cy="quiz-prev-btn"]').should("be.disabled");
 
     // Next gombra kattintás
-    cy.contains("TOVÁBB").click();
+    cy.get('[data-cy="quiz-next-btn"]').click();
     cy.contains("Mi a főváros?").should("be.visible");
 
     // Visszalépés
-    cy.contains("VISSZA").click();
+    cy.get('[data-cy="quiz-prev-btn"]').click();
     cy.contains("Mi a 2+2 eredménye?").should("be.visible");
   });
 
@@ -128,14 +128,14 @@ describe("Cadet Quiz Player Page", () => {
     cy.wait("@getMe");
     cy.wait("@startQuiz");
 
-    // Az első kérdésnél NEXT gomb van
-    cy.contains("BEFEJEZÉS").should("not.exist");
-    cy.contains("TOVÁBB").should("be.visible");
+    // Az első kérdésnél NEXT gomb van, FINISH nincs
+    cy.get('[data-cy="quiz-finish-btn"]').should("not.exist");
+    cy.get('[data-cy="quiz-next-btn"]').should("be.visible");
 
-    // Az utolsó kérdésnél BEFEJEZÉS gomb van
-    cy.contains("TOVÁBB").click();
-    cy.contains("BEFEJEZÉS").should("be.visible");
-    cy.contains("TOVÁBB").should("not.exist");
+    // Az utolsó kérdésnél FINISH gomb van, NEXT nincs
+    cy.get('[data-cy="quiz-next-btn"]').click();
+    cy.get('[data-cy="quiz-finish-btn"]').should("be.visible");
+    cy.get('[data-cy="quiz-next-btn"]').should("not.exist");
   });
 
   it("should select a single-choice answer and submit the quiz", () => {
@@ -157,11 +157,11 @@ describe("Cadet Quiz Player Page", () => {
     cy.contains("4").click();
 
     // Tovább a második kérdéshez, ott is választunk
-    cy.contains("TOVÁBB").click();
+    cy.get('[data-cy="quiz-next-btn"]').click();
     cy.contains("Budapest").click();
 
     // Beküldés
-    cy.contains("BEFEJEZÉS").click();
+    cy.get('[data-cy="quiz-finish-btn"]').click();
     cy.wait("@submitQuiz");
 
     // Eredmény képernyő megjelenik
@@ -197,8 +197,8 @@ describe("Cadet Quiz Player Page", () => {
     cy.wait("@startQuiz");
 
     // Navigálj az utolsó kérdéshez és küldd be
-    cy.contains("TOVÁBB").click();
-    cy.contains("BEFEJEZÉS").click();
+    cy.get('[data-cy="quiz-next-btn"]').click();
+    cy.get('[data-cy="quiz-finish-btn"]').click();
     cy.wait("@submitQuizConflict");
 
     // A korábbi eredmény jelenik meg
