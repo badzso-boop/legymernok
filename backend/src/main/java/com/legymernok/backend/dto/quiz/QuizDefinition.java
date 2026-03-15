@@ -20,6 +20,7 @@ public class QuizDefinition {
         private String id;
         private String text;
         private Integer points;
+        private Boolean isMulti; // Több helyes válasz van-e — kliens kapja, isCorrect nem
         private List<QuizOptionDTO> options;
     }
 

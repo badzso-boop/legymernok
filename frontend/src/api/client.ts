@@ -170,4 +170,9 @@ export const quizApi = {
     );
     return response.data;
   },
+
+  // Összes aktív session törlése (csak misszió tulajdonosa / admin)
+  clearSessions: async (missionId: string): Promise<void> => {
+    await apiClient.delete(`/quiz/${missionId}/sessions`);
+  },
 };

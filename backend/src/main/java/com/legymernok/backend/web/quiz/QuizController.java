@@ -48,4 +48,13 @@ public class QuizController {
             @AuthenticationPrincipal Cadet cadet) throws Exception {
         return ResponseEntity.ok(quizService.submitQuiz(missionId, cadet, answers));
     }
+
+    @DeleteMapping("/{missionId}/sessions")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<Void> clearAllSessions(
+            @PathVariable UUID missionId,
+            @AuthenticationPrincipal Cadet cadet) {
+        quizService.clearAllSessions(missionId, cadet);
+        return ResponseEntity.noContent().build();
+    }
 }

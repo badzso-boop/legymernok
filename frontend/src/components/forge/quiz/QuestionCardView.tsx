@@ -8,6 +8,7 @@ import {
   FormControlLabel,
   FormGroup,
 } from "@mui/material";
+import { useTranslation } from "react-i18next";
 import type { QuizQuestion } from "../../../types/quiz";
 
 interface QuestionCardViewProps {
@@ -22,9 +23,10 @@ const QuestionCardView: React.FC<QuestionCardViewProps> = ({
   selectedOptions,
   onOptionToggle,
 }) => {
-  // Megszámoljuk hány jó válasz van (ha a kérdésben benne van a megoldás - pl. előnézetnél)
-  const correctCount = question.options.filter((o) => o.isCorrect).length;
-  const isMulti = correctCount > 1;
+  const { t } = useTranslation();
+  // Production módban a backend küldi az isMulti-t; preview módban isCorrect alapján döntjük el
+  const isMulti = question.isMulti ??
+    question.options.filter((o) => o.isCorrect).length > 1;
 
   return (
     <Box
@@ -147,6 +149,29 @@ const QuestionCardView: React.FC<QuestionCardViewProps> = ({
           sx={{ color: "#ffb000", fontFamily: "monospace", fontSize: "0.7rem" }}
         >
           VALUE: {question.points} PTS
+        </Typography>
+      </Box>
+
+      {/* Single / Multi jelzés */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: -12,
+          left: 20,
+          bgcolor: "#222",
+          px: 1,
+          border: `1px solid ${isMulti ? "#32cd32" : "#555"}`,
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            color: isMulti ? "#32cd32" : "#666",
+            fontFamily: "monospace",
+            fontSize: "0.7rem",
+          }}
+        >
+          {isMulti ? t("quizEditor.multiSelection") : t("quizEditor.singleSelection")}
         </Typography>
       </Box>
     </Box>

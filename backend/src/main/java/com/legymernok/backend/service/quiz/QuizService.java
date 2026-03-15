@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.dto.quiz.QuizDefinition;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.*;
@@ -164,6 +165,23 @@ public class QuizService {
         return result;
     }
 
+    @Transactional
+    public void clearAllSessions(UUID missionId, Cadet cadet) {
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+
+        boolean isOwner = mission.getOwner().getId().equals(cadet.getId());
+        boolean canEditAny = cadet.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("mission:edit_any"));
+
+        if (!isOwner && !canEditAny) {
+            throw new UnauthorizedAccessException("Nincs jogosultságod törölni más misszió sessionjeit.");
+        }
+
+        quizSessionRepository.deleteAllByMissionId(missionId);
+        log.info("Cleared all quiz sessions for mission {} by cadet {}", missionId, cadet.getUsername());
+    }
+
     private String generateSubmissionHash(Map<String, List<String>> answers) {
         try {
             // 1. Sorba rendezzük a kérdéseket és a válaszokat, hogy determinisztikus legyen
@@ -191,10 +209,15 @@ public class QuizService {
     }
 
     private QuizDefinition stripAnswers(QuizDefinition fullQuiz) {
-        // Végigmegyünk a kérdéseken és az opciókon, és mindenhol nullára állítjuk az isCorrect mezőt
-        fullQuiz.getQuestions().forEach(q ->
-                q.getOptions().forEach(o -> o.setIsCorrect(null))
-        );
+        fullQuiz.getQuestions().forEach(q -> {
+            // isMulti kiszámítása isCorrect törlése ELŐTT
+            long correctCount = q.getOptions().stream()
+                    .filter(o -> Boolean.TRUE.equals(o.getIsCorrect()))
+                    .count();
+            q.setIsMulti(correctCount > 1);
+            // isCorrect törlése — kliens nem láthatja a helyes válaszokat
+            q.getOptions().forEach(o -> o.setIsCorrect(null));
+        });
         return fullQuiz;
     }
 }

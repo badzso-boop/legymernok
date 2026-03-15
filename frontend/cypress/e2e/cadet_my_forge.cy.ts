@@ -4,7 +4,15 @@ import { createMockJwt } from "../support/utils";
 describe("Cadet My Forge Page", () => {
   const token = createMockJwt(["ROLE_CADET"]);
 
-  const mockSystems = [{ id: "s1", name: "Solar System", description: "", createdAt: "", updatedAt: "" }];
+  const mockSystems = [
+    {
+      id: "s1",
+      name: "Solar System",
+      description: "",
+      createdAt: "",
+      updatedAt: "",
+    },
+  ];
   const mockMissions = [
     {
       id: "m1",
@@ -50,7 +58,7 @@ describe("Cadet My Forge Page", () => {
     cy.wait("@getMySystems");
     cy.wait("@getMyMissions");
 
-    cy.contains("SOLAR SYSTEM").should("be.visible");
+    cy.contains("Solar System").should("be.visible");
     cy.contains("My Test Mission").scrollIntoView().should("be.visible");
   });
 

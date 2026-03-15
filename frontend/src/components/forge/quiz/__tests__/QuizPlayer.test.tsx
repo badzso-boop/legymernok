@@ -18,7 +18,11 @@ const getRetroBtn = (labelText: string): HTMLButtonElement =>
 // --- Test adatok ---
 
 const twoQuestionQuiz: QuizDefinition = {
-  config: { timeLimitSeconds: 300, allowNavigation: true, showSolutions: false },
+  config: {
+    timeLimitSeconds: 300,
+    allowNavigation: true,
+    showSolutions: false,
+  },
   questions: [
     {
       id: "q1",
@@ -43,7 +47,11 @@ const twoQuestionQuiz: QuizDefinition = {
 };
 
 const singleQuestionQuiz: QuizDefinition = {
-  config: { timeLimitSeconds: 300, allowNavigation: true, showSolutions: false },
+  config: {
+    timeLimitSeconds: 300,
+    allowNavigation: true,
+    showSolutions: false,
+  },
   questions: [
     {
       id: "q1",
@@ -58,7 +66,11 @@ const singleQuestionQuiz: QuizDefinition = {
 };
 
 const multiSelectQuiz: QuizDefinition = {
-  config: { timeLimitSeconds: 300, allowNavigation: true, showSolutions: false },
+  config: {
+    timeLimitSeconds: 300,
+    allowNavigation: true,
+    showSolutions: false,
+  },
   questions: [
     {
       id: "q1",
@@ -110,21 +122,21 @@ describe("QuizPlayer", () => {
 
     it("több kérdésnél Next gomb jelenik meg (nem Finish)", () => {
       render(<QuizPlayer data={twoQuestionQuiz} />);
-      expect(screen.queryByText("quiz.finish")).not.toBeInTheDocument();
-      expect(screen.getByText("quiz.next")).toBeInTheDocument();
+      expect(screen.queryByText("quizEditor.finish")).not.toBeInTheDocument();
+      expect(screen.getByText("quizEditor.next")).toBeInTheDocument();
     });
 
     it("egyetlen kérdésnél Finish gomb jelenik meg (nem Next)", () => {
       render(<QuizPlayer data={singleQuestionQuiz} />);
-      expect(screen.queryByText("quiz.next")).not.toBeInTheDocument();
-      expect(screen.getByText("quiz.finish")).toBeInTheDocument();
+      expect(screen.queryByText("quizEditor.next")).not.toBeInTheDocument();
+      expect(screen.getByText("quizEditor.finish")).toBeInTheDocument();
     });
 
     it("preview módban megjelenik a bezárás gomb", () => {
       render(
         <QuizPlayer data={singleQuestionQuiz} isPreview onClose={vi.fn()} />,
       );
-      expect(screen.getByText("quiz.closePreview")).toBeInTheDocument();
+      expect(screen.getByText("quizEditor.closePreview")).toBeInTheDocument();
     });
 
     it("haladásjelző progress szöveget mutat a haladásjelzőben", () => {
@@ -151,8 +163,8 @@ describe("QuizPlayer", () => {
 
       fireEvent.click(getRetroBtn("quiz.next"));
 
-      expect(screen.getByText("quiz.finish")).toBeInTheDocument();
-      expect(screen.queryByText("quiz.next")).not.toBeInTheDocument();
+      expect(screen.getByText("quizEditor.finish")).toBeInTheDocument();
+      expect(screen.queryByText("quizEditor.next")).not.toBeInTheDocument();
     });
 
     it("Prev gomb visszavisz az előző kérdésre", () => {

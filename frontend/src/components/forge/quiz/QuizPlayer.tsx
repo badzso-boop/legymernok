@@ -38,7 +38,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
     if (timeLeft === 0 && !isPreview && onSubmit) {
       onSubmit(answers);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft]);
 
   const currentQuestion = data.questions[currentIndex];
@@ -49,12 +49,9 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
     const qId = currentQuestion.id;
     const currentAnswers = answers[qId] || [];
 
-    // Megszámoljuk a helyes válaszokat a sablonban (ha van - pl. preview-nál)
-    // Megjegyzés: Production játék módban ez a logika finomításra szorul (isMultiSelect flag kell a backendről)
-    const correctCount = currentQuestion.options.filter(
-      (o) => o.isCorrect,
-    ).length;
-    const isMulti = correctCount > 1;
+    // Preview módban isCorrect alapján, production módban a backend által küldött isMulti alapján
+    const isMulti = currentQuestion.isMulti ??
+      currentQuestion.options.filter((o) => o.isCorrect).length > 1;
 
     if (isMulti) {
       const newAnswers = currentAnswers.includes(optionId)
@@ -162,7 +159,9 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
           color="blue"
           labelKey="quizEditor.prev"
           onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-          disabled={currentIndex === 0 || !data.config.allowNavigation || isTimeUp}
+          disabled={
+            currentIndex === 0 || !data.config.allowNavigation || isTimeUp
+          }
         />
 
         {currentIndex < data.questions.length - 1 ? (
@@ -184,7 +183,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
         {isPreview && (
           <RetroButton
             color="red"
-            labelKey="quiz.closePreview"
+            labelKey="quizEditor.closePreview"
             onClick={onClose}
           />
         )}

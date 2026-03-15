@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { forgeApi } from "../../../api/client";
+import { forgeApi, quizApi } from "../../../api/client";
 import type { QuizDefinition, QuizQuestion } from "../../../types/quiz";
 import { RetroPanel } from "../RetroPanel";
 import RetroButton from "../../RetroButton";
@@ -65,7 +65,32 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
     }
   }, [fetchedFiles]);
 
-  // 2. MENTÉS MUTÁCIÓ
+  // 2. SESSION TÖRLÉS MUTÁCIÓ
+  const clearSessionsMutation = useMutation({
+    mutationFn: () => quizApi.clearSessions(missionId),
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: "SESSION_RESET_COMPLETE",
+        severity: "success",
+      });
+    },
+    onError: (err: any) => {
+      setSnackbar({
+        open: true,
+        message: err.message,
+        severity: "error",
+      });
+    },
+  });
+
+  const handleClearSessions = () => {
+    if (window.confirm(t("quizEditor.clearSessionsConfirm"))) {
+      clearSessionsMutation.mutate();
+    }
+  };
+
+  // 3. MENTÉS MUTÁCIÓ
   const saveMutation = useMutation({
     mutationFn: (data: QuizDefinition) =>
       forgeApi.saveMissionFiles(missionId, {
@@ -168,8 +193,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
 
         <Box sx={{ display: "flex", gap: 3, mr: 2 }}>
           <RetroButton
+            color="red"
+            labelKey="quizEditor.clearSessions"
+            size="small"
+            onClick={handleClearSessions}
+            disabled={clearSessionsMutation.isPending}
+          />
+          <RetroButton
             color="yellow"
-            labelKey="quiz.preview"
+            labelKey="quizEditor.preview"
             size="small"
             onClick={() => setPreviewOpen(true)}
           />
@@ -234,7 +266,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({ missionId }) => {
             >
               <RetroButton
                 color="yellow"
-                labelKey="quiz.addQuestion"
+                labelKey="quizEditor.addQuestion"
                 onClick={addNewQuestion}
                 data-cy="quiz-add-question-btn"
               />
