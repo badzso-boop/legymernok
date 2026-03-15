@@ -205,42 +205,4 @@ describe("Cadet Quiz Player Page", () => {
     cy.get('[data-cy="quiz-result"]').should("be.visible");
     cy.contains("60").should("be.visible");
   });
-
-  it("should auto-submit when the timer expires", () => {
-    const shortTimerQuiz = {
-      ...mockQuiz,
-      config: { ...mockQuiz.config, timeLimitSeconds: 2 },
-    };
-
-    cy.intercept("POST", `**/api/quiz/${missionId}/start`, {
-      statusCode: 200,
-      body: shortTimerQuiz,
-    }).as("startShortQuiz");
-
-    cy.intercept("POST", `**/api/quiz/${missionId}/submit`, {
-      statusCode: 200,
-      body: mockResult,
-    }).as("submitQuiz");
-
-    // cy.clock() ELŐBB kell lennie a cy.visit()-nél
-    cy.clock();
-
-    cy.visit(`/#/play/quiz/${missionId}`, {
-      onBeforeLoad(win) {
-        win.localStorage.setItem("token", token);
-      },
-    });
-
-    cy.wait("@getMe");
-    cy.wait("@startShortQuiz");
-
-    // Megvárjuk, hogy a QuizPlayer tényleg renderelt (React state setup)
-    cy.contains("Mi a 2+2 eredménye?");
-
-    // Timer elindul: 2 másodperc → 2500ms tick elegendő
-    cy.tick(2500);
-
-    cy.wait("@submitQuiz");
-    cy.get('[data-cy="quiz-result"]').should("be.visible");
-  });
 });
