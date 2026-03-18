@@ -4,6 +4,25 @@ Ez a dokumentum a LégyMérnök.hu projekt fejlesztésének történetét örök
 
 ---
 
+## 🎯 Bejegyzés #18: A Kvíz-Reaktor és a Kohó Teljessé Vétele (Quiz System & Mission Forge Complete)
+
+**Stardate:** 2026.03.18
+**Status:** Teljes Kapacitás — Küldetésrendszer Élesítve
+
+A `mission-forge` ág befutott a főáramlatba. Az eddigi legkomplexebb modul — a Kvíz-Reaktor — teljessé vált: a kadétok mostantól valódi, interaktív kvízeket tölthetnek ki, a szerver pontosan értékeli a válaszaikat, és az eredmény azonnal rögzítésre kerül. A biztonsági protokollok gondoskodnak arról, hogy a helyes válaszok titokban maradjanak — a szerver oldal osztályozza, amit a kliens nem láthat. A `isMulti` flag elegánsan jelzi, hogy egy kérdésnél egy vagy több helyes válasz létezik-e, és a frontend ennek megfelelően vált radio gomb és checkbox között. A Küldetés-Kohó szerkesztőfelülete is megkapta a végső összekötő elemeket: az oktatók a teljes munkafolyamatot — a létrehozástól a Gitea verifikációig — a saját Forge-felületeiken keresztül kezelhetik. A session-menedzsment is bekerült: ha egy kvíz tartalma frissül, az oktató egyetlen gombnyomásra ki tudja törölni az összes aktív sessiont, és a kadét automatikusan újrakezdi a friss verzióval.
+
+- **Technikai részletek:**
+  - **Quiz Backend:** `QuizSession`, `QuizDefinition`, `MissionResult` entitások. `QuizService`: session indítás, szinkronizáció, beküldés és pontozás. Szerver oldali `stripAnswers()` biztonsági metódus — a helyes válaszok (`isCorrect`) soha nem hagyják el a backendet; helyette az `isMulti` flag kerül kiszámításra és elküldésre.
+  - **Quiz Frontend:** `QuizPlayer` komponens időzítővel, navigációval, automatikus checkbox/radio váltással (`isMulti` alapján). `QuizEditor` a kérdésbank szerkesztéséhez, vizuális MULTI/SINGLE_SELECTION jelölővel. `QuizPlayerPage` session-helyreállítással — 404-es hiba esetén a TanStack Query cache resetelése és automatikus újraindítás.
+  - **Session Menedzsment:** `DELETE /{missionId}/sessions` endpoint — az oktatók és adminok kényszerrel resetelhetik az összes aktív sessiont, ha a kvíz tartalma megváltozott. Saját `clearAllSessions` validációval (csak a misszió tulajdonosa vagy `mission:edit_any` jogkörű felhasználó törölhet).
+  - **Mission Verification:** `MissionVerificationController` — Gitea Action callbackok fogadása HMAC-SHA256 aláírás-ellenőrzéssel, `MissionResult` rögzítése, `VerificationStatus` státuszgép.
+  - **GiteaService 3.0:** Masszív bővítés — forge-alapú repókezelés, `createForgeRepo`, fájlfeltöltés, `CreateForgeMissionRequest` és `CreateMissionInitialRequest` kétlépéses folyamatok.
+  - **Retro UI:** `RetroButton` komponens bevezetése az egységes retro-esztétikáért. `MissionTable` és `StarSystemTable` kiszervezése újrafelhasználható komponensekbe (admin listák és kadét nézet közös alapon).
+  - **i18n:** Magyar és angol szótár masszív bővítése — forge, quiz, timer, session-kezelés, hibaüzenetek mind lokalizálva.
+  - **Testing:** `QuizServiceTest` (5 egységteszt a `clearAllSessions`-re), `QuizControllerSecurityTest` (13 biztonsági teszt — minden végpont jogosultsági mátrixa ellenőrizve). `MissionServiceTest` masszív kibővítése a forge-flow-val. Frontend: `QuizPlayer.test.tsx`, `QuizPlayerPage.test.tsx`, `OptionRow.test.tsx`, `QuestionCard.test.tsx`. Cypress E2E: `cadet_forge_init`, `cadet_forge_editor`, `cadet_my_forge`, `cadet_quiz_player` — a teljes kadét kvíz- és forge-workflow automatizáltan tesztelve.
+
+---
+
 ## 🛠️ Bejegyzés #17: A Küldetés-Kohó Alapkövei (Mission Forge - Initial Phase)
 
 **Stardate:** 2026.02.24
