@@ -37,6 +37,8 @@ public class GiteaService {
     private final String pythonTemplateRepoName;
     private final String quizTemplateRepoOwner;
     private final String quizTemplateRepoName;
+    private final String circuitTemplateOwner;
+    private final String circuitTemplateRepo;
     private final String verificationSecretValue;
 
     public GiteaService(
@@ -49,7 +51,9 @@ public class GiteaService {
             @Value("${gitea.template.python.owner}") String pythonTemplateRepoOwner,
             @Value("${gitea.template.python.repo}") String pythonTemplateRepoName,
             @Value("${gitea.template.quiz.owner}") String quizTemplateRepoOwner,
-            @Value("${gitea.template.quiz.repo}")String quizTemplateRepoName,
+            @Value("${gitea.template.quiz.repo}") String quizTemplateRepoName,
+            @Value("${gitea.template.circuit.owner}") String circuitTemplateOwner,
+            @Value("${gitea.template.circuit.repo}") String circuitTemplateRepo,
             @Value("${mission.verification.secret}") String verificationSecretValue) {
 
         this.adminUsername = adminUsername;
@@ -60,6 +64,8 @@ public class GiteaService {
         this.pythonTemplateRepoName = pythonTemplateRepoName;
         this.quizTemplateRepoOwner = quizTemplateRepoOwner;
         this.quizTemplateRepoName = quizTemplateRepoName;
+        this.circuitTemplateOwner = circuitTemplateOwner;
+        this.circuitTemplateRepo = circuitTemplateRepo;
         this.verificationSecretValue = verificationSecretValue;
 
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString((adminUsername + ":" + adminPassword).getBytes(StandardCharsets.UTF_8));
@@ -481,6 +487,9 @@ public class GiteaService {
         if (type == MissionType.QUIZ) {
             sourceOwner = quizTemplateRepoOwner;
             sourceRepoName = quizTemplateRepoName;
+        } else if (type == MissionType.CIRCUIT_SIMULATION) {
+            sourceOwner = circuitTemplateOwner;
+            sourceRepoName = circuitTemplateRepo;
         } else if ("javascript".equalsIgnoreCase(templateLanguage)) {
             sourceOwner = jsTemplateRepoOwner;
             sourceRepoName = jsTemplateRepoName;

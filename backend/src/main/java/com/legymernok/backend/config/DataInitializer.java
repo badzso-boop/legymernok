@@ -57,6 +57,11 @@ public class DataInitializer implements CommandLineRunner {
         // Log jogok
         Permission logsRead = createPermissionIfNotFound("logs:read", "Rendszernaplók megtekintése");
 
+        // Circuit jogok
+        Permission circuitRead = createPermissionIfNotFound("circuit:read", "Áramkör pin katalógus lekérdezése");
+        Permission circuitManage = createPermissionIfNotFound("circuit:manage", "Áramkör definíciók és katalógus kezelése (admin)");
+        Permission circuitSimulate = createPermissionIfNotFound("circuit:simulate", "Áramkör szimuláció futtatása (kadét)");
+
         // --- 2. SZEREPKÖRÖK (ROLES) LÉTREHOZÁSA ---
 
         // ROLE_CADET: Alap jogok (Olvasás, Indítás)
@@ -67,6 +72,8 @@ public class DataInitializer implements CommandLineRunner {
         cadetPermissions.add(starSystemRead);
         cadetPermissions.add(starSystemCreate);
         cadetPermissions.add(missionCreate);
+        cadetPermissions.add(circuitRead);
+        cadetPermissions.add(circuitSimulate);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
 
         // ROLE_ADMIN: Minden jog (Full Access)
@@ -100,6 +107,10 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(roleWrite);
         // Logs
         adminPermissions.add(logsRead);
+        // Circuit
+        adminPermissions.add(circuitRead);
+        adminPermissions.add(circuitManage);
+        adminPermissions.add(circuitSimulate);
 
         createRoleIfNotFound("ROLE_ADMIN", adminPermissions);
 
