@@ -6,6 +6,8 @@ import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.circuit.*;
 import com.legymernok.backend.model.mission.Mission;
+import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.circuit.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +24,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +42,7 @@ class CadetCircuitServiceTest {
     @Mock private CadetRepository cadetRepository;
     @Mock private UnitOfMeasureService unitOfMeasureService;
     @Mock private CircuitVerificationCheckRepository checkRepository;
+    @Mock private GiteaService giteaService;
 
     @InjectMocks private CadetCircuitService service;
 
@@ -84,6 +88,8 @@ class CadetCircuitServiceTest {
         when(circuitDefinitionRepository.findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED))
                 .thenReturn(Optional.of(def));
         when(saveRepository.findByCadetIdAndCircuitDefinitionId(cadetId, defId)).thenReturn(Optional.empty());
+        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any(MissionType.class)))
+                .thenReturn("http://gitea:3000/legymernok_admin/circuit-" + missionId + "-cadet1");
         when(saveRepository.save(any())).thenReturn(save);
         when(defComponentRepository.findAllByCircuitDefinitionId(defId)).thenReturn(List.of());
         stubToResponse();
@@ -150,6 +156,8 @@ class CadetCircuitServiceTest {
         when(circuitDefinitionRepository.findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED))
                 .thenReturn(Optional.of(def));
         when(saveRepository.findByCadetIdAndCircuitDefinitionId(cadetId, defId)).thenReturn(Optional.empty());
+        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any(MissionType.class)))
+                .thenReturn("http://gitea:3000/legymernok_admin/circuit-" + missionId + "-cadet1");
         when(saveRepository.save(any())).thenReturn(save);
         when(defComponentRepository.findAllByCircuitDefinitionId(defId)).thenReturn(List.of(templateComp));
         when(componentRepository.save(any())).thenReturn(savedCadetComp);
@@ -309,7 +317,8 @@ class CadetCircuitServiceTest {
 
     @Test
     void saveCanvas_connectionDirectionNormalized() {
-        UUID bigId  = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        // 7fff... > 0000...0001 in Java signed long comparison (UUID.compareTo uses signed longs)
+        UUID bigId  = UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff");
         UUID smallId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         UpsertCircuitDefComponentRequest ledReq = makeCompRequest("LED1", ComponentType.LED);

@@ -12,19 +12,15 @@ import com.legymernok.backend.repository.circuit.CadetCircuitSaveRepository;
 import com.legymernok.backend.repository.circuit.CircuitDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.Comparator;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -33,7 +29,7 @@ import java.util.stream.Stream;
  * Flow:
  *  1. Fetch sketch.ino from Gitea
  *  2. Write to a temp directory (arduino-cli requires dir name == sketch name)
- *  3. Run: arduino-cli compile --fqbn <fqbn> --output-dir <outputDir> <sketchDir>
+ *  3. Delegate process execution to ArduinoCliRunner
  *  4. Read the resulting .hex, Base64-encode it
  *  5. Update CadetCircuitSave.simulationStatus + timing fields
  *  6. Return CompileCircuitResponse (hex or error)
@@ -49,12 +45,7 @@ public class ArduinoCompilerService {
     private final CircuitDefinitionRepository circuitDefinitionRepository;
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
-
-    @Value("${arduino.cli.path:arduino-cli}")
-    private String arduinoCliPath;
-
-    @Value("${arduino.cli.compile.timeout-seconds:120}")
-    private int compileTimeoutSeconds;
+    private final ArduinoCliRunner cliRunner;
 
     // --- Public API ---
 
@@ -64,16 +55,13 @@ public class ArduinoCompilerService {
      */
     @Transactional
     public CompileCircuitResponse compile(String username, UUID missionId) {
-        // Resolve cadet
         var cadet = cadetRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username));
 
-        // Resolve published definition
         var definition = circuitDefinitionRepository
                 .findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED)
                 .orElseThrow(() -> new ResourceNotFoundException("CircuitDefinition", "missionId/status", missionId + "/PUBLISHED"));
 
-        // Resolve save
         CadetCircuitSave save = saveRepository
                 .findByCadetIdAndCircuitDefinitionId(cadet.getId(), definition.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("CadetCircuitSave", "username/missionId", username + "/" + missionId));
@@ -94,7 +82,6 @@ public class ArduinoCompilerService {
             return failSave(save, "sketch.ino not found in Gitea repository '" + repoName + "'.");
         }
 
-        // Compile
         String fqbn = toFqbn(definition.getBoardType());
         return doCompile(save, sketchCode, fqbn, definition.getBoardType());
     }
@@ -114,7 +101,7 @@ public class ArduinoCompilerService {
             Files.createDirectories(outputDir);
 
             long startMs = System.currentTimeMillis();
-            ProcessResult result = runArduinoCli(fqbn, sketchDir, outputDir);
+            ArduinoCliRunner.Result result = cliRunner.run(fqbn, sketchDir, outputDir);
             long elapsedMs = System.currentTimeMillis() - startMs;
 
             if (!result.success()) {
@@ -152,32 +139,6 @@ public class ArduinoCompilerService {
         }
     }
 
-    private ProcessResult runArduinoCli(String fqbn, Path sketchDir, Path outputDir)
-            throws IOException, InterruptedException {
-
-        List<String> command = List.of(
-                arduinoCliPath, "compile",
-                "--fqbn", fqbn,
-                "--output-dir", outputDir.toAbsolutePath().toString(),
-                sketchDir.toAbsolutePath().toString()
-        );
-        log.debug("Running: {}", String.join(" ", command));
-
-        Process process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-
-        boolean finished = process.waitFor(compileTimeoutSeconds, TimeUnit.SECONDS);
-        if (!finished) {
-            process.destroyForcibly();
-            return new ProcessResult(false, "Compilation timed out after " + compileTimeoutSeconds + " seconds.");
-        }
-
-        String output = new String(process.getInputStream().readAllBytes());
-        boolean success = process.exitValue() == 0;
-        return new ProcessResult(success, output);
-    }
-
     /** Searches recursively for any .hex file under outputDir. */
     private Path findHexFile(Path outputDir) throws IOException {
         try (Stream<Path> paths = Files.walk(outputDir)) {
@@ -190,10 +151,6 @@ public class ArduinoCompilerService {
 
     // --- Helpers ---
 
-    /**
-     * Maps BoardType to the arduino-cli FQBN string.
-     * P1: AVR boards. P2: ESP (requires additional core config).
-     */
     private String toFqbn(BoardType boardType) {
         return switch (boardType) {
             case ARDUINO_UNO -> "arduino:avr:uno";
@@ -205,10 +162,6 @@ public class ArduinoCompilerService {
         };
     }
 
-    /**
-     * Extracts the Gitea repo name from the clone URL.
-     * E.g. "http://gitea:3000/legymernok_admin/circuit-abc-user" → "circuit-abc-user"
-     */
     private String extractRepoName(String cloneUrl) {
         if (cloneUrl == null) return "";
         String path = cloneUrl;
@@ -234,6 +187,4 @@ public class ArduinoCompilerService {
             log.warn("Failed to clean temp dir {}: {}", dir, e.getMessage());
         }
     }
-
-    private record ProcessResult(boolean success, String output) {}
 }

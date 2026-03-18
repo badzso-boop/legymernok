@@ -243,8 +243,8 @@ class CircuitDefinitionServiceTest {
 
     @Test
     void saveCanvas_connectionDirectionNormalized() {
-        // big > small by UUID string comparison
-        UUID bigId  = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        // 7fff... > 0000...0001 in Java signed long comparison (UUID.compareTo uses signed longs)
+        UUID bigId  = UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff");
         UUID smallId = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         UpsertCircuitDefComponentRequest ledReq = makeCompRequest("LED1", ComponentType.LED);
