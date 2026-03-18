@@ -56,6 +56,11 @@ const LandingPage: React.FC = () => {
 
   const handleLaunch = (index: number) => {
     if (launchingIndex !== null) return; // Már megy egy
+    const control = mainNavigationControls[index];
+    if (control.disabled) {
+      setStatusMessage(t("controlPanel.wipMessage"));
+      return;
+    }
     setLaunchingIndex(index);
     setCountdown(3); // 3 mp visszaszámlálás indul
   };
@@ -191,7 +196,12 @@ const LandingPage: React.FC = () => {
                       className={`retro-btn ${btn.color} ${launchingIndex === index ? "active" : ""}`}
                       onClick={() => handleLaunch(index)}
                       disabled={launchingIndex !== null}
-                      style={{ width: "50px", height: "50px" }}
+                      style={{
+                        width: "50px",
+                        height: "50px",
+                        opacity: btn.disabled ? 0.4 : 1,
+                        cursor: btn.disabled ? "not-allowed" : "pointer",
+                      }}
                     />
                     {/* Címke elhagyható, vagy nagyon kicsiben, ha zsúfolt */}
                     <div

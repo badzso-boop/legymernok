@@ -24,5 +24,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-log")
                 .setAllowedOriginPatterns("*") // Fejlesztéshez engedjük mindenhonnan
                 .withSockJS(); // Fallback opció régebbi böngészőkhöz
+
+        registry.addEndpoint("/ws-mission-logs")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 }

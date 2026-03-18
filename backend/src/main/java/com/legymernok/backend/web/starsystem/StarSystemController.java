@@ -58,4 +58,10 @@ public class StarSystemController {
     public ResponseEntity<StarSystemWithMissionResponse> getStarSystemWithMissions(@PathVariable UUID id) {
         return ResponseEntity.ok(starSystemService.getStarSystemWithMissions(id));
     }
+
+    @GetMapping("/my-systems")
+    @PreAuthorize("isAuthenticated()") // Bármely bejelentkezett felhasználó lekérheti a sajátjait
+    public ResponseEntity<List<StarSystemResponse>> getMyStarSystems() {
+        return ResponseEntity.ok(starSystemService.getSystemsByCurrentUser());
+    }
 }

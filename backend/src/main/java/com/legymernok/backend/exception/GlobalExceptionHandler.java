@@ -28,7 +28,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceConflictException.class)
     public ResponseEntity<Object> handleResourceConflictException(ResourceConflictException ex) {
         log.warn("Resource conflict: {}", ex.getMessage());
-        return buildResponse(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
+
+        if (ex.getData() != null) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("timestamp", LocalDateTime.now());
+            body.put("status", HttpStatus.CONFLICT.value());
+            body.put("error", "Conflict");
+            body.put("message", ex.getMessage());
+            body.put("data", ex.getData());
+
+            return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+        }
+        else {
+            return buildResponse(HttpStatus.CONFLICT, "Conflict", ex.getMessage());
+        }
     }
 
     @ExceptionHandler(ExternalServiceException.class)
@@ -40,6 +53,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
     public ResponseEntity<Object> handleAuthorizationDeniedException(org.springframework.security.authorization.AuthorizationDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
+        return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
+    }
+
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Object> handleUnauthorizedAccessException(UnauthorizedAccessException ex) {
+        log.warn("Unauthorized access attempt: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
     }
 

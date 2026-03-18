@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next"; // <--- Import
 import StarMapCanvas from "./StarMapCanvas";
 import apiClient from "../../api/client";
 import type { StarSystemResponse } from "../../types/starSystem";
-import "../../styles/ControlPanel.css";
 import "../../styles/RetroUI.css";
 
 const StarMapPage: React.FC = () => {

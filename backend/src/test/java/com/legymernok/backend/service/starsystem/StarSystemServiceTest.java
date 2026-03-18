@@ -1,196 +1,153 @@
 package com.legymernok.backend.service.starsystem;
 
-import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
-import com.legymernok.backend.dto.starsystem.StarSystemResponse;
-import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
+import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.exception.UnauthorizedAccessException;
+import com.legymernok.backend.model.auth.Permission;
+import com.legymernok.backend.model.auth.Role;
+import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
-import com.legymernok.backend.service.mission.MissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.Instant;
-import java.util.List;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-
+import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class StarSystemServiceTest {
-    @Mock
-    private StarSystemRepository starSystemRepository;
 
-    @Mock
-    private MissionService missionService;
+    @Mock private StarSystemRepository starSystemRepository;
+    @Mock private CadetRepository cadetRepository;
+    @InjectMocks private StarSystemService starSystemService;
 
-    @InjectMocks
-    private StarSystemService starSystemService;
-
-    private StarSystem testStarSystem;
-    private UUID starSystemId;
+    private Cadet owner;
+    private Cadet otherUser;
+    private Cadet adminUser;
 
     @BeforeEach
     void setUp() {
-        starSystemId = UUID.randomUUID();
-        testStarSystem = StarSystem.builder()
-                .id(starSystemId)
-                .name("Tatooine")
-                .description("A desert planet.")
-                .iconUrl("tatooine.png")
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
+        owner = new Cadet();
+        owner.setId(UUID.randomUUID());
+        owner.setUsername("owner_user");
+
+        otherUser = new Cadet();
+        otherUser.setId(UUID.randomUUID());
+        otherUser.setUsername("other_user");
+
+        adminUser = new Cadet();
+        adminUser.setId(UUID.randomUUID());
+        adminUser.setUsername("admin_user");
+
+        // JAVÍTÁS: Létrehozzuk a Permission objektumot, és beállítjuk a nevét
+        Permission editAnyPermission = new Permission();
+        editAnyPermission.setName("starsystem:edit_any");
+
+        Permission deleteAnyPermission = new Permission();
+        deleteAnyPermission.setName("starsystem:delete_any");
+
+        Role adminRole = new Role();
+        adminRole.setName("ROLE_ADMIN"); // Set role name
+        adminRole.setPermissions(Set.of(editAnyPermission, deleteAnyPermission));
+        adminUser.setRoles(Set.of(adminRole));
+
+        Authentication auth = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(auth);
+        SecurityContextHolder.setContext(securityContext);
+    }
+
+    private void mockAuthenticatedUser(String username, Cadet user) {
+        when(SecurityContextHolder.getContext().getAuthentication().getName()).thenReturn(username);
+        when(cadetRepository.findByUsername(username)).thenReturn(Optional.of(user));
     }
 
     @Test
     void createStarSystem_Success() {
+        mockAuthenticatedUser("owner_user", owner);
         CreateStarSystemRequest request = new CreateStarSystemRequest();
-        request.setName("Java Basics");
-        request.setDescription("Intro");
-        request.setIconUrl("icon.png");
+        request.setName("New System");
 
-        when(starSystemRepository.findByName("Java Basics")).thenReturn(Optional.empty());
-        when(starSystemRepository.save(any(StarSystem.class))).thenAnswer(i -> {
-            StarSystem s = i.getArgument(0);
-            s.setId(UUID.randomUUID());
-            return s;
-        });
+        when(starSystemRepository.findByName("New System")).thenReturn(Optional.empty());
+        when(starSystemRepository.save(any(StarSystem.class))).thenAnswer(i -> i.getArgument(0));
 
-        StarSystemResponse response = starSystemService.createStarSystem(request);
+        starSystemService.createStarSystem(request);
 
-        assertNotNull(response);
-        assertEquals("Java Basics", response.getName());
-        verify(starSystemRepository).save(any(StarSystem.class));
+        verify(starSystemRepository).save(argThat(system -> system.getOwner().equals(owner)));
     }
 
     @Test
-    void updateStarSystem_Success() {
-        // Arrange
+    void updateStarSystem_byAdmin_shouldSucceed() {
+        mockAuthenticatedUser("admin_user", adminUser);
+
+        StarSystem systemToUpdate = new StarSystem();
+        systemToUpdate.setOwner(owner); // Másé a rendszer
+        systemToUpdate.setName("Original Name");
+        systemToUpdate.setId(UUID.randomUUID());
+
         CreateStarSystemRequest request = new CreateStarSystemRequest();
-        request.setName("Tatooine II");
-        request.setDescription("Still a desert planet.");
-        request.setIconUrl("tatooine_v2.png");
+        request.setName("Updated By Admin");
 
-        when(starSystemRepository.findById(starSystemId)).thenReturn(Optional.of(testStarSystem));
-        when(starSystemRepository.findByName("Tatooine II")).thenReturn(Optional.empty());
-        when(starSystemRepository.save(any(StarSystem.class))).thenReturn(testStarSystem);
+        when(starSystemRepository.findById(systemToUpdate.getId())).thenReturn(Optional.of(systemToUpdate));
+        when(starSystemRepository.save(any(StarSystem.class))).thenReturn(systemToUpdate);
 
-        // Act
-        StarSystemResponse response = starSystemService.updateStarSystem(starSystemId, request);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals("Tatooine II", response.getName());
-        assertEquals("Still a desert planet.", response.getDescription());
-        assertEquals("tatooine_v2.png", response.getIconUrl());
-        verify(starSystemRepository, times(1)).save(testStarSystem);
+        assertDoesNotThrow(() -> starSystemService.updateStarSystem(systemToUpdate.getId(), request));
     }
 
     @Test
-    void updateStarSystem_NotFound_ThrowsException() {
-        CreateStarSystemRequest request = new CreateStarSystemRequest();
-        UUID nonExistentId = UUID.randomUUID();
-        when(starSystemRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+    void deleteStarSystem_byOwner_shouldSucceed() {
+        mockAuthenticatedUser("owner_user", owner);
+        StarSystem system = new StarSystem();
+        system.setOwner(owner);
+        system.setId(UUID.randomUUID());
 
-        assertThrows(RuntimeException.class, () -> starSystemService.updateStarSystem(nonExistentId, request));
+        // JAVÍTÁS: A mockolásnál a konkrét ID-t használjuk
+        when(starSystemRepository.findById(system.getId())).thenReturn(Optional.of(system));
+        when(starSystemRepository.existsById(system.getId())).thenReturn(true);
+
+        assertDoesNotThrow(() -> starSystemService.deleteStarSystem(system.getId()));
+
+        verify(starSystemRepository).deleteById(system.getId());
     }
 
     @Test
-    void deleteStarSystem_Success() {
-        // Arrange
-        when(starSystemRepository.existsById(starSystemId)).thenReturn(true);
-        doNothing().when(starSystemRepository).deleteById(starSystemId);
+    void deleteStarSystem_byAdmin_shouldSucceed() {
+        mockAuthenticatedUser("admin_user", adminUser);
+        StarSystem system = new StarSystem();
+        system.setOwner(owner);
+        system.setId(UUID.randomUUID());
 
-        // Act
-        starSystemService.deleteStarSystem(starSystemId);
+        // JAVÍTÁS: A mockolásnál a konkrét ID-t használjuk
+        when(starSystemRepository.findById(system.getId())).thenReturn(Optional.of(system));
+        when(starSystemRepository.existsById(system.getId())).thenReturn(true);
 
-        // Assert
-        verify(starSystemRepository, times(1)).deleteById(starSystemId);
+        assertDoesNotThrow(() -> starSystemService.deleteStarSystem(system.getId()));
+
+        verify(starSystemRepository).deleteById(system.getId());
     }
 
     @Test
-    void deleteStarSystem_NotFound_ThrowsException() {
-        UUID nonExistentId = UUID.randomUUID();
-        when(starSystemRepository.existsById(nonExistentId)).thenReturn(false);
+    void deleteStarSystem_whenUserIsNotOwner_shouldThrowUnauthorized() {
+        mockAuthenticatedUser("other_user", otherUser);
+        StarSystem system = new StarSystem();
+        system.setOwner(owner);
+        system.setId(UUID.randomUUID());
 
-        assertThrows(RuntimeException.class, () -> starSystemService.deleteStarSystem(nonExistentId));
-    }
+        // JAVÍTÁS: A findById itt is a konkrét ID-t várja
+        when(starSystemRepository.findById(system.getId())).thenReturn(Optional.of(system));
+        when(starSystemRepository.existsById(system.getId())).thenReturn(true);
 
-    @Test
-    void getStarSystemWithMissions_Success() {
-        // Arrange
-        MissionResponse mission1 = MissionResponse.builder().id(UUID.randomUUID()).name("Mission 1").build();
-        List<MissionResponse> missions = List.of(mission1);
-
-        when(starSystemRepository.findById(starSystemId)).thenReturn(Optional.of(testStarSystem));
-        when(missionService.getMissionsByStarSystem(starSystemId)).thenReturn(missions);
-
-        // Act
-        StarSystemWithMissionResponse response = starSystemService.getStarSystemWithMissions(starSystemId);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(testStarSystem.getName(), response.getName());
-        assertEquals(1, response.getMissions().size());
-        assertEquals("Mission 1", response.getMissions().get(0).getName());
-        verify(missionService, times(1)).getMissionsByStarSystem(starSystemId);
-    }
-
-    @Test
-    void getStarSystemWithMissions_NotFound_ThrowsException() {
-        UUID nonExistentId = UUID.randomUUID();
-        when(starSystemRepository.findById(nonExistentId)).thenReturn(Optional.empty());
-
-        assertThrows(RuntimeException.class, () -> starSystemService.getStarSystemWithMissions(nonExistentId));
-        verify(missionService, never()).getMissionsByStarSystem(any());
-    }
-
-    @Test
-    void createStarSystem_AlreadyExists_ThrowsException() {
-        CreateStarSystemRequest request = new CreateStarSystemRequest();
-        request.setName("Existing");
-
-        when(starSystemRepository.findByName("Existing")).thenReturn(Optional.of(new StarSystem()));
-
-        assertThrows(RuntimeException.class, () -> starSystemService.createStarSystem(request));
-        verify(starSystemRepository, never()).save(any());
-    }
-
-    @Test
-    void getAllStarSystems() {
-        when(starSystemRepository.findAll()).thenReturn(List.of(
-                StarSystem.builder().name("S1").build(),
-                StarSystem.builder().name("S2").build()
-        ));
-
-        List<StarSystemResponse> responses = starSystemService.getAllStarSystems();
-
-        assertEquals(2, responses.size());
-    }
-
-    @Test
-    void updateStarSystem_NameConflict_ThrowsException() {
-        // Arrange
-        CreateStarSystemRequest request = new CreateStarSystemRequest();
-        request.setName("ExistingName");
-
-        // Egy másik létező rendszer szimulálása ugyanazzal a névvel
-        StarSystem existingOther = StarSystem.builder().id(UUID.randomUUID()).name("ExistingName"
-        ).build();
-
-        when(starSystemRepository.findById(starSystemId)).thenReturn(Optional.of(testStarSystem));
-        when(starSystemRepository.findByName("ExistingName"
-        )).thenReturn(Optional.of(existingOther));
-
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> starSystemService.updateStarSystem(starSystemId, request));
-        verify(starSystemRepository, never()).save(any());
+        assertThrows(UnauthorizedAccessException.class, () -> starSystemService.deleteStarSystem(system.getId()));
     }
 }

@@ -28,18 +28,27 @@ public class DataInitializer implements CommandLineRunner {
         Permission missionCreate = createPermissionIfNotFound("mission:create", "Küldetés létrehozása");
         Permission missionEdit = createPermissionIfNotFound("mission:edit", "Küldetés szerkesztése");
         Permission missionDelete = createPermissionIfNotFound("mission:delete", "Küldetés törlése");
+        Permission missionEditAny = createPermissionIfNotFound("mission:edit_any", "Bármely küldetés szerkesztése");
+        Permission missionDeleteAny = createPermissionIfNotFound("mission:delete_any", "Bármely küldetés törlése");
+        Permission missionCreateAnySystem = createPermissionIfNotFound("mission:create_any_system", "Küldetés létrehozása bármely rendszerbe");
+        // Quiz jogok
+        Permission quizViewResults = createPermissionIfNotFound("quiz:view_results", "Saját kvízeredmények megtekintése");
+        Permission quizManage = createPermissionIfNotFound("quiz:manage", "Kvízek javítása és pontozása");
 
         // StarSystem jogok
         Permission starSystemRead = createPermissionIfNotFound("starsystem:read", "Csillagrendszer megtekintése");
         Permission starSystemCreate = createPermissionIfNotFound("starsystem:create", "Csillagrendszer létrehozása");
         Permission starSystemEdit = createPermissionIfNotFound("starsystem:edit", "Csillagrendszer szerkesztése");
         Permission starSystemDelete = createPermissionIfNotFound("starsystem:delete", "Csillagrendszer törlése");
+        Permission starSystemEditAny = createPermissionIfNotFound("starsystem:edit_any", "Bármely csillagrendszer szerkesztése");
+        Permission starSystemDeleteAny = createPermissionIfNotFound("starsystem:delete_any", "Bármely csillagrendszer törlése");
 
         // User jogok
         Permission userRead = createPermissionIfNotFound("user:read", "Felhasználók listázása");
         Permission userCreate = createPermissionIfNotFound("user:create", "Felhasználó létrehozása");
         Permission userEdit = createPermissionIfNotFound("user:edit", "Felhasználó szerkesztése");
         Permission userDelete = createPermissionIfNotFound("user:delete", "Felhasználó törlése");
+        Permission inheritanceAdmin = createPermissionIfNotFound("system:inheritance", "Törölt felhasználók tartalmainak öröklése");
 
         // Role jogok (RBAC menedzsment)
         Permission roleRead = createPermissionIfNotFound("role:read", "Szerepkörök megtekintése");
@@ -54,7 +63,10 @@ public class DataInitializer implements CommandLineRunner {
         Set<Permission> cadetPermissions = new HashSet<>();
         cadetPermissions.add(missionRead);
         cadetPermissions.add(missionStart);
+        cadetPermissions.add(quizViewResults);
         cadetPermissions.add(starSystemRead);
+        cadetPermissions.add(starSystemCreate);
+        cadetPermissions.add(missionCreate);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
 
         // ROLE_ADMIN: Minden jog (Full Access)
@@ -65,16 +77,24 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(missionCreate);
         adminPermissions.add(missionEdit);
         adminPermissions.add(missionDelete);
+        adminPermissions.add(missionEditAny);
+        adminPermissions.add(missionDeleteAny);
+        adminPermissions.add(quizViewResults);
+        adminPermissions.add(quizManage);
+        adminPermissions.add(missionCreateAnySystem);
         // StarSystem
         adminPermissions.add(starSystemRead);
         adminPermissions.add(starSystemCreate);
         adminPermissions.add(starSystemEdit);
         adminPermissions.add(starSystemDelete);
+        adminPermissions.add(starSystemEditAny);
+        adminPermissions.add(starSystemDeleteAny);
         // User
         adminPermissions.add(userRead);
         adminPermissions.add(userCreate);
         adminPermissions.add(userEdit);
         adminPermissions.add(userDelete);
+        adminPermissions.add(inheritanceAdmin);
         // Role
         adminPermissions.add(roleRead);
         adminPermissions.add(roleWrite);

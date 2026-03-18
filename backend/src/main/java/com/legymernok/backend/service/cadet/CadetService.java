@@ -7,9 +7,13 @@ import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.mission.Mission;
+import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.legymernok.backend.integration.GiteaService;
@@ -30,6 +34,8 @@ public class CadetService {
 
     private final CadetRepository cadetRepository;
     private final CadetMissionRepository cadetMissionRepository;
+    private final StarSystemRepository starSystemRepository;
+    private final MissionRepository missionRepository;
     private final PasswordEncoder passwordEncoder;
     private final GiteaService giteaService;
     private final RoleRepository roleRepository;
@@ -87,6 +93,30 @@ public class CadetService {
     public void deleteCadet(UUID id) {
         Cadet cadet = cadetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
+
+        Cadet inheritanceAdmin = cadetRepository.findFirstByRoles_Permissions_Name("system:inheritance")
+                .orElse(null);
+
+        if (inheritanceAdmin != null) {
+            // 2. Átruházzuk a csillagrendszereket
+            List<StarSystem> systemsToReassign = starSystemRepository.findAllByOwnerId(id);
+            for (StarSystem system : systemsToReassign) {
+                system.setOwner(inheritanceAdmin);
+                starSystemRepository.save(system);
+            }
+
+            // 3. Átruházzuk a küldetéseket
+            List<Mission> missionsToReassign = missionRepository.findAllByOwnerId(id);
+            for (Mission mission : missionsToReassign) {
+                mission.setOwner(inheritanceAdmin);
+                missionRepository.save(mission);
+            }
+        } else {
+            // Ha nincs "örökös", akkor töröljük a tartalmakat is (vagy dobjunk hibát)
+            // Döntés kérdése. Most tegyük fel, hogy ez hiba.
+            log.warn("Could not delete user {}, no inheritance admin found. Content remains orphaned.", cadet.getUsername());
+            // Itt dobhatnánk egy OperationNotAllowedException-t
+        }
 
         try {
             giteaService.deleteGiteaUser(cadet.getUsername());

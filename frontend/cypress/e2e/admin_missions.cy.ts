@@ -115,6 +115,7 @@ describe("Admin Mission Management (Mocked Backend)", () => {
     cy.visit("/#/admin/missions", {
       onBeforeLoad(win) {
         win.localStorage.setItem("token", token);
+        cy.stub(win, "confirm").returns(true);
       },
     });
 
@@ -127,11 +128,7 @@ describe("Admin Mission Management (Mocked Backend)", () => {
       "getMissionsEmpty",
     );
 
-    cy.get("button")
-      .find('svg[data-testid="DeleteIcon"]')
-      .should("exist")
-      .first()
-      .click({ force: true });
+    cy.get('[data-cy="delete-mission-btn"]').first().click({ force: true });
 
     cy.wait("@deleteMission");
     cy.wait("@getMissionsEmpty");

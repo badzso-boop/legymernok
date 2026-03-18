@@ -18,8 +18,11 @@ import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
+import MissionForgePage from "../pages/mission-forge/MissionForgePage";
+import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
+import MyForgePage from "../pages/mission-forge/MyForgePage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -31,6 +34,7 @@ interface NavControl {
   labelKey: string; // Fordításhoz
   color: "red" | "blue" | "yellow" | "green";
   path: string;
+  disabled?: boolean;
 }
 
 export const mainNavigationControls: NavControl[] = [
@@ -41,22 +45,24 @@ export const mainNavigationControls: NavControl[] = [
     path: "/star-map",
   },
   {
-    id: "YOUR_BASE",
-    labelKey: "controlPanel.pilotData", // Vagy 'controlPanel.base'
+    id: "MY_FORGE",
+    labelKey: "controlPanel.myForge",
     color: "blue",
-    path: "/base", // Későbbi oldal
+    path: "/my-forge",
   },
   {
     id: "LOBBY",
     labelKey: "controlPanel.lobby",
     color: "yellow",
-    path: "/lobby", // Későbbi oldal
+    path: "/lobby",
+    disabled: true,
   },
   {
     id: "ARENA",
     labelKey: "controlPanel.arena",
     color: "green",
-    path: "/arena", // Későbbi oldal
+    path: "/arena",
+    disabled: true,
   },
 ];
 
@@ -112,6 +118,38 @@ export const router = createHashRouter([
         element: <ChangelogPage />,
       },
     ],
+  },
+  {
+    path: "forge",
+    element: (
+      <ProtectedRoute>
+        <MissionForgePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "forge/:missionId",
+    element: (
+      <ProtectedRoute>
+        <MissionForgePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/my-forge",
+    element: (
+      <ProtectedRoute>
+        <MyForgePage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/play/quiz/:missionId",
+    element: (
+      <ProtectedRoute>
+        <QuizPlayerPage />
+      </ProtectedRoute>
+    ),
   },
 
   {

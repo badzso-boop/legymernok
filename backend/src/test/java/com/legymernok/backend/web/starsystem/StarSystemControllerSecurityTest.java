@@ -93,6 +93,19 @@ class StarSystemControllerSecurityTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @WithMockUser(authorities = "starsystem:read")
+    void getMyStarSystems_whenAuthenticated_shouldReturnOk() throws Exception {
+        mockMvc.perform(get("/api/star-systems/my-systems"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void getMyStarSystems_whenNotAuthenticated_shouldReturnForbidden() throws Exception { // Itt átírtam a nevet is
+        mockMvc.perform(get("/api/star-systems/my-systems"))
+                .andExpect(status().isForbidden()); // <--- JAVÍTVA 401-ről 403-ra
+    }
+
     // --- POST (CREATE) TESZTEK ---
 
     @Test
@@ -148,6 +161,24 @@ class StarSystemControllerSecurityTest {
     void deleteStarSystem_AsCadet_ShouldReturnForbidden() throws Exception {
         mockMvc.perform(delete("/api/star-systems/{id}", UUID.randomUUID())
                         .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "starsystem:create") // Felhasználó, akinek van joga létrehozni
+    void createStarSystem_withValidAuthority_shouldReturnCreated() throws Exception {
+        mockMvc.perform(post("/api/star-systems")
+                        .contentType("application/json")
+                        .content("{\"name\": \"Test\", \"description\": \"...\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @WithMockUser // Felhasználó, akinek NINCS joga
+    void createStarSystem_withoutAuthority_shouldReturnForbidden() throws Exception {
+        mockMvc.perform(post("/api/star-systems")
+                        .contentType("application/json")
+                        .content("{\"name\": \"Test\"}"))
                 .andExpect(status().isForbidden());
     }
 }

@@ -1,18 +1,11 @@
+import type { MissionResponse } from "./mission";
+
 export interface StarSystemResponse {
   id: string;
   name: string;
   description: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface MissionResponse {
-  id: string;
-  name: string;
-  descriptionMarkdown: string;
-  orderInSystem: number;
-  difficulty: string;
-  missionType: string;
 }
 
 export interface StarSystemWithMissionsResponse {
