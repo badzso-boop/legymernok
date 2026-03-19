@@ -19,8 +19,11 @@ public class CompileCircuitResponse {
     /** Board type enum, convenient for the frontend to configure avr8js. */
     private BoardType boardType;
 
-    /** Compilation time in milliseconds. */
+    /** Compilation time in milliseconds. Null if served from cache. */
     private Long compilationTimeMs;
+
+    /** True if the hex was returned from cache (no re-compilation needed). */
+    private boolean fromCache;
 
     /** Full compiler output / error message. Null on success. */
     private String errorOutput;
@@ -32,6 +35,17 @@ public class CompileCircuitResponse {
                 .fqbn(fqbn)
                 .boardType(boardType)
                 .compilationTimeMs(compilationTimeMs)
+                .fromCache(false)
+                .build();
+    }
+
+    public static CompileCircuitResponse cachedSuccess(String hexBase64, String fqbn, BoardType boardType) {
+        return CompileCircuitResponse.builder()
+                .success(true)
+                .hexBase64(hexBase64)
+                .fqbn(fqbn)
+                .boardType(boardType)
+                .fromCache(true)
                 .build();
     }
 

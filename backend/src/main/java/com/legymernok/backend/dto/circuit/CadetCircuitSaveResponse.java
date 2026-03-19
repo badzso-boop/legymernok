@@ -19,6 +19,7 @@ public class CadetCircuitSaveResponse {
     private Long totalTimeSpentMs;
     private String giteaRepoUrl;
     private String lastCompileError;
+    private boolean stale;
     private List<CadetCircuitComponentResponse> components;
     private List<CadetCircuitConnectionResponse> connections;
     private List<CadetVerificationResultResponse> verificationResults;

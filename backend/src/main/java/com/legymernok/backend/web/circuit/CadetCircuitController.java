@@ -2,8 +2,8 @@ package com.legymernok.backend.web.circuit;
 
 import com.legymernok.backend.dto.circuit.CadetCircuitSaveResponse;
 import com.legymernok.backend.dto.circuit.CadetVerificationResultResponse;
-import com.legymernok.backend.dto.circuit.CompileCircuitResponse;
 import com.legymernok.backend.dto.circuit.SaveCadetCircuitRequest;
+import com.legymernok.backend.dto.circuit.VerifyBehaviorRequest;
 import com.legymernok.backend.service.circuit.ArduinoCompilerService;
 import com.legymernok.backend.service.circuit.CadetCircuitService;
 import com.legymernok.backend.service.circuit.CircuitVerificationService;
@@ -50,16 +50,17 @@ public class CadetCircuitController {
     }
 
     /**
-     * Compiles the cadet's sketch.ino from the Gitea repo using Arduino CLI.
-     * Returns Base64-encoded .hex on success, or the compiler error output on failure.
-     * The response HTTP status is always 200 — the {@code success} field indicates
-     * the compile result (compile errors are not HTTP errors).
+     * Triggers async compilation of the cadet's sketch.ino from the Gitea repo.
+     * Returns 202 Accepted immediately. Poll GET /{missionId} and check
+     * {@code simulationStatus}: COMPILING → in progress, NEVER_RUN → success,
+     * COMPILE_ERROR → failure (see {@code lastCompileError}).
      */
     @PostMapping("/{missionId}/compile")
     @PreAuthorize("hasAuthority('circuit:simulate')")
-    public ResponseEntity<CompileCircuitResponse> compile(@PathVariable UUID missionId) {
+    public ResponseEntity<Void> compile(@PathVariable UUID missionId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        return ResponseEntity.ok(arduinoCompilerService.compile(username, missionId));
+        arduinoCompilerService.compile(username, missionId); // fire-and-forget
+        return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/{missionId}/verify")
@@ -67,5 +68,19 @@ public class CadetCircuitController {
     public ResponseEntity<List<CadetVerificationResultResponse>> verify(@PathVariable UUID missionId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return ResponseEntity.ok(circuitVerificationService.verifyTopology(username, missionId));
+    }
+
+    /**
+     * Phase 2 verification: checks GPIO pin states, serial output, and PWM duty cycles
+     * against the expected values defined in the CircuitDefinition's verification checks.
+     * Called after the cadet has run the avr8js simulation in the browser.
+     */
+    @PostMapping("/{missionId}/verify-behavior")
+    @PreAuthorize("hasAuthority('circuit:simulate')")
+    public ResponseEntity<List<CadetVerificationResultResponse>> verifyBehavior(
+            @PathVariable UUID missionId,
+            @RequestBody VerifyBehaviorRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ResponseEntity.ok(circuitVerificationService.verifyBehavior(username, missionId, request));
     }
 }

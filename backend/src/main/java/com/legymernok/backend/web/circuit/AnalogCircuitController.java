@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -76,5 +77,13 @@ public class AnalogCircuitController {
                                                                     @Valid @RequestBody SaveCadetAnalogRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return ResponseEntity.ok(analogCircuitService.saveCadetAnalog(username, missionId, request));
+    }
+
+    @PostMapping("/missions/{missionId}/verify")
+    @PreAuthorize("hasAuthority('circuit:simulate')")
+    public ResponseEntity<List<AnalogCheckResultResponse>> verifyAnalog(@PathVariable UUID missionId,
+                                                                         @RequestBody VerifyAnalogRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ResponseEntity.ok(analogCircuitService.verifyAnalog(username, missionId, request));
     }
 }

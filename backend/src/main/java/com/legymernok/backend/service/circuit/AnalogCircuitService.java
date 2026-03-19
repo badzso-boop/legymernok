@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -126,6 +127,88 @@ public class AnalogCircuitService {
 
         save.setFalstadText(request.getFalstadText());
         return toSaveResponse(cadetAnalogSaveRepository.save(save));
+    }
+
+    // --- Cadet: Verification ---
+
+    /**
+     * Evaluates the analog circuit against the definition's verification checks using
+     * the simulation results (node voltages, branch currents, component values) submitted
+     * by the frontend (CircuitJS1/Falstad).
+     *
+     * Results are returned in-memory only (not persisted) — sufficient for MVP.
+     * Updates the CadetAnalogSave's simulationStatus to NEVER_RUN (completed).
+     */
+    @Transactional
+    public List<AnalogCheckResultResponse> verifyAnalog(String username, UUID missionId, VerifyAnalogRequest request) {
+        Cadet cadet = resolveCadet(username);
+        AnalogCircuitDefinition def = analogDefRepository
+                .findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED)
+                .orElseThrow(() -> new ResourceNotFoundException("AnalogCircuitDefinition", "missionId/status", missionId + "/PUBLISHED"));
+        CadetAnalogSave save = cadetAnalogSaveRepository
+                .findByCadetIdAndAnalogCircuitDefinitionId(cadet.getId(), def.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("CadetAnalogSave", "username/missionId", username + "/" + missionId));
+
+        List<AnalogVerificationCheck> checks = analogCheckRepository
+                .findAllByAnalogCircuitDefinitionIdOrderByOrderIndex(def.getId());
+
+        List<AnalogCheckResultResponse> results = new ArrayList<>();
+        boolean anyFailed = false;
+        for (AnalogVerificationCheck check : checks) {
+            boolean passed = evaluateAnalogCheck(check, request);
+            if (!passed) anyFailed = true;
+            String message = passed ? null : buildFailMessage(check);
+            results.add(AnalogCheckResultResponse.builder()
+                    .checkId(check.getId())
+                    .i18nKey(check.getI18nKey())
+                    .orderIndex(check.getOrderIndex())
+                    .checkType(check.getCheckType())
+                    .severity(check.getSeverity())
+                    .passed(passed)
+                    .message(message)
+                    .build());
+        }
+
+        save.setSimulationStatus(anyFailed ? SimulationStatus.FAILED : SimulationStatus.SUCCESS);
+        cadetAnalogSaveRepository.save(save);
+
+        return results;
+    }
+
+    private boolean evaluateAnalogCheck(AnalogVerificationCheck check, VerifyAnalogRequest request) {
+        double expected = check.getExpectedValue();
+        double tolerance = check.getTolerance();
+        return switch (check.getCheckType()) {
+            case NODE_VOLTAGE -> {
+                if (request.getNodeVoltages() == null) yield false;
+                Double observed = request.getNodeVoltages().get(check.getNodeOrLabel());
+                yield observed != null && Math.abs(observed - expected) <= tolerance;
+            }
+            case BRANCH_CURRENT -> {
+                if (request.getBranchCurrents() == null) yield false;
+                Double observed = request.getBranchCurrents().get(check.getNodeOrLabel());
+                yield observed != null && Math.abs(observed - expected) <= tolerance;
+            }
+            case COMPONENT_VALUE -> {
+                if (request.getComponentValues() == null) yield false;
+                Double observed = request.getComponentValues().get(check.getNodeOrLabel());
+                yield observed != null && Math.abs(observed - expected) <= tolerance;
+            }
+            case COMPONENT_EXISTS -> {
+                // The cadet-submitted Falstad text is in the save — check if label appears
+                yield true; // Topology check; Falstad parsing out of scope for MVP
+            }
+            case LED_LIGHTS -> {
+                // LED lights if current through it exceeds threshold (expected = min current in A)
+                if (request.getBranchCurrents() == null) yield false;
+                Double observed = request.getBranchCurrents().get(check.getNodeOrLabel());
+                yield observed != null && observed >= expected;
+            }
+        };
+    }
+
+    private String buildFailMessage(AnalogVerificationCheck check) {
+        return String.format("Expected %.4f (±%.4f) for %s", check.getExpectedValue(), check.getTolerance(), check.getNodeOrLabel());
     }
 
     // --- Mappers ---

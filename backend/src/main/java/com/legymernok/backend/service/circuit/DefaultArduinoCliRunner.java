@@ -2,6 +2,7 @@ package com.legymernok.backend.service.circuit;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -10,9 +11,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Default ArduinoCliRunner implementation that delegates to a real arduino-cli process.
+ * Default ArduinoCliRunner — runs a local arduino-cli process.
+ * Active when the "production" profile is NOT active (dev, test, staging).
  */
 @Component
+@Profile("!production")
 @Slf4j
 public class DefaultArduinoCliRunner implements ArduinoCliRunner {
 

@@ -352,18 +352,21 @@ class CircuitDefinitionServiceTest {
     // --- publishCircuitDefinition ---
 
     @Test
-    void publishCircuitDefinition_cascadesCadetDeletesAndSetsPublished() {
+    void publishCircuitDefinition_stalesExistingSavesAndSetsPublished() {
+        CadetCircuitSave existingSave = CadetCircuitSave.builder()
+                .id(UUID.randomUUID()).stale(false).build();
         when(circuitDefinitionRepository.findById(defId)).thenReturn(Optional.of(def));
+        when(cadetCircuitSaveRepository.findAllByCircuitDefinitionId(defId)).thenReturn(List.of(existingSave));
+        when(cadetCircuitSaveRepository.save(existingSave)).thenReturn(existingSave);
         when(circuitDefinitionRepository.save(def)).thenReturn(def);
         stubToResponse(defId);
 
         service.publishCircuitDefinition(defId);
 
-        verify(cadetVerificationResultRepository).deleteAllByCircuitDefinitionId(defId);
-        verify(cadetCircuitConnectionRepository).deleteAllByCircuitDefinitionId(defId);
-        verify(cadetCircuitComponentPropertyRepository).deleteAllByCircuitDefinitionId(defId);
-        verify(cadetCircuitComponentRepository).deleteAllByCircuitDefinitionId(defId);
-        verify(cadetCircuitSaveRepository).deleteAllByCircuitDefinitionId(defId);
+        // Existing saves must be marked stale, NOT deleted
+        assertTrue(existingSave.isStale());
+        verify(cadetCircuitSaveRepository).save(existingSave);
+        verify(cadetCircuitSaveRepository, never()).deleteAllByCircuitDefinitionId(any());
         assertEquals(CircuitDefinitionStatus.PUBLISHED, def.getStatus());
     }
 

@@ -64,6 +64,12 @@ public class CircuitDefinitionController {
         return ResponseEntity.ok(circuitDefinitionService.publishCircuitDefinition(id));
     }
 
+    @PostMapping("/{id}/unpublish")
+    @PreAuthorize("hasAuthority('circuit:manage')")
+    public ResponseEntity<CircuitDefinitionResponse> unpublish(@PathVariable UUID id) {
+        return ResponseEntity.ok(circuitDefinitionService.unpublishCircuitDefinition(id));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('circuit:manage')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {

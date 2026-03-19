@@ -516,6 +516,28 @@ public class GiteaService {
     }
 
     /**
+     * Returns the SHA of the latest commit on the default branch of an admin-owned repo.
+     * Used as part of the compile cache key.
+     *
+     * @param repoName The repository name (under admin account).
+     * @return The latest commit SHA, or null if the repo is empty / not found.
+     */
+    public String getLatestCommitHash(String repoName) {
+        try {
+            List<Map<String, Object>> commits = restClient.get()
+                    .uri("/repos/{owner}/{repo}/commits?limit=1", adminUsername, repoName)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+            if (commits != null && !commits.isEmpty()) {
+                return (String) commits.get(0).get("sha");
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch latest commit hash for repo '{}': {}", repoName, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Lekér egy repository-t név alapján egy adott tulajdonos alatt.
      * @param owner A repository tulajdonosának neve.
      * @param repoName A lekérdezendő repository neve.

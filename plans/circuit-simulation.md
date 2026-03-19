@@ -193,19 +193,36 @@ window.addEventListener('message', (e) => {
 ```java
 public enum CircuitDefinitionStatus {
     IN_WORK,   // csak admin látja és szerkesztheti, kadétoknak nem jelenik meg
-    PUBLISHED  // kadétok aktívan használják; struktúra nem módosítható
-               // visszavonáskor (PUBLISHED → IN_WORK) az összes CadetCircuitSave törlődik!
+    PUBLISHED, // kadétok aktívan használják; struktúra nem módosítható
+    STALE      // korábbi publikus verzió: a visszavont save-ek ide kerülnek archívként
+               // (nem törlődnek, de kadét nem dolgozhat tovább rajtuk)
 }
 ```
 
-**Visszavonás logikája (PUBLISHED → IN_WORK):**
+**Visszavonás logikája (PUBLISHED → IN_WORK) — STALE modell:**
 ```
-1. Confirm popup az adminnak: "Ez törli X kadét mentett munkáját. Biztosan folytatod?"
-2. DELETE FROM cadet_circuit_saves WHERE mission_id = ?
-   (cascade törli a komponenseket, kapcsolatokat, verifikációs eredményeket)
+❌ Régi megközelítés (elkerülendő):
+   DELETE FROM cadet_circuit_saves WHERE mission_id = ?
+   → az összes kadét munkája véglegesen elvész, visszaállíthatatlan
+
+✅ Új megközelítés (STALE státusz):
+1. Confirm popup az adminnak:
+   "X kadét aktív munkája STALE státuszra kerül. Nem vesznek el, de nem folytathatják.
+    Az admin visszanézhet archívként. Biztosan folytatod?"
+2. UPDATE cadet_circuit_saves SET status = 'STALE' WHERE circuit_definition_id = ?
+   (a komponensek, kapcsolatok, verifikációs eredmények megmaradnak)
 3. CircuitDefinition.status = IN_WORK
-4. Opcionális: értesítés küldése az érintett kadétoknak (WebSocket vagy email)
+4. Értesítés az érintett kadétoknak (WebSocket vagy email):
+   "Ez a misszió frissítve lett — az előző munkád archívba kerül, új kezdéssel folytathatod."
+
+Mikor kerül vissza NEVER_RUN-ba a cadet save?
+   → A kadét újra rákattint a "Misszió elkezdése" gombra → új CadetCircuitSave jön létre
+   → A STALE save megmarad (admin export célra), de a kadétnak már nem látható
 ```
+
+> **Architektúrai megjegyzés:** A `CadetCircuitSave` entitáshoz `status` mező szükséges
+> (`ACTIVE` / `STALE`), hogy a kadét nézet kizárólag az aktív save-et mutassa.
+> Ezt **Fázis 2** megvalósításakor kell bevezetni az entitásba és a service rétegbe.
 
 #### CircuitDefinition — Misszió sablonos kapcsolása (fejléc)
 ```java
@@ -1151,18 +1168,74 @@ class PinResolver {
 
 ### ArduinoCompilerService részletes logika
 
+#### Docker izoláció — compiler microservice
+
+> **Kritikus biztonsági követelmény:** Az Arduino CLI-t **soha nem szabad közvetlenül**
+> a Spring Boot backend konténerben futtatni. A kadét tetszőleges C++ kódot küld be,
+> amelyet a gcc preprocesszor és linker dolgoz fel — ez exploitálható felületet jelent
+> a fő backend folyamaton belül.
+
+**Architektúra: külön `arduino-compiler` microservice**
+
+```
+Spring Boot backend
+    ↓  POST http://arduino-compiler:8090/compile
+    ↓  { "sketchCode": "...", "fqbn": "arduino:avr:uno" }
+arduino-compiler konténer (Docker Compose service)
+    ├── Csak ezt csinálja: sketch → arduino-cli compile → .hex
+    ├── Erőforrás limit: mem_limit: 256m, cpus: 0.5
+    ├── Hálózati izoláció: csak a backend éri el (internal network)
+    └── Kimenet: { "success": true, "hexBase64": "...", "errorOutput": null }
+```
+
+**`docker-compose.yml` részlet (tervezett):**
+```yaml
+arduino-compiler:
+  build: ./arduino-compiler
+  mem_limit: 256m
+  cpus: 0.5
+  networks:
+    - legymernok-internal   # csak a backend éri el, kintről nem
+  restart: unless-stopped
+```
+
+**Spring Boot integráció — `ArduinoCliRunner` interfész:**
+
+A jelenlegi kódban már megvan a `ArduinoCliRunner` interfész, amely absztrahálja
+a fordítási folyamatot. Ez pontosan az a réteg, amin keresztül a Docker-alapú
+megközelítés bevezethető anélkül, hogy a `ArduinoCompilerService` logikáját módosítani kellene:
+
+```java
+// Jelenlegi implementáció (lokális — csak fejlesztői környezetben):
+@Component
+public class DefaultArduinoCliRunner implements ArduinoCliRunner {
+    // ProcessBuilder hívás — arduino-cli-t futtat lokálisan
+}
+
+// Tervezett éles implementáció (Docker microservice):
+@Component
+@Profile("production")
+public class HttpArduinoCliRunner implements ArduinoCliRunner {
+    // HTTP POST a arduino-compiler szolgáltatásnak
+    // Az ArduinoCompilerService.java változatlan marad
+}
+```
+
+> A `DefaultArduinoCliRunner` fejlesztési és tesztelési célra megmarad.
+> Éles deployban a `HttpArduinoCliRunner` cserélődik be Spring Profile-lal.
+
+**Compile flow:**
 ```
 POST /api/circuit/{missionId}/compile
 
 1. JWT → cadet azonosítás
-2. Rate limiting: max 10 compile/perc/cadet (egyszerű in-memory counter)
-3. CadetCircuitSave.giteaRepoUrl alapján: kód lekérése Giteából
+2. Rate limiting ellenőrzés (ld. Compile Queue szekció)
+3. Compile cache ellenőrzés (ld. Compile Cache szekció)
+4. CadetCircuitSave.giteaRepoUrl alapján: kód lekérése Giteából
    (GiteaService.getFileContent(repoUrl, "sketch/sketch.ino"))
-4. Temp könyvtár létrehozása: /tmp/compile-{UUID}/sketch/sketch.ino
-5. Arduino CLI futtatása (külön Docker image-ben):
-   arduino-cli compile --fqbn {boardFqbn} --output-dir /tmp/compile-{UUID}/out /tmp/compile-{UUID}/sketch
+5. ArduinoCliRunner.run(fqbn, sketchCode) → fordítás (lokálisan vagy HTTP-n)
 6. Sikeres esetén: .hex fájl beolvasása → Base64 → response
-7. Hiba esetén: stderr visszaadása (compile error szöveg) → CadetCircuitSave.lastCompileError frissítve
+7. Hiba esetén: stderr visszaadása → CadetCircuitSave.lastCompileError frissítve
 8. Cleanup: temp könyvtár törlése (finally blokkban)
 
 Response:
@@ -1170,20 +1243,105 @@ Response:
   "success": true,
   "hexBase64": "...",
   "boardType": "ARDUINO_UNO",
-  "sizeBytes": 2048,
-  "memoryUsed": { "flash": "6%", "sram": "3%" }
+  "compilationTimeMs": 4820
 }
 ```
 
 **Board FQBN mapping:**
 ```java
-private static final Map<BoardType, String> FQBN_MAP = Map.of(
-    BoardType.ARDUINO_UNO,       "arduino:avr:uno",
-    BoardType.ARDUINO_MEGA_2560, "arduino:avr:mega:cpu=atmega2560",
-    BoardType.ESP8266,           "esp8266:esp8266:nodemcuv2",
-    BoardType.ESP32,             "esp32:esp32:esp32"
-);
+// ArduinoCompilerService.java — toFqbn()
+private String toFqbn(BoardType boardType) {
+    return switch (boardType) {
+        case ARDUINO_UNO       -> "arduino:avr:uno";
+        case ARDUINO_MEGA_2560 -> "arduino:avr:mega:cpu=atmega2560";
+        case ESP8266           -> "esp8266:esp8266:nodemcuv2";
+        case ESP32             -> "esp32:esp32:esp32";
+        default -> throw new IllegalArgumentException(
+            "Board type not supported for compilation: " + boardType);
+    };
+}
 ```
+
+---
+
+### Compile Queue — aszinkron fordítási sor
+
+> **Probléma:** Az `arduino-cli compile` hideg cache esetén 10–40 másodpercig futhat.
+> Ha 30 kadét egyszerre indít fordítást, a szerver lefagy (thread pool kimerül).
+
+**Megoldás: Spring `@Async` + korlátozott thread pool**
+
+```java
+// CompilerThreadPoolConfig.java (tervezett)
+@Configuration
+@EnableAsync
+public class CompilerThreadPoolConfig {
+    @Bean(name = "compilerExecutor")
+    public Executor compilerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);       // max 4 párhuzamos fordítás
+        executor.setQueueCapacity(20);    // max 20 várakozó job
+        executor.setThreadNamePrefix("arduino-compiler-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+**Async compile endpoint — state machine a `SimulationStatus`-ban:**
+```
+NEVER_RUN → COMPILING (azonnal visszatér, job ID a válaszban)
+           ↓ aszinkron
+COMPILE_ERROR  |  NEVER_RUN (kész, hexBase64 a DB-ben)
+
+Kadét pollingol: GET /api/circuit/{missionId}/compile/status
+→ { "status": "COMPILING" } | { "status": "READY", "hexBase64": "..." } | { "status": "ERROR", "error": "..." }
+```
+
+> Alternatív: WebSocket STOMP értesítés (a log WebSocket infrastruktúra már megvan).
+> Fázis 2-ben a polling egyszerűbb, Fázis 3-ban WebSocket push váltja fel.
+
+**Implementációs státusz:** Tervezett (Fázis 2). A jelenlegi `ArduinoCompilerService.compile()`
+szinkron — ezt kell `@Async`-ra váltani és a hex-et ideiglenesen DB-ben tárolni.
+
+---
+
+### Compile Cache — ismétlő fordítás elkerülése
+
+> **Probléma:** Ha a kadét kódja nem változott az utolsó fordítás óta,
+> felesleges újrafordítani. Egy Uno sketch fordítása ~5–15 másodperc.
+
+**Cache kulcs:** `SHA-256(giteaRepoUrl + latestCommitHash + fqbn)`
+
+```
+Fordítás előtt:
+1. Gitea API: GET /repos/{owner}/{repo}/commits?limit=1 → commitHash
+2. cacheKey = SHA-256(save.giteaRepoUrl + commitHash + fqbn)
+3. Ha CadetCircuitSave.compileCacheKey == cacheKey:
+   → azonnal visszaadjuk a tárolt hexBase64-et (cache HIT)
+   → fordítási idő: ~0ms
+4. Ha nem egyezik: fordítás fut, majd:
+   → save.compileCacheKey = cacheKey
+   → save.compiledHexBase64 = hexBase64  ← új DB mező
+
+Előny: Ugyanazt a sketch.ino-t fordítják újra ("Fordítás" gomb duplán kattintva)?
+  → cache hit, azonnal visszatér
+```
+
+**Szükséges DB módosítások (Fázis 2):**
+```java
+// CadetCircuitSave entitás — új mezők:
+@Column(name = "compile_cache_key", length = 64)
+private String compileCacheKey;     // SHA-256 hex string
+
+@Column(name = "compiled_hex_base64", columnDefinition = "TEXT")
+private String compiledHexBase64;   // Base64 kódolt .hex tartalom (null = nem fordított)
+```
+
+**Implementációs státusz:** Tervezett (Fázis 2), a Gitea commit hash lekérése
+egy extra API hívást igényel — `GiteaService`-be kerül: `getLatestCommitHash(repoName)`.
 
 ### CircuitSaveService logika (kód mentés Giteába)
 
@@ -2111,12 +2269,36 @@ A Mission Forge-ban (kadétok által készített missziók) a `CIRCUIT_SIMULATIO
 
 ## X. Biztonsági szempontok
 
-### Arduino CLI sandbox
-- Futtatás Docker konténerben (ne host-on)
-- Kód méretlimit: max 50KB
-- CPU timeout: 30 másodperc (ProcessBuilder `waitFor(30, SECONDS)`)
-- Temp könyvtárak: UUID-alapú, `finally` blokkban cleanup
-- **Veszélyes Arduino library-k blacklist:** wifi, ethernet, SD (nem kell szimulátorban)
+### Arduino CLI fordítás — biztonsági architektúra
+
+**Miért kritikus ez?**
+A kadét tetszőleges C++ kódot küldhet be fordításra. A gcc preprocesszor, linker szkriptek
+és az arduino-cli által meghívott toolchain exploitálható felület a fő backend folyamaton belül.
+Ezen kívül egy rosszindulatú kadét 100 párhuzamos fordítással lefagyaszthatja a szervert.
+
+**Megoldás: `arduino-compiler` Docker microservice (ld. ArduinoCompilerService szekció)**
+
+```
+[Spring Boot backend]
+      ↓ HTTP POST (sketch + fqbn)
+[arduino-compiler konténer]
+      ├── mem_limit: 256m
+      ├── cpus: 0.5
+      ├── --network none (a compile image-ben — nincs kifelé hálózat)
+      ├── Csak a legymernok-internal hálózatból érhető el
+      └── Temp könyvtárak: UUID-alapú, finally cleanup
+```
+
+**Jelenlegi állapot (fejlesztői környezet):**
+- `DefaultArduinoCliRunner` a Spring Boot folyamatán belül futtat ProcessBuilder hívást
+- Ez fejlesztési és tesztelési célra elfogadható
+- Élesbe kerülés előtt **kötelező** `HttpArduinoCliRunner`-re váltani
+
+**Egyéb limitek:**
+- Kód méretlimit: max 50KB (`sketch.ino` feltöltésnél ellenőrizve)
+- Compile timeout: `@Value("${arduino.cli.compile.timeout-seconds:120}")` (konfigurálható)
+- Veszélyes Arduino library-k blacklist a compiler image-ben: `wifi.h`, `ethernet.h`, `SD.h`
+- Rate limiting: Compile Queue szekció szerint (max 4 párhuzamos fordítás)
 
 ### Python szandbox (Pi)
 - Docker `--network none` (nincs hálózat)
@@ -2124,6 +2306,52 @@ A Mission Forge-ban (kadétok által készített missziók) a `CIRCUIT_SIMULATIO
 - Konténer TTL: 10 perc, majd `docker stop` + `rm`
 - Nem írhat fájlrendszerre (read-only root, csak `/tmp`)
 - `seccomp` profil: felesleges syscall-ok tiltása
+
+### Verifikáció megbízhatósága — ismert korlátok
+
+> **Tudatos architektúrai döntés:** A jelenlegi verifikáció kliens-oldalon fut,
+> és a frontend küldi be az eredményeket a backendnek. Ez oktatási MVP-re elfogadható,
+> de biztonsági szempontból nem hamisításbiztos.
+
+**Mi az a probléma pontosan?**
+
+A `GPIO_BEHAVIOR`, `SERIAL_OUTPUT` és `PWM` típusú checkek esetén:
+- Az avr8js Web Worker-ben fut a böngészőben
+- A GPIO log (`simulationLog`) teljesen kliens-oldalon képződik
+- Egy motivált hallgató DevTools-szal triviálisan hamisíthat:
+  ```json
+  POST /api/circuit/{missionId}/verify/behavior
+  { "simulationLog": [{"pin":"D13","value":1,"t":0}], "serialOutput": "Hello" }
+  ```
+- Az analóg (Falstad) verifikáció szintén: a `nodeVoltages` az iframe-ből jön postMessage-en
+
+**MVP stratégia (jelenlegi, Fázis 1–2):**
+- Elfogadjuk a trust modellt: oktatási platformon a cél a tanulási folyamat
+- Egy kadét aki "csalt" valójában saját magát csapta be — nem tudja megoldani a feladatot
+- Ez dokumentáltan elfogadott kompromisszum, nem figyelmetlenség
+
+**Hosszú távú javítás (Fázis 4+): Server-side avr8js**
+
+```
+Jelenlegi flow (MVP):
+Frontend (avr8js) → GPIO log → POST /verify/behavior → Backend ellenőrzi a log-ot
+                    ↑ hamisítható
+
+Tervezett flow (biztonságos):
+Backend → hex-t aláírja (HMAC, compiler service-től)
+        → POST /verify { signedHex }
+        → avr8js Node.js service-ben fut server-side
+        → Backend ellenőrzi a saját simulation eredményét
+        → Frontend csak vizualizáció (nem befolyásolja az eredményt)
+```
+
+A `ArduinoCliRunner` interfész és a `ArduinoCompilerService` architektúrája úgy van
+tervezve, hogy a server-side szimuláció Fázis 4-ben bevezethető legyen anélkül, hogy
+a meglévő kódot újra kellene írni — egy új `SimulationVerificationService` kerül be
+amely a Node.js avr8js service-t hívja HTTP-n.
+
+**CIRCUIT_TOPOLOGY és PATH_EXISTS:** Ezek backend-oldalon futnak, hamisíthatatlanok.
+A BFS gráfbejárás teljes egészében a `CircuitVerificationService`-ben van.
 
 ### Frontend
 - A `.hex` fájl a browser sandbox-ában fut (avr8js), nincs natív kód végrehajtás

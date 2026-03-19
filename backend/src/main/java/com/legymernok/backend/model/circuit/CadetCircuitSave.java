@@ -56,6 +56,30 @@ public class CadetCircuitSave {
     @Column(name = "last_compile_error", columnDefinition = "TEXT")
     private String lastCompileError;
 
+    /**
+     * True ha ez a save egy visszavont (PUBLISHED → IN_WORK) definícióhoz tartozik.
+     * Stale save-en a kadét nem dolgozhat tovább, de az adat megmarad archívként.
+     */
+    @Builder.Default
+    @Column(name = "stale", nullable = false)
+    private boolean stale = false;
+
+    /**
+     * Cache kulcs az utolsó fordításhoz: SHA-256(giteaRepoUrl + latestCommitHash + fqbn).
+     * Ha a következő fordításkor ugyanez a kulcs számítódik ki, a compiledHexBase64
+     * közvetlenül visszaadható — nem kell újra fordítani.
+     */
+    @Column(name = "compile_cache_key", length = 64)
+    private String compileCacheKey;
+
+    /**
+     * Az utolsó sikeres fordítás eredménye Base64 kódolva.
+     * Cache hit esetén ebből kerül visszaadásra a hex, arduino-cli futtatás nélkül.
+     * Null ha még nem volt sikeres fordítás, vagy a cache érvénytelen.
+     */
+    @Column(name = "compiled_hex_base64", columnDefinition = "TEXT")
+    private String compiledHexBase64;
+
     @CreationTimestamp
     private Instant createdAt;
 

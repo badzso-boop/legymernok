@@ -15,12 +15,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.scheduling.annotation.Async;
+
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 /**
@@ -50,11 +57,14 @@ public class ArduinoCompilerService {
     // --- Public API ---
 
     /**
-     * Compiles the sketch for the given cadet + mission.
-     * Updates simulationStatus on the CadetCircuitSave.
+     * Compiles the sketch for the given cadet + mission asynchronously.
+     * The caller receives a CompletableFuture and can poll the save's simulationStatus
+     * (via GET /circuit/missions/{missionId}) to track progress.
+     * The returned future resolves to the CompileCircuitResponse once compilation finishes.
      */
+    @Async("compilerExecutor")
     @Transactional
-    public CompileCircuitResponse compile(String username, UUID missionId) {
+    public CompletableFuture<CompileCircuitResponse> compile(String username, UUID missionId) {
         var cadet = cadetRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username));
 
@@ -67,7 +77,22 @@ public class ArduinoCompilerService {
                 .orElseThrow(() -> new ResourceNotFoundException("CadetCircuitSave", "username/missionId", username + "/" + missionId));
 
         if (save.getGiteaRepoUrl() == null) {
-            return failSave(save, "Circuit mission not properly started: missing Gitea repo URL.");
+            return CompletableFuture.completedFuture(
+                    failSave(save, "Circuit mission not properly started: missing Gitea repo URL."));
+        }
+
+        String repoName = extractRepoName(save.getGiteaRepoUrl());
+        String fqbn = toFqbn(definition.getBoardType());
+
+        // --- Compile cache check ---
+        String latestCommit = giteaService.getLatestCommitHash(repoName);
+        String cacheKey = buildCacheKey(save.getGiteaRepoUrl(), latestCommit, fqbn);
+        if (cacheKey != null
+                && cacheKey.equals(save.getCompileCacheKey())
+                && save.getCompiledHexBase64() != null) {
+            log.info("Compile cache hit for save {} (key={})", save.getId(), cacheKey);
+            return CompletableFuture.completedFuture(
+                    CompileCircuitResponse.cachedSuccess(save.getCompiledHexBase64(), fqbn, definition.getBoardType()));
         }
 
         // Mark as compiling
@@ -76,19 +101,19 @@ public class ArduinoCompilerService {
         saveRepository.save(save);
 
         // Fetch sketch source
-        String repoName = extractRepoName(save.getGiteaRepoUrl());
         String sketchCode = giteaService.getFileContent(giteaService.getAdminUsername(), repoName, SKETCH_FILENAME);
         if (sketchCode == null) {
-            return failSave(save, "sketch.ino not found in Gitea repository '" + repoName + "'.");
+            return CompletableFuture.completedFuture(
+                    failSave(save, "sketch.ino not found in Gitea repository '" + repoName + "'."));
         }
 
-        String fqbn = toFqbn(definition.getBoardType());
-        return doCompile(save, sketchCode, fqbn, definition.getBoardType());
+        return CompletableFuture.completedFuture(
+                doCompile(save, sketchCode, fqbn, definition.getBoardType(), cacheKey));
     }
 
     // --- Compilation ---
 
-    private CompileCircuitResponse doCompile(CadetCircuitSave save, String sketchCode, String fqbn, BoardType boardType) {
+    private CompileCircuitResponse doCompile(CadetCircuitSave save, String sketchCode, String fqbn, BoardType boardType, String cacheKey) {
         Path tempRoot = null;
         try {
             // arduino-cli requires: <tempRoot>/sketch/sketch.ino
@@ -125,6 +150,9 @@ public class ArduinoCompilerService {
             save.setSimulationStatus(SimulationStatus.NEVER_RUN); // ready to simulate, not yet running
             save.setCompilationTimeMs(elapsedMs);
             save.setSimulationStartedAt(null);
+            // Store compiled hex in cache
+            save.setCompiledHexBase64(hexBase64);
+            save.setCompileCacheKey(cacheKey);
             saveRepository.save(save);
 
             log.info("Compile OK for save {} in {}ms, hex size {} bytes.", save.getId(), elapsedMs, hexBytes.length);
@@ -160,6 +188,19 @@ public class ArduinoCompilerService {
             default -> throw new IllegalArgumentException(
                     "Board type not supported for compilation: " + boardType);
         };
+    }
+
+    private String buildCacheKey(String repoUrl, String commitHash, String fqbn) {
+        if (repoUrl == null || commitHash == null || fqbn == null) return null;
+        try {
+            String input = repoUrl + "|" + commitHash + "|" + fqbn;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            log.warn("SHA-256 not available, compile cache disabled");
+            return null;
+        }
     }
 
     private String extractRepoName(String cloneUrl) {

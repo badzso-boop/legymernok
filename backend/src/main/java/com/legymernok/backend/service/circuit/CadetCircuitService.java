@@ -4,9 +4,12 @@ import com.legymernok.backend.dto.circuit.*;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.circuit.*;
+import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.mission.MissionType;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.circuit.*;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,7 @@ public class CadetCircuitService {
     private final CircuitDefComponentPropertyRepository defPropertyRepository;
     private final UnitOfMeasureRepository unitOfMeasureRepository;
     private final CadetRepository cadetRepository;
+    private final CadetMissionRepository cadetMissionRepository;
     private final UnitOfMeasureService unitOfMeasureService;
     private final CircuitVerificationCheckRepository checkRepository;
     private final GiteaService giteaService;
@@ -107,6 +111,16 @@ public class CadetCircuitService {
                 .circuitDefinition(definition)
                 .giteaRepoUrl(giteaRepoUrl)
                 .build());
+
+        // Register the cadet's participation in the mission (idempotent)
+        cadetMissionRepository.findByCadetIdAndMissionId(cadet.getId(), definition.getMission().getId())
+                .orElseGet(() -> cadetMissionRepository.save(CadetMission.builder()
+                        .cadet(cadet)
+                        .mission(definition.getMission())
+                        .status(MissionStatus.IN_PROGRESS)
+                        .repositoryUrl(giteaRepoUrl)
+                        .startedAt(java.time.Instant.now())
+                        .build()));
 
         List<CircuitDefComponent> templateComponents = defComponentRepository.findAllByCircuitDefinitionId(definition.getId());
         for (CircuitDefComponent template : templateComponents) {
@@ -240,6 +254,7 @@ public class CadetCircuitService {
                 .circuitDefinitionId(save.getCircuitDefinition().getId())
                 .giteaRepoUrl(save.getGiteaRepoUrl())
                 .lastCompileError(save.getLastCompileError())
+                .stale(save.isStale())
                 .simulationStatus(save.getSimulationStatus())
                 .simulationStartedAt(save.getSimulationStartedAt())
                 .compilationTimeMs(save.getCompilationTimeMs())

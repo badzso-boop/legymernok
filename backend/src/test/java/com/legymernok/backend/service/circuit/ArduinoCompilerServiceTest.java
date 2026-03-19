@@ -29,6 +29,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for ArduinoCompilerService.
+ *
+ * Note: @Async is NOT applied when using @InjectMocks (no Spring AOP proxy),
+ * so compile() runs synchronously here. .join() is used to unwrap the
+ * CompletableFuture return value.
+ */
 @ExtendWith(MockitoExtension.class)
 class ArduinoCompilerServiceTest {
 
@@ -121,7 +128,7 @@ class ArduinoCompilerServiceTest {
                 .thenReturn(Optional.of(noRepo));
         when(saveRepository.save(any())).thenReturn(noRepo);
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertFalse(resp.isSuccess());
         assertTrue(resp.getErrorOutput().contains("Gitea"));
@@ -147,7 +154,7 @@ class ArduinoCompilerServiceTest {
         when(giteaService.getFileContent("legymernok_admin", REPO_NAME, "sketch.ino"))
                 .thenReturn(null);
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertFalse(resp.isSuccess());
         assertTrue(resp.getErrorOutput().contains("sketch.ino"));
@@ -173,7 +180,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertTrue(resp.isSuccess());
         assertNotNull(resp.getHexBase64());
@@ -193,7 +200,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         // BoardType.ARDUINO_UNO → fqbn must be "arduino:avr:uno"
         assertEquals("arduino:avr:uno", resp.getFqbn());
@@ -211,7 +218,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        service.compile("cadet1", missionId);
+        service.compile("cadet1", missionId).join();
 
         ArgumentCaptor<String> fqbnCaptor = ArgumentCaptor.forClass(String.class);
         verify(cliRunner).run(fqbnCaptor.capture(), any(), any());
@@ -230,7 +237,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        service.compile("cadet1", missionId);
+        service.compile("cadet1", missionId).join();
 
         ArgumentCaptor<CadetCircuitSave> captor = ArgumentCaptor.forClass(CadetCircuitSave.class);
         verify(saveRepository, times(2)).save(captor.capture()); // COMPILING + NEVER_RUN
@@ -248,7 +255,7 @@ class ArduinoCompilerServiceTest {
         when(cliRunner.run(any(), any(), any()))
                 .thenReturn(new ArduinoCliRunner.Result(false, "undefined reference to 'foo'"));
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertFalse(resp.isSuccess());
         assertTrue(resp.getErrorOutput().contains("undefined reference to 'foo'"));
@@ -270,7 +277,7 @@ class ArduinoCompilerServiceTest {
         when(cliRunner.run(any(), any(), any()))
                 .thenReturn(new ArduinoCliRunner.Result(true, ""));
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertFalse(resp.isSuccess());
         assertTrue(resp.getErrorOutput().contains(".hex"));
@@ -285,7 +292,7 @@ class ArduinoCompilerServiceTest {
         when(cliRunner.run(any(), any(), any()))
                 .thenThrow(new IOException("disk full"));
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertFalse(resp.isSuccess());
         assertTrue(resp.getErrorOutput().contains("disk full"));
@@ -311,7 +318,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertEquals("arduino:avr:mega:cpu=atmega2560", resp.getFqbn());
     }
@@ -332,7 +339,7 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertEquals("esp8266:esp8266:nodemcuv2", resp.getFqbn());
     }
@@ -353,24 +360,22 @@ class ArduinoCompilerServiceTest {
             return new ArduinoCliRunner.Result(true, "");
         });
 
-        CompileCircuitResponse resp = service.compile("cadet1", missionId);
+        CompileCircuitResponse resp = service.compile("cadet1", missionId).join();
 
         assertEquals("esp32:esp32:esp32", resp.getFqbn());
     }
 
     @Test
-    void compile_unsupportedBoardType_returnsErrorResponse() {
+    void compile_unsupportedBoardType_throwsIllegalArgumentException() {
         CircuitDefinition rpiDef = CircuitDefinition.builder()
                 .id(defId).mission(Mission.builder().id(missionId).build())
                 .boardType(BoardType.RASPBERRY_PI_3)
                 .status(CircuitDefinitionStatus.PUBLISHED)
                 .build();
         stubCommonLookups(rpiDef);
-        stubSketch();
-        when(saveRepository.save(any())).thenReturn(save);
+        // No stubSketch() — toFqbn throws before reaching Gitea or save calls
 
-        // toFqbn throws IllegalArgumentException — doCompile catches it as RuntimeException
-        // which bubbles up (not caught by the IOException|InterruptedException handler)
+        // toFqbn throws IllegalArgumentException which propagates directly from compile()
         assertThrows(IllegalArgumentException.class,
                 () -> service.compile("cadet1", missionId));
     }
@@ -387,13 +392,13 @@ class ArduinoCompilerServiceTest {
         when(giteaService.getFileContent("legymernok_admin", REPO_NAME, "sketch.ino"))
                 .thenReturn(null); // sketch missing triggers early return — enough to verify arg
 
-        service.compile("cadet1", missionId);
+        service.compile("cadet1", missionId).join();
 
         verify(giteaService).getFileContent("legymernok_admin", "circuit-abc-cadet1", "sketch.ino");
     }
 
     @Test
-    void compile_extractsRepoNameFromUrlWithGitSuffix() throws IOException, InterruptedException {
+    void compile_extractsRepoNameFromUrlWithGitSuffix() {
         CadetCircuitSave saveWithGit = CadetCircuitSave.builder()
                 .id(saveId).cadet(cadet).circuitDefinition(def)
                 .giteaRepoUrl(GITEA_REPO_URL + ".git")
@@ -408,7 +413,7 @@ class ArduinoCompilerServiceTest {
         when(giteaService.getFileContent("legymernok_admin", REPO_NAME, "sketch.ino"))
                 .thenReturn(null);
 
-        service.compile("cadet1", missionId);
+        service.compile("cadet1", missionId).join();
 
         // Must strip .git → same REPO_NAME
         verify(giteaService).getFileContent("legymernok_admin", REPO_NAME, "sketch.ino");

@@ -121,21 +121,41 @@ public class CircuitDefinitionService {
 
     /**
      * Publishes a definition: status → PUBLISHED.
-     * Deletes all cadet saves for this definition so cadets start fresh with the new template.
+     * Marks any existing cadet saves as stale (template may have changed).
+     * Stale saves are preserved as archive but cadets cannot continue them.
      */
     @Transactional
     public CircuitDefinitionResponse publishCircuitDefinition(UUID definitionId) {
         CircuitDefinition def = circuitDefinitionRepository.findById(definitionId)
                 .orElseThrow(() -> new ResourceNotFoundException("CircuitDefinition", "id", definitionId));
 
-        // Delete all cadet progress in FK order
-        cadetVerificationResultRepository.deleteAllByCircuitDefinitionId(definitionId);
-        cadetCircuitConnectionRepository.deleteAllByCircuitDefinitionId(definitionId);
-        cadetCircuitComponentPropertyRepository.deleteAllByCircuitDefinitionId(definitionId);
-        cadetCircuitComponentRepository.deleteAllByCircuitDefinitionId(definitionId);
-        cadetCircuitSaveRepository.deleteAllByCircuitDefinitionId(definitionId);
+        // Mark existing cadet saves as stale — template/board may have changed
+        cadetCircuitSaveRepository.findAllByCircuitDefinitionId(definitionId)
+                .forEach(save -> {
+                    save.setStale(true);
+                    cadetCircuitSaveRepository.save(save);
+                });
 
         def.setStatus(CircuitDefinitionStatus.PUBLISHED);
+        return toResponse(circuitDefinitionRepository.save(def));
+    }
+
+    /**
+     * Unpublishes a definition: status → IN_WORK.
+     * Marks all cadet saves as stale so cadets cannot continue with the now-draft version.
+     */
+    @Transactional
+    public CircuitDefinitionResponse unpublishCircuitDefinition(UUID definitionId) {
+        CircuitDefinition def = circuitDefinitionRepository.findById(definitionId)
+                .orElseThrow(() -> new ResourceNotFoundException("CircuitDefinition", "id", definitionId));
+
+        cadetCircuitSaveRepository.findAllByCircuitDefinitionId(definitionId)
+                .forEach(save -> {
+                    save.setStale(true);
+                    cadetCircuitSaveRepository.save(save);
+                });
+
+        def.setStatus(CircuitDefinitionStatus.IN_WORK);
         return toResponse(circuitDefinitionRepository.save(def));
     }
 

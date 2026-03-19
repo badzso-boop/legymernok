@@ -1,10 +1,9 @@
 package com.legymernok.backend.service.circuit;
 
 import com.legymernok.backend.dto.circuit.CadetVerificationResultResponse;
+import com.legymernok.backend.dto.circuit.VerifyBehaviorRequest;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.model.circuit.*;
-import com.legymernok.backend.repository.circuit.CircuitDefinitionRepository;
-import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.circuit.*;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +91,106 @@ public class CircuitVerificationService {
                 .collect(Collectors.toMap(CircuitVerificationCheck::getId, c -> c));
 
         return saved.stream().map(r -> toResponse(r, checksById)).toList();
+    }
+
+    // --- Phase 2: Behavior verification (GPIO / Serial / PWM) ---
+
+    /**
+     * Evaluates simulation-phase checks using the log submitted by the frontend (avr8js).
+     * Updates existing CadetVerificationResult records for GPIO_BEHAVIOR, SERIAL_OUTPUT, PWM checks.
+     * Topology/path checks already have results from Phase 1 and are left untouched.
+     */
+    @Transactional
+    public List<CadetVerificationResultResponse> verifyBehavior(String username, UUID missionId,
+                                                                 VerifyBehaviorRequest request) {
+        UUID cadetId = cadetRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username))
+                .getId();
+        CircuitDefinition definition = circuitDefinitionRepository
+                .findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED)
+                .orElseThrow(() -> new ResourceNotFoundException("CircuitDefinition", "missionId/status", missionId + "/PUBLISHED"));
+        CadetCircuitSave save = saveRepository.findByCadetIdAndCircuitDefinitionId(cadetId, definition.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("CadetCircuitSave", "username/missionId", username + "/" + missionId));
+
+        List<CircuitVerificationCheck> checks = checkRepository
+                .findAllByCircuitDefinitionIdOrderByOrderIndex(definition.getId());
+        Map<UUID, CircuitVerificationCheck> checksById = checks.stream()
+                .collect(Collectors.toMap(CircuitVerificationCheck::getId, c -> c));
+
+        // Load existing results; update simulation-phase checks only
+        List<CadetVerificationResult> allResults = resultRepository.findAllByCadetCircuitSaveId(save.getId());
+        Map<UUID, CadetVerificationResult> resultByCheckId = allResults.stream()
+                .collect(Collectors.toMap(r -> r.getCheck().getId(), r -> r));
+
+        for (CircuitVerificationCheck check : checks) {
+            boolean isSimPhase = switch (check.getCheckType()) {
+                case GPIO_BEHAVIOR, SERIAL_OUTPUT, PWM -> true;
+                default -> false;
+            };
+            if (!isSimPhase) continue;
+
+            boolean passed = switch (check.getCheckType()) {
+                case GPIO_BEHAVIOR -> checkGpioBehavior(check, request);
+                case SERIAL_OUTPUT -> checkSerialOutput(check, request);
+                case PWM -> checkPwm(check, request);
+                default -> false;
+            };
+
+            CadetVerificationResult result = resultByCheckId.get(check.getId());
+            if (result == null) {
+                result = CadetVerificationResult.builder()
+                        .cadetCircuitSave(save)
+                        .check(check)
+                        .build();
+            }
+            result.setPassed(passed);
+            resultRepository.save(result);
+        }
+
+        return resultRepository.findAllByCadetCircuitSaveId(save.getId()).stream()
+                .map(r -> toResponse(r, checksById))
+                .toList();
+    }
+
+    /**
+     * Expected value format: "PIN_&lt;number&gt;:&lt;HIGH|LOW&gt;" e.g. "PIN_13:HIGH"
+     */
+    private boolean checkGpioBehavior(CircuitVerificationCheck check, VerifyBehaviorRequest request) {
+        if (check.getExpectedValue() == null || request.getGpioPinStates() == null) return false;
+        String[] parts = check.getExpectedValue().split(":");
+        if (parts.length != 2 || !parts[0].startsWith("PIN_")) return false;
+        String pin = parts[0].substring(4); // strip "PIN_"
+        String expectedState = parts[1].trim().toUpperCase();
+        String observed = request.getGpioPinStates().get(pin);
+        return expectedState.equals(observed != null ? observed.toUpperCase() : null);
+    }
+
+    /**
+     * Expected value is a substring that must appear in at least one serial output line.
+     */
+    private boolean checkSerialOutput(CircuitVerificationCheck check, VerifyBehaviorRequest request) {
+        if (check.getExpectedValue() == null || request.getSerialOutputLines() == null) return false;
+        return request.getSerialOutputLines().stream()
+                .anyMatch(line -> line != null && line.contains(check.getExpectedValue()));
+    }
+
+    /**
+     * Expected value format: "PIN_&lt;number&gt;:&lt;dutyCycle%&gt;" e.g. "PIN_9:50"
+     * Tolerance: ±5 percentage points.
+     */
+    private boolean checkPwm(CircuitVerificationCheck check, VerifyBehaviorRequest request) {
+        if (check.getExpectedValue() == null || request.getPwmDutyCycles() == null) return false;
+        String[] parts = check.getExpectedValue().split(":");
+        if (parts.length != 2 || !parts[0].startsWith("PIN_")) return false;
+        String pin = parts[0].substring(4);
+        try {
+            int expectedDuty = Integer.parseInt(parts[1].trim());
+            Integer observed = request.getPwmDutyCycles().get(pin);
+            if (observed == null) return false;
+            return Math.abs(observed - expectedDuty) <= 5;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     // --- Check implementations ---
