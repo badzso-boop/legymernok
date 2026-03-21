@@ -2,6 +2,7 @@ package com.legymernok.backend.service.circuit;
 
 import com.legymernok.backend.dto.circuit.CompileCircuitResponse;
 import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.integration.GiteaActionsService;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.circuit.BoardType;
 import com.legymernok.backend.model.circuit.CadetCircuitSave;
@@ -12,34 +13,31 @@ import com.legymernok.backend.repository.circuit.CadetCircuitSaveRepository;
 import com.legymernok.backend.repository.circuit.CircuitDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.Base64;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Stream;
 
 /**
- * Compiles an Arduino sketch stored in the cadet's Gitea repo.
+ * Compiles an Arduino sketch by dispatching a Gitea Actions workflow on the cadet's circuit repo.
  *
  * Flow:
- *  1. Fetch sketch.ino from Gitea
- *  2. Write to a temp directory (arduino-cli requires dir name == sketch name)
- *  3. Delegate process execution to ArduinoCliRunner
- *  4. Read the resulting .hex, Base64-encode it
- *  5. Update CadetCircuitSave.simulationStatus + timing fields
- *  6. Return CompileCircuitResponse (hex or error)
+ *  1. Resolve cadet / CircuitDefinition / CadetCircuitSave
+ *  2. Fetch sketch.ino content → compute content-based cache key (SHA-256 of content + fqbn)
+ *  3. Cache check: own save → global (any cadet who compiled the same sketch) → miss → dispatch
+ *  4. Dispatch compile.yml via Gitea Actions API
+ *  5. Poll until the workflow run completes
+ *  6. Download the .hex artifact, encode to Base64
+ *  7. Update CadetCircuitSave.simulationStatus + cache fields
  */
 @Service
 @RequiredArgsConstructor
@@ -52,29 +50,32 @@ public class ArduinoCompilerService {
     private final CircuitDefinitionRepository circuitDefinitionRepository;
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
-    private final ArduinoCliRunner cliRunner;
+    private final GiteaActionsService giteaActionsService;
+
+    @Value("${arduino.compile.poll.timeout-seconds:300}")
+    private int pollTimeoutSeconds;
 
     // --- Public API ---
 
     /**
      * Compiles the sketch for the given cadet + mission asynchronously.
-     * The caller receives a CompletableFuture and can poll the save's simulationStatus
-     * (via GET /circuit/missions/{missionId}) to track progress.
-     * The returned future resolves to the CompileCircuitResponse once compilation finishes.
+     * The caller receives a CompletableFuture; the cadet can poll
+     * GET /circuit/missions/{missionId} to check simulationStatus progress.
      */
-    @Async("compilerExecutor")
-    @Transactional
+    @Async
     public CompletableFuture<CompileCircuitResponse> compile(String username, UUID missionId) {
         var cadet = cadetRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username));
 
         var definition = circuitDefinitionRepository
                 .findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED)
-                .orElseThrow(() -> new ResourceNotFoundException("CircuitDefinition", "missionId/status", missionId + "/PUBLISHED"));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "CircuitDefinition", "missionId/status", missionId + "/PUBLISHED"));
 
         CadetCircuitSave save = saveRepository
                 .findByCadetIdAndCircuitDefinitionId(cadet.getId(), definition.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("CadetCircuitSave", "username/missionId", username + "/" + missionId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "CadetCircuitSave", "username/missionId", username + "/" + missionId));
 
         if (save.getGiteaRepoUrl() == null) {
             return CompletableFuture.completedFuture(
@@ -84,15 +85,35 @@ public class ArduinoCompilerService {
         String repoName = extractRepoName(save.getGiteaRepoUrl());
         String fqbn = toFqbn(definition.getBoardType());
 
-        // --- Compile cache check ---
-        String latestCommit = giteaService.getLatestCommitHash(repoName);
-        String cacheKey = buildCacheKey(save.getGiteaRepoUrl(), latestCommit, fqbn);
+        // --- Content-based compile cache ---
+        // Fetch the sketch source to compute a content hash (same code = same hex, regardless of who wrote it)
+        String sketchContent = giteaService.getFileContent(giteaService.getAdminUsername(), repoName, SKETCH_FILENAME);
+        String cacheKey = buildCacheKey(sketchContent, fqbn);
+
+        // 1. Check own save first (fast path)
         if (cacheKey != null
                 && cacheKey.equals(save.getCompileCacheKey())
                 && save.getCompiledHexBase64() != null) {
-            log.info("Compile cache hit for save {} (key={})", save.getId(), cacheKey);
+            log.info("Compile cache hit (own save) for save {} (key={})", save.getId(), cacheKey);
             return CompletableFuture.completedFuture(
-                    CompileCircuitResponse.cachedSuccess(save.getCompiledHexBase64(), fqbn, definition.getBoardType()));
+                    CompileCircuitResponse.cachedSuccess(
+                            save.getCompiledHexBase64(), fqbn, definition.getBoardType()));
+        }
+
+        // 2. Check global cache: if any other cadet already compiled the exact same sketch, reuse their hex
+        if (cacheKey != null) {
+            var globalHit = saveRepository
+                    .findFirstByCompileCacheKeyAndCompiledHexBase64IsNotNull(cacheKey);
+            if (globalHit.isPresent()) {
+                String cachedHex = globalHit.get().getCompiledHexBase64();
+                log.info("Compile cache hit (global) for save {} (key={})", save.getId(), cacheKey);
+                save.setSimulationStatus(SimulationStatus.NEVER_RUN);
+                save.setCompiledHexBase64(cachedHex);
+                save.setCompileCacheKey(cacheKey);
+                saveRepository.save(save);
+                return CompletableFuture.completedFuture(
+                        CompileCircuitResponse.cachedSuccess(cachedHex, fqbn, definition.getBoardType()));
+            }
         }
 
         // Mark as compiling
@@ -100,80 +121,47 @@ public class ArduinoCompilerService {
         save.setLastCompileError(null);
         saveRepository.save(save);
 
-        // Fetch sketch source
-        String sketchCode = giteaService.getFileContent(giteaService.getAdminUsername(), repoName, SKETCH_FILENAME);
-        if (sketchCode == null) {
-            return CompletableFuture.completedFuture(
-                    failSave(save, "sketch.ino not found in Gitea repository '" + repoName + "'."));
-        }
-
-        return CompletableFuture.completedFuture(
-                doCompile(save, sketchCode, fqbn, definition.getBoardType(), cacheKey));
-    }
-
-    // --- Compilation ---
-
-    private CompileCircuitResponse doCompile(CadetCircuitSave save, String sketchCode, String fqbn, BoardType boardType, String cacheKey) {
-        Path tempRoot = null;
+        long startMs = System.currentTimeMillis();
         try {
-            // arduino-cli requires: <tempRoot>/sketch/sketch.ino
-            tempRoot = Files.createTempDirectory("arduino-" + save.getId());
-            Path sketchDir = tempRoot.resolve("sketch");
-            Files.createDirectories(sketchDir);
-            Files.writeString(sketchDir.resolve(SKETCH_FILENAME), sketchCode);
+            // Dispatch the compile.yml workflow on the cadet's circuit repo
+            Instant dispatchedAt = giteaActionsService.dispatchCompileWorkflow(
+                    repoName, fqbn, save.getId());
 
-            Path outputDir = tempRoot.resolve("output");
-            Files.createDirectories(outputDir);
+            // Poll until the workflow run completes
+            GiteaActionsService.WorkflowRunResult runResult =
+                    giteaActionsService.pollUntilComplete(repoName, dispatchedAt, pollTimeoutSeconds);
 
-            long startMs = System.currentTimeMillis();
-            ArduinoCliRunner.Result result = cliRunner.run(fqbn, sketchDir, outputDir);
+            if (!runResult.success()) {
+                return CompletableFuture.completedFuture(failSave(save,
+                        "Compilation workflow failed with conclusion: " + runResult.conclusion()));
+            }
+
+            // Download the compiled .hex artifact
+            byte[] hexBytes = giteaActionsService.downloadHexArtifact(
+                    repoName, runResult.runId(), save.getId());
+
             long elapsedMs = System.currentTimeMillis() - startMs;
-
-            if (!result.success()) {
-                log.warn("Compile failed for save {}: {}", save.getId(), result.output());
-                return failSave(save, result.output());
-            }
-
-            // arduino-cli names the hex: <outputDir>/sketch.ino.hex
-            Path hexFile = outputDir.resolve(SKETCH_FILENAME + ".hex");
-            if (!Files.exists(hexFile)) {
-                // Some versions use <outputDir>/<board_fqbn_flat>/sketch.ino.hex
-                hexFile = findHexFile(outputDir);
-            }
-            if (hexFile == null || !Files.exists(hexFile)) {
-                return failSave(save, "Compilation succeeded but .hex file not found in output directory.");
-            }
-
-            byte[] hexBytes = Files.readAllBytes(hexFile);
             String hexBase64 = Base64.getEncoder().encodeToString(hexBytes);
 
-            save.setSimulationStatus(SimulationStatus.NEVER_RUN); // ready to simulate, not yet running
+            save.setSimulationStatus(SimulationStatus.NEVER_RUN);
             save.setCompilationTimeMs(elapsedMs);
             save.setSimulationStartedAt(null);
-            // Store compiled hex in cache
             save.setCompiledHexBase64(hexBase64);
             save.setCompileCacheKey(cacheKey);
             saveRepository.save(save);
 
-            log.info("Compile OK for save {} in {}ms, hex size {} bytes.", save.getId(), elapsedMs, hexBytes.length);
-            return CompileCircuitResponse.success(hexBase64, fqbn, boardType, elapsedMs);
+            log.info("Compile OK for save {} via Gitea Actions in {}ms, hex size {} bytes.",
+                    save.getId(), elapsedMs, hexBytes.length);
+            return CompletableFuture.completedFuture(
+                    CompileCircuitResponse.success(hexBase64, fqbn, definition.getBoardType(), elapsedMs));
 
-        } catch (IOException | InterruptedException e) {
-            log.error("Compiler I/O error for save {}: {}", save.getId(), e.getMessage());
-            Thread.currentThread().interrupt();
-            return failSave(save, "Internal compiler error: " + e.getMessage());
-        } finally {
-            deleteTempDir(tempRoot);
-        }
-    }
-
-    /** Searches recursively for any .hex file under outputDir. */
-    private Path findHexFile(Path outputDir) throws IOException {
-        try (Stream<Path> paths = Files.walk(outputDir)) {
-            return paths
-                    .filter(p -> p.toString().endsWith(".hex"))
-                    .min(Comparator.comparingInt(p -> p.getNameCount()))
-                    .orElse(null);
+        } catch (IOException e) {
+            log.error("Artifact download error for save {}: {}", save.getId(), e.getMessage());
+            return CompletableFuture.completedFuture(
+                    failSave(save, "Failed to retrieve compiled artifact: " + e.getMessage()));
+        } catch (RuntimeException e) {
+            log.error("Compile workflow error for save {}: {}", save.getId(), e.getMessage());
+            return CompletableFuture.completedFuture(failSave(save, e.getMessage()));
         }
     }
 
@@ -190,10 +178,17 @@ public class ArduinoCompilerService {
         };
     }
 
-    private String buildCacheKey(String repoUrl, String commitHash, String fqbn) {
-        if (repoUrl == null || commitHash == null || fqbn == null) return null;
+    /**
+     * Builds a content-based cache key from the sketch source and FQBN.
+     * The same sketch compiled for the same board always produces the same .hex,
+     * so this key is safe to share globally across all cadets.
+     *
+     * Returns null if sketchContent is null (e.g. empty/new repo) — cache is then bypassed.
+     */
+    private String buildCacheKey(String sketchContent, String fqbn) {
+        if (sketchContent == null || fqbn == null) return null;
         try {
-            String input = repoUrl + "|" + commitHash + "|" + fqbn;
+            String input = sketchContent + "|" + fqbn;
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
@@ -216,16 +211,5 @@ public class ArduinoCompilerService {
         save.setLastCompileError(error);
         saveRepository.save(save);
         return CompileCircuitResponse.error(error);
-    }
-
-    private void deleteTempDir(Path dir) {
-        if (dir == null) return;
-        try (Stream<Path> paths = Files.walk(dir)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.delete(p); } catch (IOException ignored) {}
-            });
-        } catch (IOException e) {
-            log.warn("Failed to clean temp dir {}: {}", dir, e.getMessage());
-        }
     }
 }

@@ -103,7 +103,10 @@ public class CadetCircuitService {
         // we don't leave a broken DB record. On DB failure the Gitea repo becomes
         // an orphan — known architectural limitation documented in CLAUDE.md.
         String missionId = definition.getMission().getId().toString();
-        String giteaRepoUrl = giteaService.createMissionRepository(missionId, "", cadet, MissionType.CIRCUIT_SIMULATION);
+        // Cadet repo name follows the same convention as coding/quiz missions: cadet-{username}-{missionId}
+        // This avoids colliding with the admin's forge repo (also named after the missionId).
+        String cadetRepoName = "cadet-" + cadet.getUsername() + "-" + missionId;
+        String giteaRepoUrl = giteaService.createMissionRepository(cadetRepoName, "", cadet, MissionType.CIRCUIT_SIMULATION);
         log.info("Gitea circuit repo created for cadet '{}', mission {}: {}", cadet.getUsername(), missionId, giteaRepoUrl);
 
         CadetCircuitSave save = saveRepository.save(CadetCircuitSave.builder()
@@ -214,8 +217,15 @@ public class CadetCircuitService {
         Map<UUID, CircuitVerificationCheck> checksById = checks.stream()
                 .collect(Collectors.toMap(CircuitVerificationCheck::getId, c -> c));
 
+        // Bulk-fetch all properties for all components in a single query, then group by component ID
+        List<UUID> componentIds = components.stream().map(CadetCircuitComponent::getId).toList();
+        Map<UUID, List<CadetCircuitComponentProperty>> propsByComponentId = componentIds.isEmpty()
+                ? Map.of()
+                : propertyRepository.findAllByCadetComponentIdIn(componentIds).stream()
+                        .collect(Collectors.groupingBy(p -> p.getCadetComponent().getId()));
+
         List<CadetCircuitComponentResponse> componentResponses = components.stream().map(comp -> {
-            List<CadetCircuitComponentProperty> props = propertyRepository.findAllByCadetComponentId(comp.getId());
+            List<CadetCircuitComponentProperty> props = propsByComponentId.getOrDefault(comp.getId(), List.of());
             return CadetCircuitComponentResponse.builder()
                     .id(comp.getId())
                     .componentType(comp.getComponentType())

@@ -8,12 +8,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 @Repository
 public interface CadetCircuitComponentPropertyRepository extends JpaRepository<CadetCircuitComponentProperty, UUID> {
     List<CadetCircuitComponentProperty> findAllByCadetComponentId(UUID cadetComponentId);
+    List<CadetCircuitComponentProperty> findAllByCadetComponentIdIn(Collection<UUID> cadetComponentIds);
     void deleteAllByCadetComponentId(UUID cadetComponentId);
 
     @Modifying
