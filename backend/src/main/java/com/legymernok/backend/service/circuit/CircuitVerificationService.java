@@ -158,7 +158,7 @@ public class CircuitVerificationService {
     private boolean checkGpioBehavior(CircuitVerificationCheck check, VerifyBehaviorRequest request) {
         if (check.getExpectedValue() == null || request.getGpioPinStates() == null) return false;
         String[] parts = check.getExpectedValue().split(":");
-        if (parts.length != 2 || !parts[0].startsWith("PIN_")) return false;
+        if (parts.length != 2 || !parts[0].startsWith("PIN_") || parts[0].length() < 5) return false;
         String pin = parts[0].substring(4); // strip "PIN_"
         String expectedState = parts[1].trim().toUpperCase();
         String observed = request.getGpioPinStates().get(pin);
@@ -181,7 +181,7 @@ public class CircuitVerificationService {
     private boolean checkPwm(CircuitVerificationCheck check, VerifyBehaviorRequest request) {
         if (check.getExpectedValue() == null || request.getPwmDutyCycles() == null) return false;
         String[] parts = check.getExpectedValue().split(":");
-        if (parts.length != 2 || !parts[0].startsWith("PIN_")) return false;
+        if (parts.length != 2 || !parts[0].startsWith("PIN_") || parts[0].length() < 5) return false;
         String pin = parts[0].substring(4);
         try {
             int expectedDuty = Integer.parseInt(parts[1].trim());

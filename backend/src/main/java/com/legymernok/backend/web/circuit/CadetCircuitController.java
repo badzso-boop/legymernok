@@ -4,6 +4,8 @@ import com.legymernok.backend.dto.circuit.CadetCircuitSaveResponse;
 import com.legymernok.backend.dto.circuit.CadetVerificationResultResponse;
 import com.legymernok.backend.dto.circuit.SaveCadetCircuitRequest;
 import com.legymernok.backend.dto.circuit.VerifyBehaviorRequest;
+import com.legymernok.backend.exception.ResourceConflictException;
+import com.legymernok.backend.model.circuit.SimulationStatus;
 import com.legymernok.backend.service.circuit.ArduinoCompilerService;
 import com.legymernok.backend.service.circuit.CadetCircuitService;
 import com.legymernok.backend.service.circuit.CircuitVerificationService;
@@ -59,6 +61,9 @@ public class CadetCircuitController {
     @PreAuthorize("hasAuthority('circuit:simulate')")
     public ResponseEntity<Void> compile(@PathVariable UUID missionId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (cadetCircuitService.getCadetCircuitSave(username, missionId).getSimulationStatus() == SimulationStatus.COMPILING) {
+            throw new ResourceConflictException("CadetCircuitSave", "simulationStatus", "COMPILING");
+        }
         arduinoCompilerService.compile(username, missionId); // fire-and-forget
         return ResponseEntity.accepted().build();
     }

@@ -240,9 +240,15 @@ public class CircuitDefinitionService {
         List<CircuitDefConnection> connections = connectionRepository.findAllByCircuitDefinitionId(def.getId());
         List<CircuitVerificationCheck> checks = checkRepository.findAllByCircuitDefinitionIdOrderByOrderIndex(def.getId());
 
-        // Build properties per component individually
+        // Bulk-fetch all properties for all components in a single query, then group by component ID
+        List<UUID> componentIds = components.stream().map(CircuitDefComponent::getId).toList();
+        Map<UUID, List<CircuitDefComponentProperty>> propsByComponentId = componentIds.isEmpty()
+                ? Map.of()
+                : propertyRepository.findAllByComponentIdIn(componentIds).stream()
+                        .collect(Collectors.groupingBy(p -> p.getComponent().getId()));
+
         List<CircuitDefComponentResponse> componentResponses = components.stream().map(comp -> {
-            List<CircuitDefComponentProperty> props = propertyRepository.findAllByComponentId(comp.getId());
+            List<CircuitDefComponentProperty> props = propsByComponentId.getOrDefault(comp.getId(), List.of());
             return CircuitDefComponentResponse.builder()
                     .id(comp.getId())
                     .componentType(comp.getComponentType())

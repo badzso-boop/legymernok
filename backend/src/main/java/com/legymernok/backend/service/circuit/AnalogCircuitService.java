@@ -195,8 +195,11 @@ public class AnalogCircuitService {
                 yield observed != null && Math.abs(observed - expected) <= tolerance;
             }
             case COMPONENT_EXISTS -> {
-                // The cadet-submitted Falstad text is in the save — check if label appears
-                yield true; // Topology check; Falstad parsing out of scope for MVP
+                // Falstad szöveg parszolása MVP-n kívül esik: a komponens label-ek nem
+                // azonosíthatók egyértelműen a Falstad formátumból regex alapján.
+                // false-t adunk vissza, hogy ne legyen félrevezető az ellenőrzés eredménye.
+                // TODO: implementálni, ha a Falstad formátum parszolása elkészül.
+                yield false;
             }
             case LED_LIGHTS -> {
                 // LED lights if current through it exceeds threshold (expected = min current in A)
