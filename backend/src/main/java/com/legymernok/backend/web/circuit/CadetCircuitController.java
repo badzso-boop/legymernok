@@ -4,9 +4,6 @@ import com.legymernok.backend.dto.circuit.CadetCircuitSaveResponse;
 import com.legymernok.backend.dto.circuit.CadetVerificationResultResponse;
 import com.legymernok.backend.dto.circuit.SaveCadetCircuitRequest;
 import com.legymernok.backend.dto.circuit.VerifyBehaviorRequest;
-import com.legymernok.backend.exception.ResourceConflictException;
-import com.legymernok.backend.model.circuit.SimulationStatus;
-import com.legymernok.backend.service.circuit.ArduinoCompilerService;
 import com.legymernok.backend.service.circuit.CadetCircuitService;
 import com.legymernok.backend.service.circuit.CircuitVerificationService;
 import jakarta.validation.Valid;
@@ -27,7 +24,6 @@ public class CadetCircuitController {
 
     private final CadetCircuitService cadetCircuitService;
     private final CircuitVerificationService circuitVerificationService;
-    private final ArduinoCompilerService arduinoCompilerService;
 
     @PostMapping("/{missionId}/start")
     @PreAuthorize("hasAuthority('circuit:simulate')")
@@ -49,23 +45,6 @@ public class CadetCircuitController {
                                                                 @Valid @RequestBody SaveCadetCircuitRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return ResponseEntity.ok(cadetCircuitService.saveCanvas(username, missionId, request));
-    }
-
-    /**
-     * Triggers async compilation of the cadet's sketch.ino from the Gitea repo.
-     * Returns 202 Accepted immediately. Poll GET /{missionId} and check
-     * {@code simulationStatus}: COMPILING → in progress, NEVER_RUN → success,
-     * COMPILE_ERROR → failure (see {@code lastCompileError}).
-     */
-    @PostMapping("/{missionId}/compile")
-    @PreAuthorize("hasAuthority('circuit:simulate')")
-    public ResponseEntity<Void> compile(@PathVariable UUID missionId) {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        if (cadetCircuitService.getCadetCircuitSave(username, missionId).getSimulationStatus() == SimulationStatus.COMPILING) {
-            throw new ResourceConflictException("CadetCircuitSave", "simulationStatus", "COMPILING");
-        }
-        arduinoCompilerService.compile(username, missionId); // fire-and-forget
-        return ResponseEntity.accepted().build();
     }
 
     @PostMapping("/{missionId}/verify")

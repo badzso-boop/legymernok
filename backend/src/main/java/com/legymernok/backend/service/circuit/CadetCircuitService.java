@@ -3,12 +3,10 @@ package com.legymernok.backend.service.circuit;
 import com.legymernok.backend.dto.circuit.*;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
-import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.circuit.*;
 import com.legymernok.backend.model.mission.MissionStatus;
-import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.circuit.*;
@@ -38,7 +36,6 @@ public class CadetCircuitService {
     private final CadetMissionRepository cadetMissionRepository;
     private final UnitOfMeasureService unitOfMeasureService;
     private final CircuitVerificationCheckRepository checkRepository;
-    private final GiteaService giteaService;
 
     /**
      * Creates a CadetCircuitSave if not yet started, copies template components + properties.
@@ -99,20 +96,9 @@ public class CadetCircuitService {
     // --- Template copy ---
 
     private CadetCircuitSaveResponse createSaveFromTemplate(Cadet cadet, CircuitDefinition definition) {
-        // Create the Gitea repo before touching the DB so that on Gitea failure
-        // we don't leave a broken DB record. On DB failure the Gitea repo becomes
-        // an orphan — known architectural limitation documented in CLAUDE.md.
-        String missionId = definition.getMission().getId().toString();
-        // Cadet repo name follows the same convention as coding/quiz missions: cadet-{username}-{missionId}
-        // This avoids colliding with the admin's forge repo (also named after the missionId).
-        String cadetRepoName = "cadet-" + cadet.getUsername() + "-" + missionId;
-        String giteaRepoUrl = giteaService.createMissionRepository(cadetRepoName, "", cadet, MissionType.CIRCUIT_SIMULATION);
-        log.info("Gitea circuit repo created for cadet '{}', mission {}: {}", cadet.getUsername(), missionId, giteaRepoUrl);
-
         CadetCircuitSave save = saveRepository.save(CadetCircuitSave.builder()
                 .cadet(cadet)
                 .circuitDefinition(definition)
-                .giteaRepoUrl(giteaRepoUrl)
                 .build());
 
         // Register the cadet's participation in the mission (idempotent)
@@ -121,7 +107,6 @@ public class CadetCircuitService {
                         .cadet(cadet)
                         .mission(definition.getMission())
                         .status(MissionStatus.IN_PROGRESS)
-                        .repositoryUrl(giteaRepoUrl)
                         .startedAt(java.time.Instant.now())
                         .build()));
 
@@ -262,13 +247,8 @@ public class CadetCircuitService {
         return CadetCircuitSaveResponse.builder()
                 .id(save.getId())
                 .circuitDefinitionId(save.getCircuitDefinition().getId())
-                .giteaRepoUrl(save.getGiteaRepoUrl())
-                .lastCompileError(save.getLastCompileError())
                 .stale(save.isStale())
                 .simulationStatus(save.getSimulationStatus())
-                .simulationStartedAt(save.getSimulationStartedAt())
-                .compilationTimeMs(save.getCompilationTimeMs())
-                .totalTimeSpentMs(save.getTotalTimeSpentMs())
                 .components(componentResponses)
                 .connections(connectionResponses)
                 .verificationResults(resultResponses)

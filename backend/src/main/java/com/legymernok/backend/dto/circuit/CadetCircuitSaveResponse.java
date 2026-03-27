@@ -14,11 +14,6 @@ public class CadetCircuitSaveResponse {
     private UUID id;
     private UUID circuitDefinitionId;
     private SimulationStatus simulationStatus;
-    private Instant simulationStartedAt;
-    private Long compilationTimeMs;
-    private Long totalTimeSpentMs;
-    private String giteaRepoUrl;
-    private String lastCompileError;
     private boolean stale;
     private List<CadetCircuitComponentResponse> components;
     private List<CadetCircuitConnectionResponse> connections;

@@ -20,6 +20,4 @@ public interface CadetCircuitSaveRepository extends JpaRepository<CadetCircuitSa
     @EntityGraph(attributePaths = {"circuitDefinition", "cadet"})
     Optional<CadetCircuitSave> findById(UUID id);
 
-    // Global compile cache: finds any save that already has this content-based cache key compiled
-    Optional<CadetCircuitSave> findFirstByCompileCacheKeyAndCompiledHexBase64IsNotNull(String compileCacheKey);
 }
