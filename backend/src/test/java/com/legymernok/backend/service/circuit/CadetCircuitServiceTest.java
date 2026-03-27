@@ -89,8 +89,6 @@ class CadetCircuitServiceTest {
         when(circuitDefinitionRepository.findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED))
                 .thenReturn(Optional.of(def));
         when(saveRepository.findByCadetIdAndCircuitDefinitionId(cadetId, defId)).thenReturn(Optional.empty());
-        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any(MissionType.class)))
-                .thenReturn("http://gitea:3000/legymernok_admin/circuit-" + missionId + "-cadet1");
         when(saveRepository.save(any())).thenReturn(save);
         when(cadetMissionRepository.findByCadetIdAndMissionId(cadetId, missionId)).thenReturn(Optional.empty());
         when(cadetMissionRepository.save(any())).thenReturn(null);
@@ -159,8 +157,6 @@ class CadetCircuitServiceTest {
         when(circuitDefinitionRepository.findByMissionIdAndStatus(missionId, CircuitDefinitionStatus.PUBLISHED))
                 .thenReturn(Optional.of(def));
         when(saveRepository.findByCadetIdAndCircuitDefinitionId(cadetId, defId)).thenReturn(Optional.empty());
-        when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any(MissionType.class)))
-                .thenReturn("http://gitea:3000/legymernok_admin/circuit-" + missionId + "-cadet1");
         when(saveRepository.save(any())).thenReturn(save);
         when(cadetMissionRepository.findByCadetIdAndMissionId(cadetId, missionId)).thenReturn(Optional.empty());
         when(cadetMissionRepository.save(any())).thenReturn(null);
