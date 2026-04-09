@@ -317,8 +317,8 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                             <MenuItem value="QUIZ">
                               {t("missionTypes.quiz").toUpperCase()}
                             </MenuItem>
-                            <MenuItem value="CHALLENGE">
-                              {t("missionTypes.challenge").toUpperCase()}
+                            <MenuItem value="CIRCUIT_SIMULATION">
+                              {t("missionTypes.circuitSimulation").toUpperCase()}
                             </MenuItem>
                           </Select>
                         )}
@@ -327,7 +327,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                   </Grid>
 
                   <Grid size={6}>
-                    {watch("missionType") !== "QUIZ" && (
+                    {watch("missionType") !== "QUIZ" && watch("missionType") !== "CIRCUIT_SIMULATION" && (
                       <FormControl
                         fullWidth
                         variant="filled"

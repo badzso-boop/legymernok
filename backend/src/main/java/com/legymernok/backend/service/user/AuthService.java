@@ -53,7 +53,7 @@ public class AuthService {
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        // 1. Validáció (Service szinten is, bár a Controller @Valid is elkaphatná)
+        // 1. Validation (also at service level, although the Controller @Valid could catch it too)
         if (cadetRepository.existsByUsername(request.getUsername())) {
             throw new ResourceConflictException("Cadet", "username", request.getUsername());
         }
@@ -61,14 +61,14 @@ public class AuthService {
             throw new ResourceConflictException("Cadet", "email", request.getEmail());
         }
 
-        // 2. Gitea User létrehozása
+        // 2. Create Gitea user
         Long giteaId = giteaService.createGiteaUser(
                 request.getUsername(),
                 request.getEmail(),
                 request.getPassword()
         );
 
-        // 3. Role beállítása (Alapértelmezett: ROLE_CADET)
+        // 3. Set role (Default: ROLE_CADET)
         Role cadetRole = roleRepository.findByName("ROLE_CADET")
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "ROLE_CADET"));
         Set<Role> roles = new HashSet<>();

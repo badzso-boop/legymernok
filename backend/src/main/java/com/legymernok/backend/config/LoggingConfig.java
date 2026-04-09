@@ -21,20 +21,20 @@ public class LoggingConfig {
     public void configureLogback() {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
 
-        // Encoder beállítása (formázás)
+        // Configure encoder (formatting)
         PatternLayoutEncoder encoder = new PatternLayoutEncoder();
         encoder.setContext(loggerContext);
         encoder.setPattern("%d{yyyy-MM-dd HH:mm:ss.SSS}  %5p --- [%15.15t] %-40.40logger{39} : %m%n");
         encoder.setCharset(StandardCharsets.UTF_8);
         encoder.start();
 
-        // Appender létrehozása
+        // Create appender
         WebSocketLogAppender webSocketAppender = new WebSocketLogAppender(webSocketLogService, encoder);
         webSocketAppender.setContext(loggerContext);
         webSocketAppender.setName("WEBSOCKET");
         webSocketAppender.start();
 
-        // Hozzáadás a ROOT loggerhez
+        // Attach to the ROOT logger
         Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
         rootLogger.addAppender(webSocketAppender);
     }

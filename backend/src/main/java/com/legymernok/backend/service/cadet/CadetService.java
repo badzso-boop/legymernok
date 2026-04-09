@@ -98,24 +98,24 @@ public class CadetService {
                 .orElse(null);
 
         if (inheritanceAdmin != null) {
-            // 2. Átruházzuk a csillagrendszereket
+            // 2. Transfer star systems
             List<StarSystem> systemsToReassign = starSystemRepository.findAllByOwnerId(id);
             for (StarSystem system : systemsToReassign) {
                 system.setOwner(inheritanceAdmin);
                 starSystemRepository.save(system);
             }
 
-            // 3. Átruházzuk a küldetéseket
+            // 3. Transfer missions
             List<Mission> missionsToReassign = missionRepository.findAllByOwnerId(id);
             for (Mission mission : missionsToReassign) {
                 mission.setOwner(inheritanceAdmin);
                 missionRepository.save(mission);
             }
         } else {
-            // Ha nincs "örökös", akkor töröljük a tartalmakat is (vagy dobjunk hibát)
-            // Döntés kérdése. Most tegyük fel, hogy ez hiba.
+            // If there is no "heir", delete the content too (or throw an error)
+            // A design decision. For now, treat this as an error.
             log.warn("Could not delete user {}, no inheritance admin found. Content remains orphaned.", cadet.getUsername());
-            // Itt dobhatnánk egy OperationNotAllowedException-t
+            // An OperationNotAllowedException could be thrown here
         }
 
         try {
@@ -135,31 +135,31 @@ public class CadetService {
         Cadet cadetToUpdate = cadetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cadet", "id", id));
 
-        // Email frissítése, ha meg van adva és nem egyezik a régivel
+        // Update email if provided and different from the current one
         if (request.getEmail() != null && !request.getEmail().equals(cadetToUpdate.getEmail())) {
-            // Ellenőrizzük, hogy az új email cím foglalt-e már
+            // Check if the new email address is already taken
             if (cadetRepository.existsByEmail(request.getEmail())) {
                 throw new ResourceConflictException("Cadet", "email", request.getEmail());
             }
             cadetToUpdate.setEmail(request.getEmail());
-            // TODO: Gitea email frissítése, ha a GiteaService támogatja
+            // TODO: Update Gitea email if GiteaService supports it
         }
 
-        // Jelszó frissítése, csak ha megadtak újat
+        // Update password only if a new one is provided
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             cadetToUpdate.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-            // TODO: Gitea jelszó frissítése, ha a GiteaService támogatja
+            // TODO: Update Gitea password if GiteaService supports it
         }
 
-        // Szerepkör frissítése, csak ha tényleg változott
+        // Update role only if it actually changed
         if (request.getRole() != null && !request.getRole().isBlank()) {
-            // Lekérdezzük a felhasználó jelenlegi (első) szerepkörének nevét
+            // Get the user's current (first) role name
             String currentRoleName = cadetToUpdate.getRoles().stream()
                     .map(Role::getName)
                     .findFirst()
                     .orElse(null);
 
-            // Csak akkor módosítunk, ha a kérésben lévő szerepkör eltér a jelenlegitől
+            // Only update if the requested role differs from the current one
             if (!request.getRole().equals(currentRoleName)) {
                 Role newRole = roleRepository.findByName(request.getRole())
                         .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
