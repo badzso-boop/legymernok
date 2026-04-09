@@ -21,6 +21,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
   RocketLaunch as MissionIcon,
+  ElectricBolt as ElectricBoltIcon,
 } from "@mui/icons-material";
 import axios from "axios";
 import type { StarSystemResponse } from "../../../types/starSystem";
@@ -145,17 +146,20 @@ const MissionEdit: React.FC = () => {
       };
 
       if (isNew) {
-        await axios.post(`${API_URL}/missions`, payload, {
+        const res = await axios.post<{ id: string }>(`${API_URL}/missions`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (mission.missionType === "CIRCUIT_SIMULATION") {
+          navigate(`/admin/circuit/${res.data.id}`);
+        } else {
+          navigate(`/admin/star-systems/${mission.starSystemId}`);
+        }
       } else {
         await axios.put(`${API_URL}/missions/${id}`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        navigate(`/admin/star-systems/${mission.starSystemId}`);
       }
-
-      // Visszanavigálunk a csillagrendszer szerkesztőhöz
-      navigate(`/admin/star-systems/${mission.starSystemId}`);
     } catch (err: any) {
       setError(err.response?.data?.message || t("errorSaveMission"));
     } finally {
@@ -321,6 +325,17 @@ const MissionEdit: React.FC = () => {
                 gap: 2,
               }}
             >
+              {!isNew && mission.missionType === "CIRCUIT_SIMULATION" && (
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<ElectricBoltIcon />}
+                  onClick={() => navigate(`/admin/circuit/${id}`)}
+                  data-cy="circuit-forge-btn"
+                >
+                  {t("circuit.openForge")}
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 onClick={() =>

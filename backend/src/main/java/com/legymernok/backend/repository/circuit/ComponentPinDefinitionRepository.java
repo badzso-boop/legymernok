@@ -14,4 +14,6 @@ public interface ComponentPinDefinitionRepository extends JpaRepository<Componen
     List<ComponentPinDefinition> findAllByComponentType(ComponentType componentType);
     List<ComponentPinDefinition> findAllByComponentTypeAndBoardTypeIsNull(ComponentType componentType);
     List<ComponentPinDefinition> findAllByComponentTypeAndBoardType(ComponentType componentType, BoardType boardType);
+    boolean existsByComponentTypeAndBoardTypeAndPinName(ComponentType componentType, BoardType boardType, String pinName);
+    boolean existsByComponentTypeAndBoardTypeIsNullAndPinName(ComponentType componentType, String pinName);
 }

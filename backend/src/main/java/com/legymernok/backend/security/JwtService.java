@@ -26,7 +26,7 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
-    // Username kinyerése a tokenből
+    // Extract username from the token
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
@@ -50,7 +50,7 @@ public class JwtService {
                 .compact();
     }
 
-    // Token validálás
+    // Token validation
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
@@ -78,11 +78,11 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey); // Vagy simán getBytes(), ha nem Base64 a secret
-        // Ha a fenti egyszerű stringet használod és hibát dob a Base64 miatt, használd ezt:
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey); // Or simply getBytes() if the secret is not Base64
+        // If the simple string above throws a Base64 error, use this:
         // return Keys.hmacShaKeyFor(secretKey.getBytes());
-        // De a szabványos az, ha Base64 kódolt kulcsot adsz meg a properties-ben.
-        // MOST A legegyszerűbb, ha a kulcsot bytes-ra konvertáljuk simán:
+        // The standard approach is to provide a Base64-encoded key in the properties file.
+        // The simplest solution right now: convert the key to bytes directly:
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 }

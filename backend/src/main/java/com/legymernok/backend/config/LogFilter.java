@@ -20,7 +20,7 @@ public class LogFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Cache-eljük a request/response body-t, hogy ki tudjuk olvasni (különben a stream bezáródna)
+        // Cache the request/response body so we can read it (otherwise the stream would close)
         ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request, 10);
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
 
@@ -31,13 +31,13 @@ public class LogFilter extends OncePerRequestFilter {
         } finally {
             long duration = System.currentTimeMillis() - startTime;
 
-            // Logolás
+            // Logging
             String requestBody = new String(requestWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
-            // Csak akkor logoljuk a body-t, ha nem túl hosszú és nem fájlfeltöltés
+            // Only log the body if it's not too long and not a file upload
             if (requestBody.length() > 1000 || request.getContentType() != null && request.getContentType().contains("multipart")) {
                 requestBody = "[Body too large or binary]";
             }
-            // Password kiszűrése (primitív megoldás, de véd a véletlen logolástól)
+            // Filter out password (primitive solution, but protects against accidental logging)
             if (requestBody.contains("\"password\"")) {
                 requestBody = "[HIDDEN SENSITIVE DATA]";
             }
@@ -49,7 +49,7 @@ public class LogFilter extends OncePerRequestFilter {
                     duration,
                     requestBody.isEmpty() ? "[Empty]" : requestBody);
 
-            // Fontos: a választ vissza kell másolni az eredeti response-ba!
+            // Important: the response must be copied back to the original response!
             responseWrapper.copyBodyToResponse();
         }
     }

@@ -25,10 +25,20 @@ const MissionForgePage: React.FC = () => {
     enabled: !!missionId,
   });
 
+  React.useEffect(() => {
+    if (mission?.missionType === "CIRCUIT_SIMULATION") {
+      navigate(`/admin/circuit/${missionId}`, { replace: true });
+    }
+  }, [mission?.missionType, missionId, navigate]);
+
   const handleMissionInitialized = (
     initializedMission: MissionForgeResponse,
   ) => {
-    navigate(`/forge/${initializedMission.id}`);
+    if (initializedMission.missionType === "CIRCUIT_SIMULATION") {
+      navigate(`/admin/circuit/${initializedMission.id}`);
+    } else {
+      navigate(`/forge/${initializedMission.id}`);
+    }
   };
 
   if (missionId && isLoading) {
@@ -102,9 +112,9 @@ const MissionForgePage: React.FC = () => {
           <ForgeConfigPanel onMissionInitialized={handleMissionInitialized} />
         ) : mission?.missionType === "QUIZ" ? (
           <QuizEditor missionId={missionId} />
-        ) : (
+        ) : mission?.missionType !== "CIRCUIT_SIMULATION" ? (
           <ForgeEditor missionId={missionId} />
-        )}
+        ) : null}
       </Box>
     </Box>
   );

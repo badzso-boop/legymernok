@@ -36,7 +36,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // Nyilvános végpontok: Login, Regisztráció, Swagger
+                        // Public endpoints: Login, Registration, Swagger
                         .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
@@ -49,8 +49,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // JWT-vel stateless a session
-                // Itt kötjük be a JWT filtert a UsernamePasswordAuthenticationFilter ELÉ!
+                // Session is stateless with JWT
+                // Here we register the JWT filter BEFORE the UsernamePasswordAuthenticationFilter!
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -59,7 +59,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Hozzáadtam a gyakori portokat a biztonság kedvéért
+        // Added common ports for convenience
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",

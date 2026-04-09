@@ -30,20 +30,20 @@ public class QuizService {
     private final QuizSessionRepository quizSessionRepository;
     private final MissionRepository missionRepository;
     private final MissionResultRepository missionResultRepository;
-    private final ObjectMapper objectMapper; // JSON deszerializáláshoz
+    private final ObjectMapper objectMapper; // For JSON deserialization
 
     @Transactional
     public QuizDefinition startQuiz(UUID missionId, Cadet cadet) throws Exception {
-        // 1. Megkeressük a küldetést
+        // 1. Find the mission
         Mission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
 
         if (mission.getMissionType() != MissionType.QUIZ) {
             throw new ResourceConflictException("Mission", "type", mission.getMissionType(),
-                    "Ez a küldetés nem kvíz típusú, így nem indítható el a kvíz motorral.");
+                    "This mission is not of quiz type and cannot be started with the quiz engine.");
         }
 
-        // 2. Megnézzük, van-e már aktív munkamenet
+        // 2. Check if there is already an active session
         Optional<QuizSession> existingSession = quizSessionRepository.findByMissionIdAndCadetId(missionId, cadet.getId());
 
         QuizDefinition fullQuiz;
@@ -54,9 +54,9 @@ public class QuizService {
             fullQuiz = objectMapper.readValue(session.getQuizSnapshot(), QuizDefinition.class);
             log.info("Resuming existing quiz session for mission {}", missionId);
         } else {
-            // 3. Letöltjük a kvízt a Giteából
+            // 3. Download the quiz from Gitea
             String owner = giteaService.getAdminUsername();
-            String repoName = mission.getId().toString(); // A repó neve a misszió UUID-je
+            String repoName = mission.getId().toString(); // The repo name is the mission UUID
             String jsonContent = giteaService.getFileContent(owner, repoName, "quiz.json");
 
             if (jsonContent == null) {
@@ -65,7 +65,7 @@ public class QuizService {
 
             fullQuiz = objectMapper.readValue(jsonContent, QuizDefinition.class);
 
-            // 4. Munkamenet létrehozása
+            // 4. Create session
             Instant now = Instant.now();
             int timeLimit = fullQuiz.getConfig().getTimeLimitSeconds();
 
@@ -81,7 +81,7 @@ public class QuizService {
             log.info("Started new quiz session for mission {}", missionId);
         }
 
-        // 5. Biztonsági szűrés: megoldások eltávolítása a válaszból
+        // 5. Security filter: remove answers from the response
         return stripAnswers(fullQuiz);
     }
 
@@ -108,7 +108,7 @@ public class QuizService {
                     "MissionResult",
                     "submissionHash",
                     submissionHash,
-                    "Ezeket a válaszokat már beküldted korábban. Itt az akkori eredményed:"
+                    "You have already submitted these answers before. Here is your previous result:"
             );
             ex.setData(duplicate.orElseThrow());
             throw ex;
@@ -175,7 +175,7 @@ public class QuizService {
                 .anyMatch(a -> a.getAuthority().equals("mission:edit_any"));
 
         if (!isOwner && !canEditAny) {
-            throw new UnauthorizedAccessException("Nincs jogosultságod törölni más misszió sessionjeit.");
+            throw new UnauthorizedAccessException("You do not have permission to delete sessions of other missions.");
         }
 
         quizSessionRepository.deleteAllByMissionId(missionId);
@@ -184,18 +184,18 @@ public class QuizService {
 
     private String generateSubmissionHash(Map<String, List<String>> answers) {
         try {
-            // 1. Sorba rendezzük a kérdéseket és a válaszokat, hogy determinisztikus legyen
+            // 1. Sort questions and answers to make it deterministic
             TreeMap<String, List<String>> sortedAnswers = new TreeMap<>(answers);
             sortedAnswers.forEach((k, v) -> Collections.sort(v));
 
-            // 2. Szöveggé alakítjuk
+            // 2. Convert to string
             String content = sortedAnswers.toString();
 
             // 3. SHA-256 hash
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
 
-            // 4. Hexadecimális stringgé alakítjuk
+            // 4. Convert to hexadecimal string
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
@@ -210,12 +210,12 @@ public class QuizService {
 
     private QuizDefinition stripAnswers(QuizDefinition fullQuiz) {
         fullQuiz.getQuestions().forEach(q -> {
-            // isMulti kiszámítása isCorrect törlése ELŐTT
+            // Calculate isMulti BEFORE removing isCorrect
             long correctCount = q.getOptions().stream()
                     .filter(o -> Boolean.TRUE.equals(o.getIsCorrect()))
                     .count();
             q.setIsMulti(correctCount > 1);
-            // isCorrect törlése — kliens nem láthatja a helyes válaszokat
+            // Remove isCorrect — the client must not see the correct answers
             q.getOptions().forEach(o -> o.setIsCorrect(null));
         });
         return fullQuiz;

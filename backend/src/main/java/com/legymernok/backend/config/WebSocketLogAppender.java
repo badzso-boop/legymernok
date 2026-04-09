@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 
-// Fontos: Ez nem @Component, mert manuálisan adjuk hozzá a Context-hez
+// Important: This is not a @Component because it is added to the context manually
 public class WebSocketLogAppender extends AppenderBase<ILoggingEvent> {
 
     private final WebSocketLogService webSocketLogService;
@@ -25,11 +25,11 @@ public class WebSocketLogAppender extends AppenderBase<ILoggingEvent> {
     protected void append(ILoggingEvent eventObject) {
         if (webSocketLogService == null) return;
 
-        // Formázzuk a logot a beállított minta szerint
+        // Format the log according to the configured pattern
         byte[] byteArray = encoder.encode(eventObject);
         String formattedLog = new String(byteArray, StandardCharsets.UTF_8);
 
-        // Küldés
+        // Send
         webSocketLogService.sendLog(formattedLog);
     }
 }

@@ -31,19 +31,6 @@ FROM eclipse-temurin:17-jre-focal
 # Set working directory inside the container
 WORKDIR /app
 
-# Install Arduino CLI and pre-download the AVR core so compilation works offline.
-# curl is needed for the install script; we remove it afterwards to keep the image lean.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
-    curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
-        | BINDIR=/usr/local/bin sh && \
-    apt-get purge -y curl && apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
-
-# Pre-install Arduino AVR core (P1 boards: Uno, Mega).
-# ESP8266/ESP32 cores require additional board manager URLs and are installed on demand (P2).
-RUN arduino-cli core update-index && \
-    arduino-cli core install arduino:avr
-
 # Copy the built JAR file from the builder stage
 COPY --from=builder /app/target/*.jar app.jar
 

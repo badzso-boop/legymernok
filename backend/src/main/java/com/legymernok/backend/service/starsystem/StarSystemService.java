@@ -119,14 +119,14 @@ public class StarSystemService {
 
     @Transactional(readOnly = true)
     public StarSystemWithMissionResponse getStarSystemWithMissions(UUID id) {
-        // 1. Csillagrendszer lekérdezése
+        // 1. Query star system
         StarSystem starSystem = starSystemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", id));
 
-        // 2. Küldetések lekérdezése a MissionService segítségével
+        // 2. Query missions using MissionService
         List<MissionResponse> missions = missionService.getMissionsByStarSystem(id);
 
-        // 3. A komplex válasz DTO összeállítása
+        // 3. Assemble the composite response DTO
         return StarSystemWithMissionResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
@@ -138,7 +138,7 @@ public class StarSystemService {
                 .build();
     }
 
-    // Segédmetódus a StarSystem entitás Response DTO-vá alakításához
+    // Helper method to map a StarSystem entity to a Response DTO
     private StarSystemResponse mapToResponse(StarSystem starSystem) {
         return StarSystemResponse.builder()
                 .id(starSystem.getId())

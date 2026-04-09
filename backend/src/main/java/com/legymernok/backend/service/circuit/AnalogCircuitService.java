@@ -195,10 +195,10 @@ public class AnalogCircuitService {
                 yield observed != null && Math.abs(observed - expected) <= tolerance;
             }
             case COMPONENT_EXISTS -> {
-                // Falstad szöveg parszolása MVP-n kívül esik: a komponens label-ek nem
-                // azonosíthatók egyértelműen a Falstad formátumból regex alapján.
-                // false-t adunk vissza, hogy ne legyen félrevezető az ellenőrzés eredménye.
-                // TODO: implementálni, ha a Falstad formátum parszolása elkészül.
+                // Parsing Falstad text is outside the MVP scope: component labels cannot
+                // be reliably identified from the Falstad format using regex.
+                // Returning false to avoid misleading verification results.
+                // TODO: implement once Falstad format parsing is complete.
                 yield false;
             }
             case LED_LIGHTS -> {

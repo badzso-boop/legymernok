@@ -46,29 +46,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             username = jwtService.extractUsername(jwt);
         } catch (Exception e) {
-            // Ha a token hibás vagy lejárt, nem állítunk be semmit
+            // If the token is invalid or expired, we don't set anything
             filterChain.doFilter(request, response);
             return;
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            // 1. BETÖLTJÜK A USERT AZ ADATBÁZISBÓL (Így azonnal frissülnek a jogok!)
+            // 1. LOAD THE USER FROM THE DATABASE (This immediately refreshes the permissions!)
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            // 2. VALIDÁLJUK A TOKENT (Lejárat, aláírás)
+            // 2. VALIDATE THE TOKEN (Expiry, signature)
             if (jwtService.isTokenValid(jwt, userDetails)) {
 
-                // 3. LÉTREHOZZUK AZ AUTH TOKENT A FRISS JOGOKKAL
+                // 3. CREATE THE AUTH TOKEN WITH FRESH PERMISSIONS
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
-                        userDetails.getAuthorities() // Ez a Cadet.getAuthorities() hívja, ami DB-ből jön
+                        userDetails.getAuthorities() // This calls Cadet.getAuthorities(), which comes from DB
                 );
 
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                // 4. BEÁLLÍTJUK A KONTEXTUST
+                // 4. SET THE SECURITY CONTEXT
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }

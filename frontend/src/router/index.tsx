@@ -23,6 +23,7 @@ import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 import MyForgePage from "../pages/mission-forge/MyForgePage";
+import CircuitForgeAdminPage from "../pages/admin/circuit/CircuitForgeAdminPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -230,6 +231,10 @@ export const router = createHashRouter([
       {
         path: "missions/:id",
         element: <MissionEdit />,
+      },
+      {
+        path: "circuit/:missionId",
+        element: <CircuitForgeAdminPage />,
       },
       {
         path: "roles",
