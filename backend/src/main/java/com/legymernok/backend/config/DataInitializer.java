@@ -57,6 +57,12 @@ public class DataInitializer implements CommandLineRunner {
         // Log jogok
         Permission logsRead = createPermissionIfNotFound("logs:read", "Rendszernaplók megtekintése");
 
+        // Group jogok
+        Permission groupCreate = createPermissionIfNotFound("group:create", "Mission csoport létrehozása");
+        Permission groupEdit   = createPermissionIfNotFound("group:edit",   "Mission csoport szerkesztése");
+        Permission groupDelete = createPermissionIfNotFound("group:delete", "Mission csoport törlése");
+        Permission groupRead   = createPermissionIfNotFound("group:read",   "Mission csoport megtekintése");
+
         // --- 2. SZEREPKÖRÖK (ROLES) LÉTREHOZÁSA ---
 
         // ROLE_CADET: Alap jogok (Olvasás, Indítás)
@@ -67,6 +73,7 @@ public class DataInitializer implements CommandLineRunner {
         cadetPermissions.add(starSystemRead);
         cadetPermissions.add(starSystemCreate);
         cadetPermissions.add(missionCreate);
+        cadetPermissions.add(groupRead);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
 
         // ROLE_ADMIN: Minden jog (Full Access)
@@ -100,8 +107,27 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(roleWrite);
         // Logs
         adminPermissions.add(logsRead);
+        // Group
+        adminPermissions.add(groupCreate);
+        adminPermissions.add(groupEdit);
+        adminPermissions.add(groupDelete);
+        adminPermissions.add(groupRead);
 
         createRoleIfNotFound("ROLE_ADMIN", adminPermissions);
+
+        // ROLE_CONTENT_CREATOR: Tartalom kezelés
+        Set<Permission> contentCreatorPermissions = new HashSet<>();
+        contentCreatorPermissions.add(starSystemRead);
+        contentCreatorPermissions.add(starSystemCreate);
+        contentCreatorPermissions.add(starSystemEdit);
+        contentCreatorPermissions.add(missionRead);
+        contentCreatorPermissions.add(missionCreate);
+        contentCreatorPermissions.add(missionEdit);
+        contentCreatorPermissions.add(groupCreate);
+        contentCreatorPermissions.add(groupEdit);
+        contentCreatorPermissions.add(groupDelete);
+        contentCreatorPermissions.add(groupRead);
+        createRoleIfNotFound("ROLE_CONTENT_CREATOR", contentCreatorPermissions);
 
         System.out.println("--- Jogosultsági rendszer inicializálva (Permissions & Roles) ---");
     }

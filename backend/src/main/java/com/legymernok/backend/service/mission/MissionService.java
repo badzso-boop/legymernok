@@ -2,6 +2,7 @@ package com.legymernok.backend.service.mission;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.dto.mission.*;
+import java.util.Arrays;
 import com.legymernok.backend.dto.quiz.QuizDefinition;
 import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
@@ -86,8 +87,8 @@ public class MissionService {
         }
 
         // Ellenőrzés: Sorrend ütközés (ha a sorrend már foglalt, eltoljuk a többit)
-        if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
-            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+        if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
             missionRepository.flush();
         }
 
@@ -97,12 +98,21 @@ public class MissionService {
                 .descriptionMarkdown(request.getDescriptionMarkdown())
                 .missionType(request.getMissionType())
                 .difficulty(request.getDifficulty())
-                .orderInSystem(request.getOrderInSystem())
+                .orderIndex(request.getOrderIndex())
                 .owner(currentUser)
                 .verificationStatus(VerificationStatus.DRAFT)
-                .templateRepositoryUrl("PENDING_INITIALIZATION")
                 .build();
 
+        // CONTENT és FILL_IN_BLANK típusú missziókhoz nincs Gitea repo
+        if (request.getMissionType() == MissionType.CONTENT
+                || request.getMissionType() == MissionType.FILL_IN_BLANK) {
+            Mission savedMission = missionRepository.save(mission);
+            log.info("New {} mission '{}' created by user '{}'.",
+                    request.getMissionType(), savedMission.getName(), currentUser.getUsername());
+            return mapToResponse(savedMission);
+        }
+
+        mission.setTemplateRepositoryUrl("PENDING_INITIALIZATION");
         Mission savedMission = missionRepository.save(mission);
 
         String newRepoName = savedMission.getId().toString();
@@ -115,14 +125,11 @@ public class MissionService {
                     savedMission.getMissionType()
             );
 
-            // 3. Frissítsük a rekordot a valódi Gitea URL-lel
             savedMission.setTemplateRepositoryUrl(templateRepositoryUrl);
-            // Ez már egy valódi UPDATE lesz, ami működni fog
             savedMission = missionRepository.save(savedMission);
 
         } catch (Exception e) {
             log.error("Gitea repository creation failed for mission {}. Error: {}", newRepoName, e.getMessage());
-            // Mivel @Transactional, ha itt kivételt dobsz, a DB-ből is visszagörgeti a missziót!
             throw new ExternalServiceException("Gitea", "Failed to create repository: " + e.getMessage());
         }
 
@@ -259,10 +266,10 @@ public class MissionService {
         }
 
         // Sorrend ütközés (ha a sorrend változik)
-        if (missionToUpdate.getOrderInSystem() != request.getOrderInSystem()) {
-            if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
-                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
-                missionRepository.flush(); // Biztosítjuk, hogy a shift lefusson
+        if (!java.util.Objects.equals(missionToUpdate.getOrderIndex(), request.getOrderIndex())) {
+            if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+                missionRepository.flush();
             }
         }
 
@@ -277,7 +284,7 @@ public class MissionService {
         missionToUpdate.setDescriptionMarkdown(request.getDescriptionMarkdown());
         missionToUpdate.setMissionType(request.getMissionType());
         missionToUpdate.setDifficulty(request.getDifficulty());
-        missionToUpdate.setOrderInSystem(request.getOrderInSystem());
+        missionToUpdate.setOrderIndex(request.getOrderIndex());
         missionToUpdate.setUpdatedAt(Instant.now());
 
         Mission updatedMission = missionRepository.save(missionToUpdate);
@@ -348,14 +355,43 @@ public class MissionService {
 
     @Transactional(readOnly = true)
     public List<MissionResponse> getMissionsByStarSystem(UUID starSystemId) {
-        return missionRepository.findAllByStarSystemIdOrderByOrderInSystemAsc(starSystemId)
+        return missionRepository.findAllByStarSystemIdAndGroupIsNullOrderByOrderIndexAsc(starSystemId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     public Integer getNextOrderForStarSystem(UUID starSystemId) {
-        return missionRepository.findMaxOrderInSystem(starSystemId) + 1;
+        return missionRepository.findMaxOrderIndex(starSystemId) + 1;
+    }
+
+    @Transactional(readOnly = true)
+    public ContentPageResponse getContentPage(UUID missionId, int page, int pageSize) {
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+        if (mission.getMissionType() != MissionType.CONTENT) {
+            throw new IllegalArgumentException("Mission is not CONTENT type");
+        }
+        String fullContent = mission.getContent() != null ? mission.getContent() : "";
+        String[] lines = fullContent.split("\n", -1);
+        int totalLines = lines.length;
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalLines / pageSize));
+        int from = page * pageSize;
+        int to = Math.min(from + pageSize, totalLines);
+        String pageContent = from < totalLines
+                ? String.join("\n", Arrays.copyOfRange(lines, from, to))
+                : "";
+        return ContentPageResponse.builder()
+                .missionId(missionId)
+                .missionName(mission.getName())
+                .content(pageContent)
+                .page(page)
+                .pageSize(pageSize)
+                .totalLines(totalLines)
+                .totalPages(totalPages)
+                .hasNextPage(page < totalPages - 1)
+                .hasPreviousPage(page > 0)
+                .build();
     }
 
     @Transactional
@@ -386,7 +422,7 @@ public class MissionService {
         }
 
         UUID starSystemId = mission.getStarSystem().getId();
-        Integer deletedOrder = mission.getOrderInSystem();
+        Integer deletedOrder = mission.getOrderIndex();
         String repoUrl = mission.getTemplateRepositoryUrl();
 
         // 1. Gitea Repo törlése (Best Effort - ha nem sikerül, nem állítjuk meg a folyamatot, csak logolunk)
@@ -428,7 +464,7 @@ public class MissionService {
         return lastPart;
     }
 
-    private MissionResponse mapToResponse(Mission mission) {
+    public MissionResponse mapToResponse(Mission mission) {
         String repoUrl = null;
 
         if (isAdmin()) {
@@ -443,7 +479,9 @@ public class MissionService {
                 .templateRepositoryUrl(repoUrl)
                 .missionType(mission.getMissionType())
                 .difficulty(mission.getDifficulty())
-                .orderInSystem(mission.getOrderInSystem())
+                .orderIndex(mission.getOrderIndex())
+                .groupId(mission.getGroup() != null ? mission.getGroup().getId() : null)
+                .groupOrder(mission.getGroupOrder())
                 .ownerId(mission.getOwner() != null ? mission.getOwner().getId() : null)
                 .ownerUsername(mission.getOwner() != null ? mission.getOwner().getUsername() : null)
                 .verificationStatus(mission.getVerificationStatus())

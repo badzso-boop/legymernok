@@ -71,7 +71,7 @@ class MissionControllerSecurityTest {
                 .descriptionMarkdown("# Test")
                 .missionType(MissionType.CODING)
                 .difficulty(Difficulty.EASY)
-                .orderInSystem(1)
+                .orderIndex(1)
                 .build();
     }
 
@@ -82,7 +82,7 @@ class MissionControllerSecurityTest {
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
         return request;
     }
 

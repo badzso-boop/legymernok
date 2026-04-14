@@ -18,8 +18,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "missions")
-public class Mission {
+@Table(name = "mission_groups")
+public class MissionGroup {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -33,39 +33,18 @@ public class Mission {
     private String name;
 
     @Column(columnDefinition = "TEXT")
-    private String descriptionMarkdown;
-
-    @Column(nullable = true)
-    private String templateRepositoryUrl;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private MissionType missionType;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Difficulty difficulty;
-
-    @Column(nullable = true)
-    private Integer orderIndex;
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private Cadet owner;
 
-    @Column(nullable = false)
-    @Enumerated(EnumType.STRING)
-    private VerificationStatus verificationStatus = VerificationStatus.DRAFT;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id")
-    private MissionGroup group;
+    @JoinColumn(name = "updated_by_id")
+    private Cadet updatedBy;
 
-    @Column(nullable = true)
-    private Integer groupOrder;
-
-    @Column(columnDefinition = "TEXT")
-    private String content;
+    @Column(nullable = false)
+    private Integer orderIndex;
 
     @CreationTimestamp
     private Instant createdAt;

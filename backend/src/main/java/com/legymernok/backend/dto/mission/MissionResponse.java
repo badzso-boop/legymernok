@@ -19,7 +19,9 @@ public class MissionResponse {
     private String templateRepositoryUrl;
     private MissionType missionType;
     private Difficulty difficulty;
-    private Integer orderInSystem;
+    private Integer orderIndex;
+    private UUID groupId;
+    private Integer groupOrder;
     private Instant createdAt;
     private UUID ownerId;
     private String ownerUsername;

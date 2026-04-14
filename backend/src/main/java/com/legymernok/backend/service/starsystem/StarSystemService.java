@@ -1,15 +1,20 @@
 package com.legymernok.backend.service.starsystem;
 
+import com.legymernok.backend.dto.group.MissionGroupResponse;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
+import com.legymernok.backend.dto.starsystem.StarSystemItemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
-import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,8 @@ public class StarSystemService {
 
     private final StarSystemRepository starSystemRepository;
     private final MissionService missionService;
+    private final MissionRepository missionRepository;
+    private final MissionGroupRepository missionGroupRepository;
     private final CadetRepository cadetRepository;
 
     @Transactional
@@ -118,23 +127,63 @@ public class StarSystemService {
     }
 
     @Transactional(readOnly = true)
-    public StarSystemWithMissionResponse getStarSystemWithMissions(UUID id) {
-        // 1. Csillagrendszer lekérdezése
+    public StarSystemWithItemsResponse getStarSystemWithItems(UUID id) {
         StarSystem starSystem = starSystemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", id));
 
-        // 2. Küldetések lekérdezése a MissionService segítségével
-        List<MissionResponse> missions = missionService.getMissionsByStarSystem(id);
+        // Standalone mission-ök
+        List<StarSystemItemResponse> missionItems = missionRepository
+                .findAllByStarSystemIdAndGroupIsNullOrderByOrderIndexAsc(id).stream()
+                .map(m -> StarSystemItemResponse.builder()
+                        .type("MISSION")
+                        .orderIndex(m.getOrderIndex())
+                        .mission(missionService.mapToResponse(m))
+                        .build())
+                .collect(Collectors.toList());
 
-        // 3. A komplex válasz DTO összeállítása
-        return StarSystemWithMissionResponse.builder()
+        // Group-ok
+        List<StarSystemItemResponse> groupItems = missionGroupRepository
+                .findAllByStarSystemIdOrderByOrderIndexAsc(id).stream()
+                .map(g -> {
+                    List<MissionResponse> groupMissions = missionRepository
+                            .findAllByGroupIdOrderByGroupOrderAsc(g.getId()).stream()
+                            .map(missionService::mapToResponse)
+                            .collect(Collectors.toList());
+                    return StarSystemItemResponse.builder()
+                            .type("GROUP")
+                            .orderIndex(g.getOrderIndex())
+                            .group(mapGroupToResponse(g))
+                            .groupMissions(groupMissions)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        // Összefűzés + rendezés orderIndex szerint
+        List<StarSystemItemResponse> items = Stream.concat(missionItems.stream(), groupItems.stream())
+                .sorted(Comparator.comparing(StarSystemItemResponse::getOrderIndex,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
+
+        return StarSystemWithItemsResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
-                .missions(missions)
+                .items(items)
+                .build();
+    }
+
+    private MissionGroupResponse mapGroupToResponse(MissionGroup group) {
+        return MissionGroupResponse.builder()
+                .id(group.getId())
+                .name(group.getName())
+                .description(group.getDescription())
+                .starSystemId(group.getStarSystem().getId())
+                .orderIndex(group.getOrderIndex())
+                .createdAt(group.getCreatedAt())
+                .updatedAt(group.getUpdatedAt())
                 .build();
     }
 

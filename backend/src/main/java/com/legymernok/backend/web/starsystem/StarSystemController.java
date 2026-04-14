@@ -2,7 +2,7 @@ package com.legymernok.backend.web.starsystem;
 
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
-import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
 import com.legymernok.backend.service.starsystem.StarSystemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -55,8 +55,8 @@ public class StarSystemController {
 
     @GetMapping("/{id}/with-missions")
     @PreAuthorize("hasAuthority('starsystem:read')")
-    public ResponseEntity<StarSystemWithMissionResponse> getStarSystemWithMissions(@PathVariable UUID id) {
-        return ResponseEntity.ok(starSystemService.getStarSystemWithMissions(id));
+    public ResponseEntity<StarSystemWithItemsResponse> getStarSystemWithItems(@PathVariable UUID id) {
+        return ResponseEntity.ok(starSystemService.getStarSystemWithItems(id));
     }
 
     @GetMapping("/my-systems")

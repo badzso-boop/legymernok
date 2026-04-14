@@ -20,7 +20,7 @@ public class CreateMissionInitialRequest {
     @NotNull
     private Difficulty difficulty;
     @NotNull
-    private Integer orderInSystem;
+    private Integer orderIndex;
     @NotBlank
     private String templateLanguage;
 }

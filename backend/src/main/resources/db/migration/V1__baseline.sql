@@ -1,0 +1,2 @@
+-- Flyway baseline: a meglévő séma már létezik (baseline-on-migrate=true)
+-- Ez a fájl szándékosan üres.

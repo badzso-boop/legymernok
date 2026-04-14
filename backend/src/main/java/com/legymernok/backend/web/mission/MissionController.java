@@ -113,4 +113,13 @@ public class MissionController {
     public ResponseEntity<List<MissionResponse>> getMyMissions() {
         return ResponseEntity.ok(missionService.getMissionsByCurrentUser());
     }
+
+    @GetMapping("/{id}/content")
+    @PreAuthorize("hasAuthority('mission:read')")
+    public ResponseEntity<ContentPageResponse> getContentPage(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int pageSize) {
+        return ResponseEntity.ok(missionService.getContentPage(id, page, pageSize));
+    }
 }
