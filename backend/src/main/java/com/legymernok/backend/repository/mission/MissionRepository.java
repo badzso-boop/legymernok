@@ -39,4 +39,6 @@ public interface MissionRepository extends JpaRepository<Mission, UUID> {
     void shiftOrdersDown(@Param("starSystemId") UUID starSystemId, @Param("deletedOrder") Integer deletedOrder);
 
     List<Mission> findAllByOwnerId(UUID ownerId);
+
+    List<Mission> findAllByStarSystemId(UUID starSystemId);
 }

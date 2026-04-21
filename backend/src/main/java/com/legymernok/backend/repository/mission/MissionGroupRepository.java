@@ -29,4 +29,6 @@ public interface MissionGroupRepository extends JpaRepository<MissionGroup, UUID
     @Query("UPDATE MissionGroup g SET g.orderIndex = g.orderIndex - 1 " +
             "WHERE g.starSystem.id = :ssId AND g.orderIndex > :deleted")
     void shiftOrdersDown(@Param("ssId") UUID ssId, @Param("deleted") Integer deleted);
+
+    void deleteAllByStarSystemId(UUID starSystemId);
 }

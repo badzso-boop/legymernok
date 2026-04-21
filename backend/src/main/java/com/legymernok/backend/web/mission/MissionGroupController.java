@@ -47,10 +47,18 @@ public class MissionGroupController {
 
     @PostMapping("/{id}/missions")
     @PreAuthorize("hasAuthority('group:edit')")
-    public ResponseEntity<MissionGroupResponse> addMissionToGroup(
+    public ResponseEntity<MissionGroupResponse> addMissionToGroupByBody(
             @PathVariable UUID id,
             @RequestBody java.util.Map<String, UUID> body) {
         UUID missionId = body.get("missionId");
+        return ResponseEntity.ok(missionGroupService.addMissionToGroup(id, missionId));
+    }
+
+    @PostMapping("/{id}/missions/{missionId}")
+    @PreAuthorize("hasAuthority('group:edit')")
+    public ResponseEntity<MissionGroupResponse> addMissionToGroup(
+            @PathVariable UUID id,
+            @PathVariable UUID missionId) {
         return ResponseEntity.ok(missionGroupService.addMissionToGroup(id, missionId));
     }
 
@@ -64,18 +72,35 @@ public class MissionGroupController {
 
     @PutMapping("/{id}/reorder")
     @PreAuthorize("hasAuthority('group:edit')")
-    public ResponseEntity<ReorderResponse> reorderGroup(
+    public ResponseEntity<ReorderResponse> reorderGroupByBody(
             @PathVariable UUID id,
             @Valid @RequestBody ReorderItemRequest request) {
         return ResponseEntity.ok(missionGroupService.reorderGroup(id, request.getTargetId()));
     }
 
+    @PostMapping("/{id}/reorder/{targetId}")
+    @PreAuthorize("hasAuthority('group:edit')")
+    public ResponseEntity<ReorderResponse> reorderGroup(
+            @PathVariable UUID id,
+            @PathVariable UUID targetId) {
+        return ResponseEntity.ok(missionGroupService.reorderGroup(id, targetId));
+    }
+
     @PutMapping("/{id}/missions/{missionId}/reorder")
     @PreAuthorize("hasAuthority('group:edit')")
-    public ResponseEntity<ReorderResponse> reorderMissionInGroup(
+    public ResponseEntity<ReorderResponse> reorderMissionInGroupByBody(
             @PathVariable UUID id,
             @PathVariable UUID missionId,
             @Valid @RequestBody ReorderItemRequest request) {
         return ResponseEntity.ok(missionGroupService.reorderMissionInGroup(id, missionId, request.getTargetId()));
+    }
+
+    @PostMapping("/{id}/missions/{missionId}/reorder/{targetMissionId}")
+    @PreAuthorize("hasAuthority('group:edit')")
+    public ResponseEntity<ReorderResponse> reorderMissionInGroup(
+            @PathVariable UUID id,
+            @PathVariable UUID missionId,
+            @PathVariable UUID targetMissionId) {
+        return ResponseEntity.ok(missionGroupService.reorderMissionInGroup(id, missionId, targetMissionId));
     }
 }

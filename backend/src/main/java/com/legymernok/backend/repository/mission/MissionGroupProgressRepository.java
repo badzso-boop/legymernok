@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface MissionGroupProgressRepository extends JpaRepository<MissionGroupProgress, UUID> {
 
     Optional<MissionGroupProgress> findByCadetIdAndGroupId(UUID cadetId, UUID groupId);
+
+    void deleteAllByGroupId(UUID groupId);
 }

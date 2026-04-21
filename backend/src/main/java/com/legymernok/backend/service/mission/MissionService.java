@@ -18,7 +18,16 @@ import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAnswerDetailRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankBlankRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankDefinitionRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankOptionRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
+import com.legymernok.backend.repository.quiz.QuizSessionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -46,6 +55,15 @@ public class MissionService {
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
     private final ObjectMapper objectMapper;
+    private final MissionGroupStepCompletionRepository stepCompletionRepository;
+    private final MissionResultRepository missionResultRepository;
+    private final QuizSessionRepository quizSessionRepository;
+    private final FillInBlankAnswerDetailRepository fillInBlankAnswerDetailRepository;
+    private final FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    private final FillInBlankOptionRepository fillInBlankOptionRepository;
+    private final FillInBlankBlankRepository fillInBlankBlankRepository;
+    private final FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
+    private final MissionGroupRepository missionGroupRepository;
 
     @Value("${gitea.template.js.owner}")
     private String jsTemplateRepoOwner;
@@ -86,10 +104,13 @@ public class MissionService {
             throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
-        // Ellenőrzés: Sorrend ütközés (ha a sorrend már foglalt, eltoljuk a többit)
-        if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+        // Ellenőrzés: Sorrend ütközés (missions ÉS groups ellen)
+        if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
             missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
             missionRepository.flush();
+            missionGroupRepository.flush();
         }
 
         Mission mission = Mission.builder()
@@ -155,7 +176,9 @@ public class MissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getMissionId()));
 
         // Ellenőrzés: User a tulajdonos, vagy van edit_any joga
-        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+        if (mission.getOwner() != null
+                && !mission.getOwner().getId().equals(currentUser.getId())
+                && !hasAuthority(currentUser, "mission:edit_any")) {
             throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
         }
 
@@ -243,6 +266,46 @@ public class MissionService {
     }
 
     @Transactional
+    public MissionResponse createMission(CreateMissionRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
+                .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
+
+        if (!starSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only add missions to your own star systems.");
+        }
+
+        if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(), request.getName())) {
+            throw new ResourceConflictException("Mission", "name", request.getName());
+        }
+
+        if (request.getOrderIndex() != null &&
+                (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex()))) {
+            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionRepository.flush();
+            missionGroupRepository.flush();
+        }
+
+        Mission mission = Mission.builder()
+                .starSystem(starSystem)
+                .name(request.getName())
+                .descriptionMarkdown(request.getDescriptionMarkdown())
+                .missionType(request.getMissionType())
+                .difficulty(request.getDifficulty())
+                .orderIndex(request.getOrderIndex())
+                .owner(currentUser)
+                .verificationStatus(VerificationStatus.PENDING)
+                .content(request.getContent())
+                .build();
+
+        Mission saved = missionRepository.save(mission);
+        log.info("Admin mission '{}' (ID: {}) created by '{}'.", saved.getName(), saved.getId(), currentUser.getUsername());
+        return mapToResponse(saved);
+    }
+
+    @Transactional
     public MissionResponse updateMission(UUID id, CreateMissionRequest request) {
         Cadet currentUser = getCurrentAuthenticatedUser();
         Mission missionToUpdate = missionRepository.findById(id)
@@ -265,11 +328,14 @@ public class MissionService {
             throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
-        // Sorrend ütközés (ha a sorrend változik)
+        // Sorrend ütközés (ha a sorrend változik — missions ÉS groups ellen)
         if (!java.util.Objects.equals(missionToUpdate.getOrderIndex(), request.getOrderIndex())) {
-            if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+            if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                    || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
                 missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+                missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
                 missionRepository.flush();
+                missionGroupRepository.flush();
             }
         }
 
@@ -285,6 +351,9 @@ public class MissionService {
         missionToUpdate.setMissionType(request.getMissionType());
         missionToUpdate.setDifficulty(request.getDifficulty());
         missionToUpdate.setOrderIndex(request.getOrderIndex());
+        if (request.getContent() != null) {
+            missionToUpdate.setContent(request.getContent());
+        }
         missionToUpdate.setUpdatedAt(Instant.now());
 
         Mission updatedMission = missionRepository.save(missionToUpdate);
@@ -362,7 +431,9 @@ public class MissionService {
     }
 
     public Integer getNextOrderForStarSystem(UUID starSystemId) {
-        return missionRepository.findMaxOrderIndex(starSystemId) + 1;
+        int missionMax = missionRepository.findMaxOrderIndex(starSystemId);
+        int groupMax = missionGroupRepository.findMaxOrderIndex(starSystemId);
+        return Math.max(missionMax, groupMax) + 1;
     }
 
     @Transactional(readOnly = true)
@@ -395,6 +466,19 @@ public class MissionService {
     }
 
     @Transactional
+    public MissionResponse updateMissionContent(UUID id, String content) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        mission.setContent(content);
+        return mapToResponse(missionRepository.save(mission));
+    }
+
     public void updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus) {
         Mission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
@@ -438,7 +522,16 @@ public class MissionService {
             // Nem dobunk hibát, hogy a DB törlés attól még végbemenjen
         }
 
-        // 2. DB törlés
+        // 2. DB törlés — child rekordok helyes sorrendben
+        fillInBlankAnswerDetailRepository.deleteAllByMissionId(id);
+        fillInBlankAttemptRepository.deleteAllByMissionId(id);
+        stepCompletionRepository.deleteAllByMissionId(id);
+        missionResultRepository.deleteAllByMissionId(id);
+        quizSessionRepository.deleteAllByMissionId(id);
+        cadetMissionRepository.deleteAllByMissionId(id);
+        fillInBlankOptionRepository.deleteAllByMissionId(id);
+        fillInBlankBlankRepository.deleteAllByMissionId(id);
+        fillInBlankDefinitionRepository.deleteByMissionId(id);
         missionRepository.delete(mission);
         log.info("Mission deleted: ID {}, Name '{}'", id, mission.getName());
 
@@ -486,6 +579,7 @@ public class MissionService {
                 .ownerUsername(mission.getOwner() != null ? mission.getOwner().getUsername() : null)
                 .verificationStatus(mission.getVerificationStatus())
                 .createdAt(mission.getCreatedAt())
+                .content(mission.getContent())
                 .build();
     }
 

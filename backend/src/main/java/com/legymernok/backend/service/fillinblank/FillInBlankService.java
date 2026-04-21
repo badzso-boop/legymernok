@@ -40,10 +40,6 @@ public class FillInBlankService {
         if (mission.getMissionType() != MissionType.FILL_IN_BLANK) {
             throw new IllegalArgumentException("Mission is not FILL_IN_BLANK type");
         }
-        if (mission.getGroup() == null) {
-            throw new ResourceConflictException("Mission", "id",
-                    "Standalone FILL_IN_BLANK misszió nem engedélyezett. A missziónak group-ban kell lennie.");
-        }
 
         // Ha létezik, teljes csere: blank + option törlése
         definitionRepository.findByMissionId(missionId).ifPresent(existing -> {

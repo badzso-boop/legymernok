@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface FillInBlankAttemptRepository extends JpaRepository<FillInBlankAttempt, UUID> {
 
     Optional<FillInBlankAttempt> findTopByCadetIdAndMissionIdOrderBySubmittedAtDesc(UUID cadetId, UUID missionId);
+
+    void deleteAllByMissionId(UUID missionId);
 }

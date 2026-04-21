@@ -13,4 +13,6 @@ public interface FillInBlankDefinitionRepository extends JpaRepository<FillInBla
     Optional<FillInBlankDefinition> findByMissionId(UUID missionId);
 
     boolean existsByMissionId(UUID missionId);
+
+    void deleteByMissionId(UUID missionId);
 }

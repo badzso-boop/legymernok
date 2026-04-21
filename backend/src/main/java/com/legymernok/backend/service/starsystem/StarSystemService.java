@@ -1,8 +1,10 @@
 package com.legymernok.backend.service.starsystem;
 
 import com.legymernok.backend.dto.group.MissionGroupResponse;
+import com.legymernok.backend.dto.group.ReorderResponse;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
+import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemItemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
@@ -10,9 +12,11 @@ import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
@@ -40,6 +44,7 @@ public class StarSystemService {
     private final MissionService missionService;
     private final MissionRepository missionRepository;
     private final MissionGroupRepository missionGroupRepository;
+    private final MissionGroupProgressRepository missionGroupProgressRepository;
     private final CadetRepository cadetRepository;
 
     @Transactional
@@ -92,6 +97,16 @@ public class StarSystemService {
         }
 
         log.info("Deleting StarSystem with ID: {}", id);
+
+        // Missziók és azok child rekordjainak törlése
+        missionRepository.findAllByStarSystemId(id)
+                .forEach(m -> missionService.deleteMission(m.getId()));
+
+        // Group progress + groupok törlése
+        missionGroupRepository.findAllByStarSystemIdOrderByOrderIndexAsc(id)
+                .forEach(g -> missionGroupProgressRepository.deleteAllByGroupId(g.getId()));
+        missionGroupRepository.deleteAllByStarSystemId(id);
+
         starSystemRepository.deleteById(id);
     }
 
@@ -172,6 +187,50 @@ public class StarSystemService {
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
                 .items(items)
+                .build();
+    }
+
+    @Transactional
+    public ReorderResponse reorderItems(UUID starSystemId, ReorderItemsRequest request) {
+        Integer idx1;
+        Integer idx2;
+
+        MissionGroup group1 = null;
+        Mission mission1 = null;
+        MissionGroup group2 = null;
+        Mission mission2 = null;
+
+        if ("GROUP".equals(request.getItem1Type())) {
+            group1 = missionGroupRepository.findById(request.getItem1Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("MissionGroup", "id", request.getItem1Id()));
+            idx1 = group1.getOrderIndex();
+        } else {
+            mission1 = missionRepository.findById(request.getItem1Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getItem1Id()));
+            idx1 = mission1.getOrderIndex();
+        }
+
+        if ("GROUP".equals(request.getItem2Type())) {
+            group2 = missionGroupRepository.findById(request.getItem2Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("MissionGroup", "id", request.getItem2Id()));
+            idx2 = group2.getOrderIndex();
+        } else {
+            mission2 = missionRepository.findById(request.getItem2Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getItem2Id()));
+            idx2 = mission2.getOrderIndex();
+        }
+
+        if (group1 != null) { group1.setOrderIndex(idx2); missionGroupRepository.save(group1); }
+        else { mission1.setOrderIndex(idx2); missionRepository.save(mission1); }
+
+        if (group2 != null) { group2.setOrderIndex(idx1); missionGroupRepository.save(group2); }
+        else { mission2.setOrderIndex(idx1); missionRepository.save(mission2); }
+
+        return ReorderResponse.builder()
+                .updated(List.of(
+                        ReorderResponse.ReorderItem.builder().id(request.getItem1Id()).orderIndex(idx2).build(),
+                        ReorderResponse.ReorderItem.builder().id(request.getItem2Id()).orderIndex(idx1).build()
+                ))
                 .build();
     }
 

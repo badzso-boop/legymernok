@@ -83,6 +83,13 @@ public class MissionController {
         return ResponseEntity.ok(missionService.getNextOrderForStarSystem(starSystemId));
     }
 
+    @PostMapping
+    @PreAuthorize("hasAuthority('mission:create')")
+    public ResponseEntity<MissionResponse> createMission(@RequestBody CreateMissionRequest request) {
+        MissionResponse created = missionService.createMission(request);
+        return new ResponseEntity<>(created, HttpStatus.CREATED);
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('mission:edit')")
     public ResponseEntity<MissionResponse> updateMission(@PathVariable UUID id, @RequestBody
@@ -112,6 +119,14 @@ public class MissionController {
     @PreAuthorize("hasAuthority('mission:read')")
     public ResponseEntity<List<MissionResponse>> getMyMissions() {
         return ResponseEntity.ok(missionService.getMissionsByCurrentUser());
+    }
+
+    @PatchMapping("/{id}/content")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<MissionResponse> updateMissionContent(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(missionService.updateMissionContent(id, body.get("content")));
     }
 
     @GetMapping("/{id}/content")

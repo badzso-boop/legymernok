@@ -86,20 +86,22 @@ public class MissionGroupService {
 
         List<Mission> groupMissions = missionRepository.findAllByGroupIdOrderByGroupOrderAsc(id);
 
-        // FILL_IN_BLANK mission esetén törlés megtagadva
-        boolean hasFillInBlank = groupMissions.stream()
-                .anyMatch(m -> m.getMissionType() == MissionType.FILL_IN_BLANK);
-        if (hasFillInBlank) {
-            throw new ResourceConflictException("MissionGroup", "id",
-                    "A csoport FILL_IN_BLANK missziót tartalmaz — töröld előbb.");
-        }
-
         int groupOrderIndex = group.getOrderIndex();
         UUID starSystemId = group.getStarSystem().getId();
-        int n = groupMissions.size();
 
-        // 1. Előbb: minden meglévő standalone mission és group amelynek orderIndex > groupOrderIndex
-        //    kap +N-t, hogy helyet csináljunk az új standalone misszióknak
+        List<Mission> fibMissions = groupMissions.stream()
+                .filter(m -> m.getMissionType() == MissionType.FILL_IN_BLANK)
+                .collect(Collectors.toList());
+        List<Mission> nonFibMissions = groupMissions.stream()
+                .filter(m -> m.getMissionType() != MissionType.FILL_IN_BLANK)
+                .collect(Collectors.toList());
+
+        // 1. FIB missziók cascade törlése
+        fibMissions.forEach(m -> missionService.deleteMission(m.getId()));
+
+        int n = nonFibMissions.size();
+
+        // 2. Helyet csinálunk a standalone-ná váló misszióknak
         if (n > 0) {
             missionGroupRepository.shiftOrdersUp(starSystemId, groupOrderIndex + 1);
             missionRepository.shiftOrdersUp(starSystemId, groupOrderIndex + 1);
@@ -107,9 +109,9 @@ public class MissionGroupService {
             missionRepository.flush();
         }
 
-        // 2. Ezután: group missziók standalone-á válnak, orderIndex = groupOrderIndex + i
-        for (int i = 0; i < groupMissions.size(); i++) {
-            Mission m = groupMissions.get(i);
+        // 3. Nem-FIB missziók standalone-á válnak, orderIndex = groupOrderIndex + i
+        for (int i = 0; i < nonFibMissions.size(); i++) {
+            Mission m = nonFibMissions.get(i);
             m.setGroup(null);
             m.setGroupOrder(null);
             m.setOrderIndex(groupOrderIndex + i);
@@ -117,10 +119,11 @@ public class MissionGroupService {
         }
         missionRepository.flush();
 
-        // 3. Group törlése
+        // 4. Group törlése
         missionGroupRepository.delete(group);
         missionGroupRepository.flush();
-        log.info("MissionGroup '{}' deleted, {} missions became standalone", group.getName(), n);
+        log.info("MissionGroup '{}' deleted, {} FIB missions deleted, {} missions became standalone",
+                group.getName(), fibMissions.size(), n);
     }
 
     @Transactional
@@ -155,11 +158,6 @@ public class MissionGroupService {
                 .orElseThrow(() -> new ResourceNotFoundException("MissionGroup", "id", groupId));
         Mission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
-
-        if (mission.getMissionType() == MissionType.FILL_IN_BLANK) {
-            throw new ResourceConflictException("Mission", "id",
-                    "FILL_IN_BLANK misszió nem lehet standalone.");
-        }
 
         int newOrderIndex = missionRepository.findMaxOrderIndex(group.getStarSystem().getId()) + 1;
         mission.setGroup(null);
