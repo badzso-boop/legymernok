@@ -16,8 +16,18 @@ import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAnswerDetailRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankBlankRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankDefinitionRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankOptionRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
+import com.legymernok.backend.repository.quiz.QuizSessionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,9 +51,19 @@ class MissionServiceTest {
 
     @Mock private MissionRepository missionRepository;
     @Mock private StarSystemRepository starSystemRepository;
+    @Mock private CadetMissionRepository cadetMissionRepository;
     @Mock private GiteaService giteaService;
     @Mock private CadetRepository cadetRepository;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private MissionGroupStepCompletionRepository stepCompletionRepository;
+    @Mock private MissionResultRepository missionResultRepository;
+    @Mock private QuizSessionRepository quizSessionRepository;
+    @Mock private FillInBlankAnswerDetailRepository fillInBlankAnswerDetailRepository;
+    @Mock private FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    @Mock private FillInBlankOptionRepository fillInBlankOptionRepository;
+    @Mock private FillInBlankBlankRepository fillInBlankBlankRepository;
+    @Mock private FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
+    @Mock private MissionGroupRepository missionGroupRepository;
     @InjectMocks private MissionService missionService;
 
     private Cadet testUser;

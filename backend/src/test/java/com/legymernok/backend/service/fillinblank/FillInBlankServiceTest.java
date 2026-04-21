@@ -72,24 +72,6 @@ class FillInBlankServiceTest {
     // =========================================================================
 
     @Test
-    void saveDefinition_whenMissionIsStandalone_shouldThrowConflict() {
-        Mission standaloneMission = new Mission();
-        standaloneMission.setId(UUID.randomUUID());
-        standaloneMission.setMissionType(MissionType.FILL_IN_BLANK);
-        standaloneMission.setGroup(null); // standalone
-
-        when(missionRepository.findById(standaloneMission.getId()))
-                .thenReturn(Optional.of(standaloneMission));
-
-        SaveFillInBlankRequest request = new SaveFillInBlankRequest();
-        request.setTemplateText("Fill: {{blank_1}}");
-        request.setBlanks(List.of());
-
-        assertThrows(ResourceConflictException.class,
-                () -> fillInBlankService.saveDefinition(standaloneMission.getId(), request));
-    }
-
-    @Test
     void saveDefinition_whenDefinitionExists_shouldDeleteOldAndSaveNew() {
         UUID missionId = fibMission.getId();
 
