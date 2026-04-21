@@ -254,6 +254,7 @@ const FillInBlankEditor: React.FC<FillInBlankEditorProps> = ({ missionId }) => {
                 if (e.key === "Enter") handleOptionCommit(blank.key, (e.target as HTMLInputElement).value);
               }}
               fullWidth
+              inputProps={{ "data-cy": `blank-option-input-${blank.key}` }}
               sx={{
                 mt: 1,
                 "& .MuiInputBase-root": { bgcolor: "#111", color: "#ccc", fontFamily: "monospace" },
@@ -281,6 +282,7 @@ const FillInBlankEditor: React.FC<FillInBlankEditorProps> = ({ missionId }) => {
         <RetroButton
           color="green"
           labelKey="forge.save"
+          data-cy="fib-save"
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || templateText.trim() === ""}
         />

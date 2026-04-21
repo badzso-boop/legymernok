@@ -92,7 +92,11 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     }).as("getSystemWithGroup");
 
     cy.intercept(
-      { method: "GET", url: "**/api/star-systems/system-1/with-missions", times: 1 },
+      {
+        method: "GET",
+        url: "**/api/star-systems/system-1/with-missions",
+        times: 1,
+      },
       { statusCode: 200, body: mockSystemEmpty },
     ).as("getSystem");
 
@@ -117,7 +121,11 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     cy.contains("Új csoport létrehozása").should("be.visible");
 
     // Kitöltjük a nevet
-    cy.get('input[placeholder*="csoport neve"], input[label*="neve"], .MuiDialog-root input').first().type("Alapok");
+    cy.get(
+      'input[placeholder*="csoport neve"], input[label*="neve"], .MuiDialog-root input',
+    )
+      .first()
+      .type("Alapok");
 
     // Mentés
     cy.contains("Létrehozás").click();
@@ -159,21 +167,22 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
             type: "GROUP",
             orderIndex: 1,
             group: mockGroup,
-            groupMissions: [{ ...mockStandaloneMission, groupId: "group-1", groupOrder: 1 }],
+            groupMissions: [
+              { ...mockStandaloneMission, groupId: "group-1", groupOrder: 1 },
+            ],
           },
         ],
       },
     }).as("getSystemUpdated");
 
     cy.intercept(
-      { method: "GET", url: "**/api/star-systems/system-1/with-missions", times: 1 },
+      {
+        method: "GET",
+        url: "**/api/star-systems/system-1/with-missions",
+        times: 2,
+      },
       { statusCode: 200, body: systemWithBoth },
     ).as("getSystem");
-
-    cy.intercept("GET", "**/api/mission-groups*", {
-      statusCode: 200,
-      body: [mockGroup],
-    }).as("getGroups");
 
     cy.intercept("POST", "**/api/mission-groups/group-1/missions/mission-1", {
       statusCode: 200,
@@ -189,22 +198,23 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     cy.wait("@getMe");
     cy.wait("@getSystem");
 
-    // "Csoportba" gombra kattintás a standalone misszión
-    cy.contains("Standalone Coding")
-      .closest("[data-cy='mission-row'], tr, .MuiPaper-root, .MuiBox-root")
-      .find("[aria-label='Csoportba'], button")
-      .first()
+    // A csoport "Misszió hozzáadása" gombjára kattintás (MoveToInbox ikon a GROUP-on)
+    cy.contains("Alapok")
+      .closest(".MuiPaper-root")
+      .find('[title="Misszió hozzáadása"]')
       .click({ force: true });
 
-    // Dialog: válasszuk ki a csoportot
-    cy.wait("@getGroups");
-    cy.contains("Alapok").click();
+    // Dialog megnyílik — választunk a standalone missziók közül
+    cy.get(".MuiDialog-root").should("be.visible");
+    cy.get(".MuiDialog-root .MuiSelect-select").click();
+    cy.get('[role="option"]').contains("Standalone Coding").click();
     cy.contains("Hozzáadás").click();
 
     cy.wait("@addMission");
 
-    // Misszió megjelenik a csoportban
-    cy.contains("Alapok").should("be.visible");
+    // Misszió megjelenik a csoportban (reload után)
+    cy.wait("@getSystemUpdated");
+    cy.contains("Standalone Coding").should("be.visible");
   });
 
   // ─────────────────────────────────────────────
@@ -251,17 +261,21 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     }).as("getMission");
 
     // LIFO fix: reload response (200) ELŐSZÖR, initial 404 UTOLJÁRA times:1-gyel
-    cy.intercept("GET", "**/api/fill-in-blank/fib-content-m1/admin", {
+    cy.intercept("GET", "**/api/missions/fib-content-m1/fill-in-blank/admin", {
       statusCode: 200,
       body: mockFibDefinition,
     }).as("getFibLoaded");
 
     cy.intercept(
-      { method: "GET", url: "**/api/fill-in-blank/fib-content-m1/admin", times: 1 },
+      {
+        method: "GET",
+        url: "**/api/missions/fib-content-m1/fill-in-blank/admin",
+        times: 1,
+      },
       { statusCode: 404, body: {} },
     ).as("getFibNotFound");
 
-    cy.intercept("POST", "**/api/fill-in-blank/fib-content-m1", {
+    cy.intercept("POST", "**/api/missions/fib-content-m1/fill-in-blank", {
       statusCode: 201,
       body: mockFibDefinition,
     }).as("saveFib");
@@ -280,42 +294,67 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     cy.contains("Kitöltős szerkesztő").click();
 
     // Template szöveg megadása
-    cy.get("textarea").first().clear().type("A víz forráspontja [[blank_1]] Celsius.");
+    cy.get("textarea")
+      .first()
+      .clear()
+      .type("A víz forráspontja [[blank_1]] Celsius.");
 
-    // Mentés gomb
-    cy.contains("SAVE").click({ force: true });
+    // Opciók bevitele a [[blank_1]] panelbe
+    cy.get('[data-cy="blank-option-input-blank_1"]').type("100{enter}");
+    cy.get('[data-cy="blank-option-input-blank_1"]').type("50{enter}");
+
+    // Mentés gomb (data-cy attribútummal, scrollIntoView a hosszú tartalom miatt)
+    cy.get('[data-cy="fib-save"]').scrollIntoView().click();
 
     cy.wait("@saveFib");
 
     // Oldal újratöltése — az adat megmaradt
     cy.reload();
+    // Reload után előbb az alap adatok töltődnek be
+    cy.wait("@getMe");
+    cy.wait("@getMission");
+    // Vissza kell váltani a tabra (state resetelődik 0-ra), csak ezután fut a FIB query
+    cy.contains("Kitöltős szerkesztő").click();
     cy.wait("@getFibLoaded");
     cy.contains("[[blank_1]]").should("be.visible");
   });
 
   // ─────────────────────────────────────────────
-  // 4. FIB-ot tartalmazó csoport törlése → 409 snackbar
+  // 4. FIB-ot tartalmazó csoport törlése → sikeres (cascade delete)
   // ─────────────────────────────────────────────
-  it("should show error snackbar when deleting group containing FIB mission", () => {
+  it("should delete group containing FIB mission successfully (cascade)", () => {
+    // LIFO fix: reload (üres) ELŐSZÖR, initial load UTOLJÁRA times:1-gyel
     cy.intercept("GET", "**/api/star-systems/system-1/with-missions", {
       statusCode: 200,
-      body: {
-        ...mockSystemEmpty,
-        items: [
-          {
-            type: "GROUP",
-            orderIndex: 1,
-            group: mockFibGroup,
-            groupMissions: [mockFibMission],
-          },
-        ],
+      body: { ...mockSystemEmpty, items: [] },
+    }).as("getSystemEmpty");
+
+    cy.intercept(
+      {
+        method: "GET",
+        url: "**/api/star-systems/system-1/with-missions",
+        times: 2,
       },
-    }).as("getSystem");
+      {
+        statusCode: 200,
+        body: {
+          ...mockSystemEmpty,
+          items: [
+            {
+              type: "GROUP",
+              orderIndex: 1,
+              group: mockFibGroup,
+              groupMissions: [mockFibMission],
+            },
+          ],
+        },
+      },
+    ).as("getSystem");
 
     cy.intercept("DELETE", "**/api/mission-groups/fib-group-1", {
-      statusCode: 409,
-      body: { message: "Group contains FILL_IN_BLANK mission" },
-    }).as("deleteGroupConflict");
+      statusCode: 200,
+      body: {},
+    }).as("deleteGroup");
 
     cy.visit("/#/admin/star-systems/system-1", {
       onBeforeLoad(win) {
@@ -326,24 +365,33 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     cy.wait("@getMe");
     cy.wait("@getSystem");
 
-    // Csoport törlése — a csoport neve "FIB Csoport" (nem uppercase)
+    // FIB Csoport látható
+    cy.contains("FIB Csoport").should("be.visible");
+
+    // Törlés gombra kattintás
     cy.contains("FIB Csoport")
       .closest(".MuiPaper-root")
       .find("[aria-label='Törlés']")
       .first()
       .click({ force: true });
 
-    cy.wait("@deleteGroupConflict");
+    cy.wait("@deleteGroup");
 
-    // Snackbar hibaüzenet
-    cy.contains("FILL_IN_BLANK").should("be.visible");
+    // Csoport eltűnik (reload után)
+    cy.wait("@getSystemEmpty");
+    cy.contains("FIB Csoport").should("not.exist");
   });
 
   // ─────────────────────────────────────────────
   // 5. Sorrend csere — ↑/↓ gomb
   // ─────────────────────────────────────────────
   it("should reorder groups with up/down buttons", () => {
-    const group2 = { ...mockGroup, id: "group-2", name: "Haladók", orderIndex: 2 };
+    const group2 = {
+      ...mockGroup,
+      id: "group-2",
+      name: "Haladók",
+      orderIndex: 2,
+    };
 
     // LIFO fix: reload response ELŐSZÖR, initial load UTOLJÁRA times:1-gyel
     cy.intercept("GET", "**/api/star-systems/system-1/with-missions", {
@@ -358,22 +406,36 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     }).as("getSystemReordered");
 
     cy.intercept(
-      { method: "GET", url: "**/api/star-systems/system-1/with-missions", times: 1 },
+      {
+        method: "GET",
+        url: "**/api/star-systems/system-1/with-missions",
+        times: 2,
+      },
       {
         statusCode: 200,
         body: {
           ...mockSystemEmpty,
           items: [
-            { type: "GROUP", orderIndex: 1, group: mockGroup, groupMissions: [] },
+            {
+              type: "GROUP",
+              orderIndex: 1,
+              group: mockGroup,
+              groupMissions: [],
+            },
             { type: "GROUP", orderIndex: 2, group: group2, groupMissions: [] },
           ],
         },
       },
     ).as("getSystem");
 
-    cy.intercept("POST", "**/api/mission-groups/group-1/reorder/group-2", {
+    cy.intercept("POST", "**/api/star-systems/system-1/reorder-items", {
       statusCode: 200,
-      body: { updated: [{ id: "group-1", orderIndex: 2 }, { id: "group-2", orderIndex: 1 }] },
+      body: {
+        updated: [
+          { id: "group-1", orderIndex: 2 },
+          { id: "group-2", orderIndex: 1 },
+        ],
+      },
     }).as("reorder");
 
     cy.visit("/#/admin/star-systems/system-1", {
