@@ -23,6 +23,8 @@ import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 import MyForgePage from "../pages/mission-forge/MyForgePage";
+import GroupPlayerPage from "../pages/play/GroupPlayerPage";
+import ContentMissionPage from "../pages/play/ContentMissionPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -148,6 +150,22 @@ export const router = createHashRouter([
     element: (
       <ProtectedRoute>
         <QuizPlayerPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/play/group/:groupId",
+    element: (
+      <ProtectedRoute>
+        <GroupPlayerPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/play/content/:missionId",
+    element: (
+      <ProtectedRoute>
+        <ContentMissionPage />
       </ProtectedRoute>
     ),
   },

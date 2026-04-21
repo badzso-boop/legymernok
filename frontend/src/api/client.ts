@@ -4,9 +4,27 @@ import type {
   MissionForgeContentRequest,
   MissionForgeResponse,
 } from "../types/mission-forge";
-import type { StarSystemResponse } from "../types/starSystem";
-import type { MissionResponse } from "../types/mission";
+import type {
+  StarSystemResponse,
+  StarSystemWithItemsResponse,
+} from "../types/starSystem";
+import type { MissionResponse, ContentPageResponse } from "../types/mission";
 import type { QuizDefinition, MissionResult } from "../types/quiz";
+import type {
+  MissionGroupResponse,
+  MissionGroupWithMissionsResponse,
+  GroupProgressResponse,
+  CreateMissionGroupRequest,
+  ReorderResponse,
+} from "../types/group";
+import type {
+  FillInBlankUserResponse,
+  FillInBlankAdminResponse,
+  SaveFillInBlankRequest,
+  SubmitFillInBlankRequest,
+  FillInBlankResultResponse,
+  LastAttemptResponse,
+} from "../types/fillinblank";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -115,12 +133,16 @@ export const forgeApi = {
     );
     return response.data;
   },
+
+  getContentPage: async (missionId: string, page: number, pageSize = 100) => {
+    const response = await apiClient.get<ContentPageResponse>(
+      `/missions/${missionId}/content?page=${page}&pageSize=${pageSize}`,
+    );
+    return response.data;
+  },
 };
 
 export const starSystemApi = {
-  /**
-   * Létrehoz egy új csillagrendszert.
-   */
   create: async (data: {
     name: string;
     description: string;
@@ -129,6 +151,27 @@ export const starSystemApi = {
     const response = await apiClient.post<StarSystemResponse>(
       "/star-systems",
       data,
+    );
+    return response.data;
+  },
+
+  getWithItems: async (id: string) => {
+    const response = await apiClient.get<StarSystemWithItemsResponse>(
+      `/star-systems/${id}/with-missions`,
+    );
+    return response.data;
+  },
+
+  reorderItems: async (
+    systemId: string,
+    item1Id: string,
+    item1Type: "MISSION" | "GROUP",
+    item2Id: string,
+    item2Type: "MISSION" | "GROUP",
+  ): Promise<ReorderResponse> => {
+    const response = await apiClient.post<ReorderResponse>(
+      `/star-systems/${systemId}/reorder-items`,
+      { item1Id, item1Type, item2Id, item2Type },
     );
     return response.data;
   },
@@ -171,8 +214,120 @@ export const quizApi = {
     return response.data;
   },
 
-  // Összes aktív session törlése (csak misszió tulajdonosa / admin)
   clearSessions: async (missionId: string): Promise<void> => {
     await apiClient.delete(`/quiz/${missionId}/sessions`);
+  },
+};
+
+export const missionGroupApi = {
+  create: async (data: CreateMissionGroupRequest): Promise<MissionGroupResponse> => {
+    const response = await apiClient.post<MissionGroupResponse>("/mission-groups", data);
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<MissionGroupWithMissionsResponse> => {
+    const response = await apiClient.get<MissionGroupWithMissionsResponse>(`/mission-groups/${id}`);
+    return response.data;
+  },
+
+  update: async (id: string, data: Partial<CreateMissionGroupRequest>): Promise<MissionGroupResponse> => {
+    const response = await apiClient.put<MissionGroupResponse>(`/mission-groups/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/mission-groups/${id}`);
+  },
+
+  addMission: async (groupId: string, missionId: string): Promise<MissionGroupResponse> => {
+    const response = await apiClient.post<MissionGroupResponse>(
+      `/mission-groups/${groupId}/missions/${missionId}`,
+    );
+    return response.data;
+  },
+
+  removeMission: async (groupId: string, missionId: string): Promise<void> => {
+    await apiClient.delete(`/mission-groups/${groupId}/missions/${missionId}`);
+  },
+
+  reorderGroup: async (groupId: string, targetGroupId: string): Promise<ReorderResponse> => {
+    const response = await apiClient.post<ReorderResponse>(
+      `/mission-groups/${groupId}/reorder/${targetGroupId}`,
+    );
+    return response.data;
+  },
+
+  reorderMissionInGroup: async (groupId: string, missionId: string, targetMissionId: string): Promise<ReorderResponse> => {
+    const response = await apiClient.post<ReorderResponse>(
+      `/mission-groups/${groupId}/missions/${missionId}/reorder/${targetMissionId}`,
+    );
+    return response.data;
+  },
+};
+
+export const groupProgressApi = {
+  get: async (groupId: string): Promise<GroupProgressResponse> => {
+    const response = await apiClient.get<GroupProgressResponse>(`/group-progress/${groupId}`);
+    return response.data;
+  },
+
+  start: async (groupId: string): Promise<GroupProgressResponse> => {
+    const response = await apiClient.post<GroupProgressResponse>(`/group-progress/${groupId}/start`);
+    return response.data;
+  },
+
+  completeStep: async (groupId: string): Promise<GroupProgressResponse> => {
+    const response = await apiClient.post<GroupProgressResponse>(`/group-progress/${groupId}/complete-step`);
+    return response.data;
+  },
+};
+
+export const fillInBlankApi = {
+  save: async (missionId: string, data: SaveFillInBlankRequest): Promise<FillInBlankAdminResponse> => {
+    const response = await apiClient.post<FillInBlankAdminResponse>(
+      `/missions/${missionId}/fill-in-blank`,
+      data,
+    );
+    return response.data;
+  },
+
+  update: async (missionId: string, data: SaveFillInBlankRequest): Promise<FillInBlankAdminResponse> => {
+    const response = await apiClient.put<FillInBlankAdminResponse>(
+      `/missions/${missionId}/fill-in-blank`,
+      data,
+    );
+    return response.data;
+  },
+
+  getForAdmin: async (missionId: string): Promise<FillInBlankAdminResponse> => {
+    const response = await apiClient.get<FillInBlankAdminResponse>(
+      `/missions/${missionId}/fill-in-blank/admin`,
+    );
+    return response.data;
+  },
+
+  getForUser: async (missionId: string): Promise<FillInBlankUserResponse> => {
+    const response = await apiClient.get<FillInBlankUserResponse>(
+      `/missions/${missionId}/fill-in-blank`,
+    );
+    return response.data;
+  },
+
+  submit: async (
+    missionId: string,
+    data: SubmitFillInBlankRequest,
+  ): Promise<FillInBlankResultResponse> => {
+    const response = await apiClient.post<FillInBlankResultResponse>(
+      `/missions/${missionId}/fill-in-blank/submit`,
+      data,
+    );
+    return response.data;
+  },
+
+  getLastAttempt: async (missionId: string): Promise<LastAttemptResponse> => {
+    const response = await apiClient.get<LastAttemptResponse>(
+      `/missions/${missionId}/fill-in-blank/last-attempt`,
+    );
+    return response.data;
   },
 };

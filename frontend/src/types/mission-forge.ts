@@ -15,7 +15,7 @@ export interface CreateMissionInitialRequest {
   descriptionMarkdown?: string;
   missionType: MissionType;
   difficulty: Difficulty;
-  orderInSystem: number;
+  orderIndex: number;
   templateLanguage: "javascript" | "python";
 }
 
@@ -32,7 +32,7 @@ export interface MissionForgeResponse {
   templateRepositoryUrl: string | null;
   missionType: MissionType;
   difficulty: Difficulty;
-  orderInSystem: number;
+  orderIndex: number;
   createdAt: string;
   ownerId: string;
   ownerUsername: string;
