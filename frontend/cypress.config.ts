@@ -2,12 +2,12 @@ import { defineConfig } from "cypress";
 
 export default defineConfig({
   e2e: {
-    baseUrl: "http://localhost:5173", // A frontend URL-je
+    baseUrl: "http://localhost:5173",
     viewportWidth: 1600,
     viewportHeight: 900,
-    setupNodeEvents(on, config) {
-      // implement node event listeners here
-    },
-    supportFile: false, // Egyszerűsítés végett most kikapcsoljuk
+    supportFile: false,
+    setupNodeEvents(on, config) {},
+    // Alapértelmezetten csak a mockolt tesztek futnak (CI-kompatibilis)
+    specPattern: "cypress/e2e/*.cy.ts",
   },
 });

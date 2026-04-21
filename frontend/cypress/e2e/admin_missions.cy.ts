@@ -84,7 +84,7 @@ describe("Admin Mission Management (Mocked Backend)", () => {
 
     cy.wait("@getNextOrder");
 
-    cy.get('input[name="orderInSystem"]').should("have.value", "5");
+    cy.get('input[name="orderIndex"]').should("have.value", "5");
 
     cy.get("button").find('svg[data-testid="SaveIcon"]').click({ force: true });
 

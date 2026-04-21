@@ -113,7 +113,9 @@ describe("Admin Star System Management (Mocked Backend)", () => {
         name: "Coruscant",
         description: "City planet",
         iconUrl: "",
-        missions: [],
+        createdAt: "2024-01-01T10:00:00Z",
+        updatedAt: "2024-01-01T10:00:00Z",
+        items: [],
       },
     }).as("getSystemDetail");
 
