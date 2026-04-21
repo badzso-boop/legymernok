@@ -38,6 +38,7 @@ public class MissionGroupProgress {
     private boolean completed;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant startedAt;
 
     @UpdateTimestamp

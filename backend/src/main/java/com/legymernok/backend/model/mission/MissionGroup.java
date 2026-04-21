@@ -47,6 +47,7 @@ public class MissionGroup {
     private Integer orderIndex;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

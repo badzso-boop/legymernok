@@ -32,5 +32,6 @@ public class MissionGroupStepCompletion {
     private Mission mission;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant completedAt;
 }

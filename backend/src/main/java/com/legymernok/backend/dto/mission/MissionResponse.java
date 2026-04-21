@@ -26,4 +26,5 @@ public class MissionResponse {
     private UUID ownerId;
     private String ownerUsername;
     private VerificationStatus verificationStatus;
+    private String content;
 }

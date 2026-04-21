@@ -68,6 +68,7 @@ public class Mission {
     private String content;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

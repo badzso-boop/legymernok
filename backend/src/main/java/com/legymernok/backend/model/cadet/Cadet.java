@@ -52,6 +52,7 @@ public class Cadet implements UserDetails {
     private Long giteaUserId;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

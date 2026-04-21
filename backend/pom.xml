@@ -81,7 +81,6 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
-
         <!-- TOOLS -->
         <dependency>
             <groupId>org.projectlombok</groupId>

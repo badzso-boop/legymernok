@@ -16,4 +16,5 @@ public class CreateMissionRequest {
     private MissionType missionType;
     private Difficulty difficulty;
     private Integer orderIndex;
+    private String content;
 }

@@ -34,6 +34,7 @@ public class FillInBlankDefinition {
     private Integer passThreshold;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

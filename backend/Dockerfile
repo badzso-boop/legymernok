@@ -13,15 +13,13 @@ COPY .mvn .mvn
 # Copy the pom.xml file first to download dependencies, leveraging Docker layer caching
 # This step only runs if pom.xml changes, speeding up subsequent builds
 COPY pom.xml .
-RUN ./mvnw dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 ./mvnw dependency:go-offline -B
 
 # Copy the rest of the source code
 COPY src src
 
 # Build the application
-# -DskipTests ensures tests are not run during the Docker build process, speeding it up
-# --offline uses previously downloaded dependencies
-RUN ./mvnw package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Stage 2: Create the final running image

@@ -41,5 +41,6 @@ public class FillInBlankAttempt {
     private boolean passed;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant submittedAt;
 }
