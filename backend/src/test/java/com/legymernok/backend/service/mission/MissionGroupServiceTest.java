@@ -120,8 +120,9 @@ class MissionGroupServiceTest {
     // =========================================================================
 
     @Test
-    void deleteGroup_whenGroupContainsFillInBlankMission_shouldThrowConflict() {
+    void deleteGroup_whenGroupContainsFillInBlankMission_shouldCascadeDeleteFibAndDeleteGroup() {
         UUID groupId = UUID.randomUUID();
+        UUID fibMissionId = UUID.randomUUID();
         MissionGroup group = MissionGroup.builder()
                 .id(groupId)
                 .starSystem(testStarSystem)
@@ -130,15 +131,18 @@ class MissionGroupServiceTest {
                 .build();
 
         Mission fillInBlankMission = new Mission();
-        fillInBlankMission.setId(UUID.randomUUID());
+        fillInBlankMission.setId(fibMissionId);
         fillInBlankMission.setMissionType(MissionType.FILL_IN_BLANK);
+        fillInBlankMission.setGroup(group);
 
         when(missionGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         when(missionRepository.findAllByGroupIdOrderByGroupOrderAsc(groupId))
                 .thenReturn(List.of(fillInBlankMission));
 
-        assertThrows(ResourceConflictException.class, () -> missionGroupService.deleteGroup(groupId));
-        verify(missionGroupRepository, never()).delete(any());
+        missionGroupService.deleteGroup(groupId);
+
+        verify(missionService).deleteMission(fibMissionId);
+        verify(missionGroupRepository).delete(group);
     }
 
     @Test
@@ -224,7 +228,7 @@ class MissionGroupServiceTest {
     // =========================================================================
 
     @Test
-    void removeMissionFromGroup_whenMissionIsFillInBlank_shouldThrow400() {
+    void removeMissionFromGroup_whenMissionIsFillInBlank_shouldBecomeStandalone() {
         UUID groupId = UUID.randomUUID();
         UUID missionId = UUID.randomUUID();
 
@@ -238,9 +242,13 @@ class MissionGroupServiceTest {
 
         when(missionGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         when(missionRepository.findById(missionId)).thenReturn(Optional.of(mission));
+        when(missionRepository.findMaxOrderIndex(testStarSystem.getId())).thenReturn(2);
 
-        assertThrows(ResourceConflictException.class,
-                () -> missionGroupService.removeMissionFromGroup(groupId, missionId));
+        missionGroupService.removeMissionFromGroup(groupId, missionId);
+
+        verify(missionRepository).save(mission);
+        assertNull(mission.getGroup());
+        assertEquals(3, mission.getOrderIndex());
     }
 
     // =========================================================================
