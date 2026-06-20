@@ -20,6 +20,7 @@ const GroupPlayerPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!groupId) return;
@@ -81,6 +82,21 @@ const GroupPlayerPage: React.FC = () => {
     handleCompleteStep();
   };
 
+  const missions = groupData?.missions ?? [];
+  const nextMissionIndex = missions.findIndex((m) => m.id === progress?.nextMissionId);
+  const effectiveIndex = viewIndex !== null ? viewIndex : Math.max(nextMissionIndex, 0);
+  const isReviewing = progress?.completed || (viewIndex !== null && viewIndex < nextMissionIndex);
+
+  const handleNextReview = () => {
+    if (effectiveIndex < missions.length - 1) {
+      setViewIndex(effectiveIndex + 1);
+    } else {
+      setViewIndex(null);
+    }
+  };
+
+  const handleBack = () => setViewIndex(Math.max(0, effectiveIndex - 1));
+
   // ── Loading ──────────────────────────────────────────────────
   if (loading) {
     return <div className="loading-screen">LOADING...</div>;
@@ -91,7 +107,7 @@ const GroupPlayerPage: React.FC = () => {
   }
 
   // ── Befejezési képernyő ──────────────────────────────────────
-  if (progress?.completed) {
+  if (progress?.completed && viewIndex === null) {
     return (
       <Box
         sx={{
@@ -161,6 +177,11 @@ const GroupPlayerPage: React.FC = () => {
           </Box>
 
           <RetroButton
+            color="blue"
+            labelKey="play.review"
+            onClick={() => setViewIndex(0)}
+          />
+          <RetroButton
             color="green"
             labelKey="play.backToSystem"
             onClick={() => navigate(`/star-systems/${groupData.starSystemId}`)}
@@ -171,8 +192,7 @@ const GroupPlayerPage: React.FC = () => {
   }
 
   // ── Aktuális misszió meghatározása ───────────────────────────
-  const currentMission =
-    groupData.missions.find((m) => m.id === progress?.nextMissionId) ?? null;
+  const currentMission = missions[effectiveIndex] ?? null;
 
   // ── Misszió tartalom ─────────────────────────────────────────
   const renderMission = () => {
@@ -189,21 +209,21 @@ const GroupPlayerPage: React.FC = () => {
         return (
           <ContentMissionView
             missionId={currentMission.id}
-            onComplete={handleCompleteStep}
+            onComplete={isReviewing ? handleNextReview : handleCompleteStep}
           />
         );
       case "FILL_IN_BLANK":
         return (
           <FillInBlankView
             missionId={currentMission.id}
-            onComplete={handleCompleteStep}
+            onComplete={isReviewing ? handleNextReview : handleCompleteStep}
           />
         );
       case "QUIZ":
         return (
           <QuizPlayerComponent
             missionId={currentMission.id}
-            onComplete={handleQuizComplete}
+            onComplete={isReviewing ? (_r) => handleNextReview() : handleQuizComplete}
           />
         );
       default:
@@ -283,6 +303,14 @@ const GroupPlayerPage: React.FC = () => {
           </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {effectiveIndex > 0 && (
+              <button
+                className="retro-btn blue"
+                onClick={handleBack}
+                title="Előző misszió"
+                style={{ width: 28, height: 28 }}
+              />
+            )}
             <Typography
               sx={{
                 fontFamily: '"VT323", monospace',
@@ -291,7 +319,7 @@ const GroupPlayerPage: React.FC = () => {
                 letterSpacing: 1,
               }}
             >
-              {completedCount + 1} / {totalCount}
+              {effectiveIndex + 1} / {totalCount}
             </Typography>
             <button
               className="retro-btn red"

@@ -43,6 +43,8 @@ public class FillInBlankService {
 
         // Ha létezik, teljes csere: blank + option törlése
         definitionRepository.findByMissionId(missionId).ifPresent(existing -> {
+            // Előbb töröljük az answer detail-eket (FK a blank_id-ra)
+            answerDetailRepository.deleteAllByMissionId(missionId);
             List<FillInBlankBlank> blanks = blankRepository.findAllByDefinitionIdOrderByOrderIndexAsc(existing.getId());
             blanks.forEach(b -> {
                 optionRepository.findAllByBlankIdOrderByOrderIndexAsc(b.getId())

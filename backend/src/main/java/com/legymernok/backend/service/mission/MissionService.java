@@ -443,7 +443,10 @@ public class MissionService {
         if (mission.getMissionType() != MissionType.CONTENT) {
             throw new IllegalArgumentException("Mission is not CONTENT type");
         }
-        String fullContent = mission.getContent() != null ? mission.getContent() : "";
+        String rawContent = mission.getContent();
+        String fullContent = (rawContent != null && !rawContent.isBlank())
+                ? rawContent
+                : (mission.getDescriptionMarkdown() != null ? mission.getDescriptionMarkdown() : "");
         String[] lines = fullContent.split("\n", -1);
         int totalLines = lines.length;
         int totalPages = Math.max(1, (int) Math.ceil((double) totalLines / pageSize));

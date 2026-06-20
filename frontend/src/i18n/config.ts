@@ -243,6 +243,8 @@ const resources = {
         start: "START",
         continue: "CONTINUE",
         replay: "REPLAY",
+        review: "REVIEW",
+        back: "PREVIOUS",
       },
       quiz: "Quiz",
       quizEditor: {
@@ -523,6 +525,8 @@ const resources = {
         start: "KEZDD EL",
         continue: "FOLYTATÁS",
         replay: "ÚJRA",
+        review: "ÁTTEKINTÉS",
+        back: "ELŐZŐ",
       },
       quiz: "Kvíz", // Visszaállítva szövegre
       quizEditor: {
