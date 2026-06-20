@@ -15,6 +15,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tab,
+  Tabs,
   type SelectChangeEvent,
 } from "@mui/material";
 import {
@@ -22,14 +24,23 @@ import {
   Save as SaveIcon,
   RocketLaunch as MissionIcon,
 } from "@mui/icons-material";
-import axios from "axios";
+import apiClient, { forgeApi } from "../../../api/client";
 import type { StarSystemResponse } from "../../../types/starSystem";
 import { useTranslation } from "react-i18next";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+import ContentEditor from "../../../components/admin/ContentEditor";
+import FillInBlankEditor from "../../../components/admin/FillInBlankEditor";
 
 const DIFFICULTIES = ["EASY", "MEDIUM", "HARD", "EXPERT"];
-const MISSION_TYPES = ["CODING", "CIRCUIT_SIMULATION"];
+const MISSION_TYPES = ["CODING", "CIRCUIT_SIMULATION", "QUIZ", "CONTENT", "FILL_IN_BLANK"];
+
+interface MissionFormState {
+  name: string;
+  descriptionMarkdown: string;
+  difficulty: string;
+  missionType: string;
+  orderIndex: number;
+  starSystemId: string;
+}
 
 const MissionEdit: React.FC = () => {
   const { t } = useTranslation();
@@ -38,57 +49,41 @@ const MissionEdit: React.FC = () => {
   const navigate = useNavigate();
   const isNew = !id;
 
-  // Ha új küldetést hozunk létre, a query paramból kapjuk meg a starSystemId-t
   const queryParams = new URLSearchParams(location.search);
   const starSystemIdFromQuery = queryParams.get("starSystemId");
 
   const [starSystems, setStarSystems] = useState<StarSystemResponse[]>([]);
-  const [mission, setMission] = useState({
+  const [mission, setMission] = useState<MissionFormState>({
     name: "",
     descriptionMarkdown: "",
     difficulty: "EASY",
     missionType: "CODING",
-    orderInSystem: 1,
+    orderIndex: 0,
     starSystemId: starSystemIdFromQuery || "",
   });
-
+  const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchContext = async () => {
-      const token = localStorage.getItem("token");
-
       try {
         setLoading(true);
 
-        const systemsRes = await axios.get<StarSystemResponse[]>(
-          `${API_URL}/star-systems`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
+        const systemsRes = await apiClient.get<StarSystemResponse[]>("/star-systems");
         setStarSystems(systemsRes.data);
+
         if (!isNew) {
-          // 1. Szerkesztés: A küldetést kérjük le változatlanul
-          const response = await axios.get(`${API_URL}/missions/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const response = await apiClient.get<MissionFormState>(`/missions/${id}`);
           setMission(response.data);
         } else if (starSystemIdFromQuery) {
-          // 2. Új Létrehozás: Csak a KÖVETKEZŐ sorszámot kérjük le
-          const response = await axios.get<number>(
-            `${API_URL}/missions/next-order`,
-            {
-              params: { starSystemId: starSystemIdFromQuery },
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-
+          const response = await apiClient.get<number>("/missions/next-order", {
+            params: { starSystemId: starSystemIdFromQuery },
+          });
           setMission((prev) => ({
             ...prev,
-            orderInSystem: response.data, // A backend már a (max + 1)-et adja
+            orderIndex: response.data,
             starSystemId: starSystemIdFromQuery,
           }));
         }
@@ -104,26 +99,18 @@ const MissionEdit: React.FC = () => {
 
   const handleSystemChange = async (e: SelectChangeEvent<string>) => {
     const newSystemId = e.target.value;
-    const token = localStorage.getItem("token");
-
-    // Beállítjuk az ID-t
     setMission((prev) => ({ ...prev, starSystemId: newSystemId }));
-
-    // Lekérjük az új rendszerhez tartozó következő sorszámot
     try {
-      const res = await axios.get<number>(`${API_URL}/missions/next-order`, {
+      const res = await apiClient.get<number>("/missions/next-order", {
         params: { starSystemId: newSystemId },
-        headers: { Authorization: `Bearer ${token}` },
       });
-      setMission((prev) => ({ ...prev, orderInSystem: res.data }));
-    } catch (err) {
-      console.error(t("errorOrderTaken", { order: mission.orderInSystem }));
+      setMission((prev) => ({ ...prev, orderIndex: res.data }));
+    } catch {
+      // silent
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setMission((prev) => ({ ...prev, [name]: value }));
   };
@@ -136,26 +123,32 @@ const MissionEdit: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-
     try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        ...mission,
-        templateFiles: {}, // Egyelőre üres, amíg nincs Monaco Editor
-      };
-
+      const payload = { ...mission, templateFiles: {} };
       if (isNew) {
-        await axios.post(`${API_URL}/missions`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        if (mission.missionType === "QUIZ") {
+          const res = await forgeApi.initializeMission({
+            starSystemId: mission.starSystemId,
+            name: mission.name,
+            descriptionMarkdown: mission.descriptionMarkdown,
+            missionType: "QUIZ",
+            difficulty: mission.difficulty as any,
+            orderIndex: mission.orderIndex,
+            templateLanguage: "javascript",
+          });
+          navigate(`/forge/${res.id}`);
+        } else {
+          const res = await apiClient.post<{ id: string }>("/missions", payload);
+          if (mission.missionType === "FILL_IN_BLANK") {
+            navigate(`/admin/missions/${res.data.id}`);
+          } else {
+            navigate(`/admin/star-systems/${mission.starSystemId}`);
+          }
+        }
       } else {
-        await axios.put(`${API_URL}/missions/${id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await apiClient.put(`/missions/${id}`, payload);
+        navigate(`/admin/star-systems/${mission.starSystemId}`);
       }
-
-      // Visszanavigálunk a csillagrendszer szerkesztőhöz
-      navigate(`/admin/star-systems/${mission.starSystemId}`);
     } catch (err: any) {
       setError(err.response?.data?.message || t("errorSaveMission"));
     } finally {
@@ -163,15 +156,16 @@ const MissionEdit: React.FC = () => {
     }
   };
 
+  const showContentTab = !isNew && mission.missionType === "CONTENT";
+  const showFillInBlankTab = mission.missionType === "FILL_IN_BLANK";
+
   if (loading) return <CircularProgress />;
 
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 2 }}>
         <IconButton
-          onClick={() =>
-            navigate(`/admin/star-systems/${mission.starSystemId}`)
-          }
+          onClick={() => navigate(`/admin/star-systems/${mission.starSystemId}`)}
           color="primary"
         >
           <ArrowBackIcon />
@@ -187,167 +181,190 @@ const MissionEdit: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 4 }}>
-        <Grid container spacing={4}>
-          <Grid size={{ xs: 12, md: 4 }} sx={{ textAlign: "center" }}>
-            <Box
-              sx={{
-                width: 120,
-                height: 120,
-                borderRadius: "50%",
-                bgcolor: "primary.main",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-                boxShadow: "0 0 20px rgba(0, 242, 255, 0.3)",
-              }}
-            >
-              <MissionIcon sx={{ fontSize: 60, color: "white" }} />
-            </Box>
-            <Grid size={{ xs: 12 }}>
-              <FormControl
-                fullWidth
-                disabled={!isNew && !starSystemIdFromQuery}
+      {(showContentTab || showFillInBlankTab) && (
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+          <Tab label="Alap adatok" />
+          {showContentTab && <Tab label="Tartalom" />}
+          {showFillInBlankTab && <Tab label="Kitöltős szerkesztő" />}
+        </Tabs>
+      )}
+
+      {tab === 0 && (
+        <Paper sx={{ p: 4 }}>
+          <Grid container spacing={4}>
+            <Grid size={{ xs: 12, md: 4 }} sx={{ textAlign: "center" }}>
+              <Box
+                sx={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: "50%",
+                  bgcolor: "primary.main",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 20px",
+                  boxShadow: "0 0 20px rgba(0, 242, 255, 0.3)",
+                }}
               >
-                <InputLabel>{t("starSystem")}</InputLabel>
-                <Select
-                  name="starSystemId"
-                  value={starSystems.length === 0 ? "" : mission.starSystemId}
-                  label="Csillagrendszer"
-                  onChange={handleSystemChange}
+                <MissionIcon sx={{ fontSize: 60, color: "white" }} />
+              </Box>
+              <Grid size={{ xs: 12 }}>
+                <FormControl fullWidth disabled={!isNew && !starSystemIdFromQuery}>
+                  <InputLabel>{t("starSystem")}</InputLabel>
+                  <Select
+                    name="starSystemId"
+                    value={starSystems.length === 0 ? "" : mission.starSystemId}
+                    label="Csillagrendszer"
+                    onChange={handleSystemChange}
+                  >
+                    {starSystems.map((sys) => (
+                      <MenuItem key={sys.id} value={sys.id}>
+                        {sys.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Typography variant="h6">{mission.name || t("unnamedMission")}</Typography>
+              <Typography color="text.secondary">ID: {mission.starSystemId}</Typography>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 8 }}>
+              <Typography variant="h6" gutterBottom>
+                {t("basicInfo")}
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    name="name"
+                    label={t("missionName")}
+                    fullWidth
+                    value={mission.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    name="descriptionMarkdown"
+                    label={t("descriptionMarkdown")}
+                    fullWidth
+                    multiline
+                    rows={6}
+                    value={mission.descriptionMarkdown}
+                    onChange={handleChange}
+                    placeholder={t("missionDescriptionPlaceholder")}
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t("difficulty")}</InputLabel>
+                    <Select
+                      name="difficulty"
+                      value={mission.difficulty}
+                      label="Nehézség"
+                      onChange={handleSelectChange}
+                    >
+                      {DIFFICULTIES.map((d) => (
+                        <MenuItem key={d} value={d}>
+                          {d}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <FormControl fullWidth>
+                    <InputLabel>{t("missionType")}</InputLabel>
+                    <Select
+                      name="missionType"
+                      value={mission.missionType}
+                      label="Típus"
+                      onChange={handleSelectChange}
+                    >
+                      {MISSION_TYPES.map((mt) => (
+                        <MenuItem key={mt} value={mt}>
+                          {mt.replace(/_/g, " ")}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <TextField
+                    name="orderIndex"
+                    label={t("orderInSystem")}
+                    type="number"
+                    fullWidth
+                    value={mission.orderIndex}
+                    inputProps={{ min: 0 }}
+                    onChange={handleChange}
+                  />
+                </Grid>
+              </Grid>
+
+              <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end", gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate(`/admin/star-systems/${mission.starSystemId}`)}
                 >
-                  {starSystems.map((sys) => (
-                    <MenuItem key={sys.id} value={sys.id}>
-                      {sys.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Typography variant="h6">
-              {mission.name || t("unnamedMission")}
-            </Typography>
-            <Typography color="text.secondary">
-              ID: {mission.starSystemId}
-            </Typography>
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 8 }}>
-            <Typography variant="h6" gutterBottom>
-              {t("basicInfo")}
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  name="name"
-                  label={t("missionName")}
-                  fullWidth
-                  value={mission.name}
-                  onChange={handleChange}
-                  required
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  name="descriptionMarkdown"
-                  label={t("descriptionMarkdown")}
-                  fullWidth
-                  multiline
-                  rows={6}
-                  value={mission.descriptionMarkdown}
-                  onChange={handleChange}
-                  placeholder={t("missionDescriptionPlaceholder")}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <FormControl fullWidth>
-                  <InputLabel>{t("difficulty")}</InputLabel>
-                  <Select
-                    name="difficulty"
-                    value={mission.difficulty}
-                    label="Nehézség"
-                    onChange={handleSelectChange}
+                  {t("cancel")}
+                </Button>
+                {!isNew && mission.missionType === "QUIZ" && (
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={() => navigate(`/forge/${id}`)}
                   >
-                    {DIFFICULTIES.map((d) => (
-                      <MenuItem key={d} value={d}>
-                        {d}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <FormControl fullWidth>
-                  <InputLabel>{t("missionType")}</InputLabel>
-                  <Select
-                    name="missionType"
-                    value={mission.missionType}
-                    label="Típus"
-                    onChange={handleSelectChange}
-                  >
-                    {MISSION_TYPES.map((t) => (
-                      <MenuItem key={t} value={t}>
-                        {t.replace("_", " ")}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 4 }}>
-                <TextField
-                  name="orderInSystem"
-                  label={t("orderInSystem")}
-                  type="number"
-                  fullWidth
-                  value={mission.orderInSystem}
-                  inputProps={{ min: 1 }}
-                  onChange={handleChange}
-                />
-              </Grid>
-            </Grid>
-
-            <Box
-              sx={{
-                mt: 4,
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 2,
-              }}
-            >
-              <Button
-                variant="outlined"
-                onClick={() =>
-                  navigate(`/admin/star-systems/${mission.starSystemId}`)
-                }
-              >
-                {t("cancel")}
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<SaveIcon />}
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <CircularProgress size={24} />
-                ) : isNew ? (
-                  t("create")
-                ) : (
-                  t("save")
+                    Kvíz szerkesztő
+                  </Button>
                 )}
-              </Button>
-            </Box>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <CircularProgress size={24} />
+                  ) : isNew ? (
+                    t("create")
+                  ) : (
+                    t("save")
+                  )}
+                </Button>
+              </Box>
+            </Grid>
           </Grid>
-        </Grid>
-      </Paper>
+        </Paper>
+      )}
+
+      {tab === 1 && showContentTab && id && (
+        <Paper sx={{ p: 4 }}>
+          <ContentEditor
+            missionId={id}
+          />
+        </Paper>
+      )}
+
+      {tab === 1 && showFillInBlankTab && (
+        <Paper sx={{ p: 4 }}>
+          {id ? (
+            <FillInBlankEditor missionId={id} />
+          ) : (
+            <Alert severity="info">
+              Mentsd el először az alap adatokat, majd automatikusan ide kerülsz a szerkesztőbe.
+            </Alert>
+          )}
+        </Paper>
+      )}
     </Box>
   );
 };

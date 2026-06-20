@@ -126,6 +126,7 @@ const resources = {
 
       // Mission Forge
       forge: {
+        save: "SAVE",
         title: "Mission Forge",
         newMission: "Initialize New Mission",
         initializeMission: "Create Mission",
@@ -225,6 +226,25 @@ const resources = {
         warp: "WARP",
         data: "DATA",
         lang: "LANGUAGE",
+      },
+      // Fill-in-blank
+      fillInBlank: {
+        addBlank: "ADD BLANK",
+      },
+      // Play (user-facing gameplay)
+      play: {
+        loadMore: "LOAD MORE",
+        next: "NEXT",
+        backToSystem: "BACK TO SYSTEM",
+        groupCompleted: "GROUP COMPLETED",
+        alreadyPassed: "Already completed! ({{pct}}%)",
+        tryAgain: "TRY AGAIN",
+        submit: "SUBMIT",
+        start: "START",
+        continue: "CONTINUE",
+        replay: "REPLAY",
+        review: "REVIEW",
+        back: "PREVIOUS",
       },
       quiz: "Quiz",
       quizEditor: {
@@ -387,6 +407,7 @@ const resources = {
 
       // Mission Forge
       forge: {
+        save: "MENTÉS",
         title: "Mission Forge",
         newMission: "Új Misszió Inicializálása",
         initializeMission: "Misszió Létrehozása",
@@ -486,6 +507,26 @@ const resources = {
         warp: "UGRÁS",
         data: "ADAT",
         lang: "NYELV",
+      },
+      // Star System detail
+      // Fill-in-blank
+      fillInBlank: {
+        addBlank: "BLANK HOZZÁADÁSA",
+      },
+      // Play (user-facing gameplay)
+      play: {
+        loadMore: "TÖBB BETÖLTÉSE",
+        next: "KÖVETKEZŐ",
+        backToSystem: "VISSZA A RENDSZERHEZ",
+        groupCompleted: "CSOPORT TELJESÍTVE",
+        alreadyPassed: "Már teljesítetted! ({{pct}}%)",
+        tryAgain: "PRÓBÁLD ÚJRA",
+        submit: "BEKÜLDÉS",
+        start: "KEZDD EL",
+        continue: "FOLYTATÁS",
+        replay: "ÚJRA",
+        review: "ÁTTEKINTÉS",
+        back: "ELŐZŐ",
       },
       quiz: "Kvíz", // Visszaállítva szövegre
       quizEditor: {

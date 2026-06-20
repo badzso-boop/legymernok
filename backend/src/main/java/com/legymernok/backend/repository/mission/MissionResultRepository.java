@@ -11,8 +11,9 @@ import java.util.UUID;
 @Repository
 public interface MissionResultRepository extends JpaRepository<MissionResult, UUID> {
 
-    // Lekérhetjük egy kadét összes eddigi eredményét
     List<MissionResult> findAllByCadetId(UUID cadetId);
 
     Optional<MissionResult> findByMissionIdAndCadetIdAndSubmissionHash(UUID missionId, UUID cadetId, String submissionHash);
+
+    void deleteAllByMissionId(UUID missionId);
 }

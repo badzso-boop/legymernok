@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface CadetMissionRepository extends JpaRepository<CadetMission, UUID> {
     void deleteAllByCadetId(UUID cadetId);
+    void deleteAllByMissionId(UUID missionId);
     Optional<CadetMission> findByCadetIdAndMissionId(UUID cadetId, UUID missionId);
 }

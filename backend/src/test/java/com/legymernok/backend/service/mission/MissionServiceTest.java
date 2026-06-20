@@ -16,8 +16,18 @@ import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAnswerDetailRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankBlankRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankDefinitionRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankOptionRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
+import com.legymernok.backend.repository.quiz.QuizSessionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,9 +51,19 @@ class MissionServiceTest {
 
     @Mock private MissionRepository missionRepository;
     @Mock private StarSystemRepository starSystemRepository;
+    @Mock private CadetMissionRepository cadetMissionRepository;
     @Mock private GiteaService giteaService;
     @Mock private CadetRepository cadetRepository;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private MissionGroupStepCompletionRepository stepCompletionRepository;
+    @Mock private MissionResultRepository missionResultRepository;
+    @Mock private QuizSessionRepository quizSessionRepository;
+    @Mock private FillInBlankAnswerDetailRepository fillInBlankAnswerDetailRepository;
+    @Mock private FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    @Mock private FillInBlankOptionRepository fillInBlankOptionRepository;
+    @Mock private FillInBlankBlankRepository fillInBlankBlankRepository;
+    @Mock private FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
+    @Mock private MissionGroupRepository missionGroupRepository;
     @InjectMocks private MissionService missionService;
 
     private Cadet testUser;
@@ -116,11 +136,11 @@ class MissionServiceTest {
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
-        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderIndex(any(), any())).thenReturn(false);
         when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING))).thenReturn("http://gitea/repo.git");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
@@ -152,7 +172,7 @@ class MissionServiceTest {
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
 
         when(starSystemRepository.findById(anotherUsersSystem.getId())).thenReturn(Optional.of(anotherUsersSystem));
 
@@ -170,7 +190,7 @@ class MissionServiceTest {
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(testStarSystem.getId(), "Duplicate Mission")).thenReturn(true);
@@ -186,13 +206,13 @@ class MissionServiceTest {
         CreateMissionInitialRequest request = new CreateMissionInitialRequest();
         request.setStarSystemId(testStarSystem.getId());
         request.setName("Shifted Mission");
-        request.setOrderInSystem(2);
+        request.setOrderIndex(2);
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
-        when(missionRepository.existsByStarSystemIdAndOrderInSystem(testStarSystem.getId(), 2)).thenReturn(true);
+        when(missionRepository.existsByStarSystemIdAndOrderIndex(testStarSystem.getId(), 2)).thenReturn(true);
         when(giteaService.createMissionRepository(anyString(), anyString(), any(Cadet.class), any())).thenReturn("http://gitea/repo.url");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
@@ -218,11 +238,11 @@ class MissionServiceTest {
         request.setTemplateLanguage("quiz");
         request.setDifficulty(Difficulty.MEDIUM);
         request.setMissionType(MissionType.QUIZ);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
-        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderIndex(any(), any())).thenReturn(false);
         when(giteaService.createMissionRepository(anyString(), eq("quiz"), eq(testUser), eq(MissionType.QUIZ))).thenReturn("http://gitea/quiz-repo.git");
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
@@ -247,11 +267,11 @@ class MissionServiceTest {
         request.setTemplateLanguage("javascript");
         request.setDifficulty(Difficulty.EASY);
         request.setMissionType(MissionType.CODING);
-        request.setOrderInSystem(1);
+        request.setOrderIndex(1);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
-        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderIndex(any(), any())).thenReturn(false);
         when(missionRepository.save(any(Mission.class))).thenAnswer(i -> {
             Mission m = i.getArgument(0);
             if (m.getId() == null) m.setId(UUID.randomUUID());
@@ -699,11 +719,11 @@ class MissionServiceTest {
         initialRequest.setTemplateLanguage("javascript");
         initialRequest.setDifficulty(Difficulty.EASY);
         initialRequest.setMissionType(MissionType.CODING);
-        initialRequest.setOrderInSystem(1);
+        initialRequest.setOrderIndex(1);
 
         when(starSystemRepository.findById(testStarSystem.getId())).thenReturn(Optional.of(testStarSystem));
         when(missionRepository.existsByStarSystemIdAndName(any(), anyString())).thenReturn(false);
-        when(missionRepository.existsByStarSystemIdAndOrderInSystem(any(), any())).thenReturn(false);
+        when(missionRepository.existsByStarSystemIdAndOrderIndex(any(), any())).thenReturn(false);
         when(giteaService.createMissionRepository(anyString(), eq("javascript"), eq(testUser), eq(MissionType.CODING))).thenReturn("http://gitea/init_repo.git");
 
         when(missionRepository.save(any(Mission.class)))

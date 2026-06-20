@@ -47,7 +47,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
         descriptionMarkdown: "",
         missionType: "CODING",
         difficulty: "EASY",
-        orderInSystem: 1,
+        orderIndex: 1,
         templateLanguage: "javascript",
         newStarSystemName: "",
         newStarSystemDescription: "",
@@ -388,7 +388,7 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                       label={t("forge.orderInSystem").toUpperCase()}
                       type="number"
                       variant="filled"
-                      {...register("orderInSystem")}
+                      {...register("orderIndex")}
                       sx={terminalInputSx}
                     />
                   </Grid>

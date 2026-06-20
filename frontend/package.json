@@ -11,6 +11,8 @@
     "test": "vitest",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
+    "cy:open:integration": "cypress open --config-file cypress.integration.config.ts",
+    "cy:integration": "cypress run --config-file cypress.integration.config.ts",
     "test:e2e:ci": "start-server-and-test dev http://localhost:5173 cy:run"
   },
   "dependencies": {

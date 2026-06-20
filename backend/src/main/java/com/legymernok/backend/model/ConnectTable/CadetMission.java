@@ -46,5 +46,6 @@ public class CadetMission {
     private Instant completedAt;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant lastUpdatedAt;
 }

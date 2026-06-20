@@ -15,5 +15,6 @@ public class CreateMissionRequest {
     private Map<String, String> templateFiles;
     private MissionType missionType;
     private Difficulty difficulty;
-    private Integer orderInSystem;
+    private Integer orderIndex;
+    private String content;
 }

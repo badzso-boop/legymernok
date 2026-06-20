@@ -8,6 +8,8 @@ import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,8 @@ public class StarSystemServiceTest {
 
     @Mock private StarSystemRepository starSystemRepository;
     @Mock private CadetRepository cadetRepository;
+    @Mock private MissionRepository missionRepository;
+    @Mock private MissionGroupRepository missionGroupRepository;
     @InjectMocks private StarSystemService starSystemService;
 
     private Cadet owner;

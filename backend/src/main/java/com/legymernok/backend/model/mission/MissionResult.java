@@ -52,6 +52,7 @@ public class MissionResult {
     private boolean isLate = false;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant completedAt;
 
     @Column(nullable = false)

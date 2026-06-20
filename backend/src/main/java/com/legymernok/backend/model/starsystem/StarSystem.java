@@ -37,6 +37,7 @@ public class StarSystem {
     private Cadet owner;
 
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

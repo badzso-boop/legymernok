@@ -1,11 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import MissionEdit from "../missions/MissionEdit";
-import axios from "axios";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-vi.mock("axios");
-const mockedAxios = axios as any;
+// --- Mockok ---
+
+// apiClient default export + szükséges namespace-ek mock-olása
+vi.mock("../../../api/client", () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -17,6 +25,19 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockedNavigate };
 });
 
+// ContentEditor és FillInBlankEditor mock (tab tartalmak, nem releváns)
+vi.mock("../../../components/admin/ContentEditor", () => ({
+  default: () => <div data-testid="content-editor-mock" />,
+}));
+vi.mock("../../../components/admin/FillInBlankEditor", () => ({
+  default: () => <div data-testid="fib-editor-mock" />,
+}));
+
+import apiClient from "../../../api/client";
+const mockedApiClient = apiClient as any;
+
+// --- Tesztek ---
+
 describe("MissionEdit Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,18 +48,19 @@ describe("MissionEdit Component", () => {
       id: "1",
       name: "Test Mission",
       starSystemId: "s1",
-      orderInSystem: 5,
+      orderIndex: 5,
       difficulty: "HARD",
       missionType: "CODING",
+      descriptionMarkdown: "",
     };
     const mockSystems = [{ id: "s1", name: "System 1" }];
 
-    mockedAxios.get.mockImplementation((url: string) => {
+    mockedApiClient.get.mockImplementation((url: string) => {
       if (url.includes("/missions/1"))
         return Promise.resolve({ data: mockMission });
       if (url.includes("/star-systems"))
         return Promise.resolve({ data: mockSystems });
-      return Promise.reject();
+      return Promise.reject(new Error("unexpected url: " + url));
     });
 
     render(
@@ -46,22 +68,22 @@ describe("MissionEdit Component", () => {
         <Routes>
           <Route path="/admin/missions/:id" element={<MissionEdit />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Test Mission")).toBeInTheDocument();
-      // A Select értékét nehéz tesztelni, de az inputban ott kell lennie a "System 1"-nek vagy az ID-nak rejtve
     });
   });
 
   it("fetches next order for new mission", async () => {
     const mockSystems = [{ id: "s1", name: "System 1" }];
 
-    mockedAxios.get.mockImplementation((url: string) => {
+    mockedApiClient.get.mockImplementation((url: string) => {
       if (url.includes("/star-systems"))
         return Promise.resolve({ data: mockSystems });
-      if (url.includes("/next-order")) return Promise.resolve({ data: 10 });
+      if (url.includes("/next-order"))
+        return Promise.resolve({ data: 10 });
       return Promise.resolve({ data: {} });
     });
 
@@ -70,11 +92,10 @@ describe("MissionEdit Component", () => {
         <Routes>
           <Route path="/admin/missions/new" element={<MissionEdit />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     await waitFor(() => {
-      // Ellenőrizzük, hogy a sorszám mezőben megjelenik-e a 10
       expect(screen.getByDisplayValue("10")).toBeInTheDocument();
     });
   });

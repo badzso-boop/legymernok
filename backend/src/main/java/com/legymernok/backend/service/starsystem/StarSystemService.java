@@ -1,15 +1,24 @@
 package com.legymernok.backend.service.starsystem;
 
+import com.legymernok.backend.dto.group.MissionGroupResponse;
+import com.legymernok.backend.dto.group.ReorderResponse;
 import com.legymernok.backend.dto.mission.MissionResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
+import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
+import com.legymernok.backend.dto.starsystem.StarSystemItemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
-import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.mission.Mission;
+import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +29,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +42,9 @@ public class StarSystemService {
 
     private final StarSystemRepository starSystemRepository;
     private final MissionService missionService;
+    private final MissionRepository missionRepository;
+    private final MissionGroupRepository missionGroupRepository;
+    private final MissionGroupProgressRepository missionGroupProgressRepository;
     private final CadetRepository cadetRepository;
 
     @Transactional
@@ -83,6 +97,16 @@ public class StarSystemService {
         }
 
         log.info("Deleting StarSystem with ID: {}", id);
+
+        // Missziók és azok child rekordjainak törlése
+        missionRepository.findAllByStarSystemId(id)
+                .forEach(m -> missionService.deleteMission(m.getId()));
+
+        // Group progress + groupok törlése
+        missionGroupRepository.findAllByStarSystemIdOrderByOrderIndexAsc(id)
+                .forEach(g -> missionGroupProgressRepository.deleteAllByGroupId(g.getId()));
+        missionGroupRepository.deleteAllByStarSystemId(id);
+
         starSystemRepository.deleteById(id);
     }
 
@@ -118,23 +142,107 @@ public class StarSystemService {
     }
 
     @Transactional(readOnly = true)
-    public StarSystemWithMissionResponse getStarSystemWithMissions(UUID id) {
-        // 1. Csillagrendszer lekérdezése
+    public StarSystemWithItemsResponse getStarSystemWithItems(UUID id) {
         StarSystem starSystem = starSystemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", id));
 
-        // 2. Küldetések lekérdezése a MissionService segítségével
-        List<MissionResponse> missions = missionService.getMissionsByStarSystem(id);
+        // Standalone mission-ök
+        List<StarSystemItemResponse> missionItems = missionRepository
+                .findAllByStarSystemIdAndGroupIsNullOrderByOrderIndexAsc(id).stream()
+                .map(m -> StarSystemItemResponse.builder()
+                        .type("MISSION")
+                        .orderIndex(m.getOrderIndex())
+                        .mission(missionService.mapToResponse(m))
+                        .build())
+                .collect(Collectors.toList());
 
-        // 3. A komplex válasz DTO összeállítása
-        return StarSystemWithMissionResponse.builder()
+        // Group-ok
+        List<StarSystemItemResponse> groupItems = missionGroupRepository
+                .findAllByStarSystemIdOrderByOrderIndexAsc(id).stream()
+                .map(g -> {
+                    List<MissionResponse> groupMissions = missionRepository
+                            .findAllByGroupIdOrderByGroupOrderAsc(g.getId()).stream()
+                            .map(missionService::mapToResponse)
+                            .collect(Collectors.toList());
+                    return StarSystemItemResponse.builder()
+                            .type("GROUP")
+                            .orderIndex(g.getOrderIndex())
+                            .group(mapGroupToResponse(g))
+                            .groupMissions(groupMissions)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        // Összefűzés + rendezés orderIndex szerint
+        List<StarSystemItemResponse> items = Stream.concat(missionItems.stream(), groupItems.stream())
+                .sorted(Comparator.comparing(StarSystemItemResponse::getOrderIndex,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .collect(Collectors.toList());
+
+        return StarSystemWithItemsResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
-                .missions(missions)
+                .items(items)
+                .build();
+    }
+
+    @Transactional
+    public ReorderResponse reorderItems(UUID starSystemId, ReorderItemsRequest request) {
+        Integer idx1;
+        Integer idx2;
+
+        MissionGroup group1 = null;
+        Mission mission1 = null;
+        MissionGroup group2 = null;
+        Mission mission2 = null;
+
+        if ("GROUP".equals(request.getItem1Type())) {
+            group1 = missionGroupRepository.findById(request.getItem1Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("MissionGroup", "id", request.getItem1Id()));
+            idx1 = group1.getOrderIndex();
+        } else {
+            mission1 = missionRepository.findById(request.getItem1Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getItem1Id()));
+            idx1 = mission1.getOrderIndex();
+        }
+
+        if ("GROUP".equals(request.getItem2Type())) {
+            group2 = missionGroupRepository.findById(request.getItem2Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("MissionGroup", "id", request.getItem2Id()));
+            idx2 = group2.getOrderIndex();
+        } else {
+            mission2 = missionRepository.findById(request.getItem2Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getItem2Id()));
+            idx2 = mission2.getOrderIndex();
+        }
+
+        if (group1 != null) { group1.setOrderIndex(idx2); missionGroupRepository.save(group1); }
+        else { mission1.setOrderIndex(idx2); missionRepository.save(mission1); }
+
+        if (group2 != null) { group2.setOrderIndex(idx1); missionGroupRepository.save(group2); }
+        else { mission2.setOrderIndex(idx1); missionRepository.save(mission2); }
+
+        return ReorderResponse.builder()
+                .updated(List.of(
+                        ReorderResponse.ReorderItem.builder().id(request.getItem1Id()).orderIndex(idx2).build(),
+                        ReorderResponse.ReorderItem.builder().id(request.getItem2Id()).orderIndex(idx1).build()
+                ))
+                .build();
+    }
+
+    private MissionGroupResponse mapGroupToResponse(MissionGroup group) {
+        return MissionGroupResponse.builder()
+                .id(group.getId())
+                .name(group.getName())
+                .description(group.getDescription())
+                .starSystemId(group.getStarSystem().getId())
+                .orderIndex(group.getOrderIndex())
+                .createdAt(group.getCreatedAt())
+                .updatedAt(group.getUpdatedAt())
                 .build();
     }
 

@@ -2,6 +2,7 @@ package com.legymernok.backend.service.mission;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.legymernok.backend.dto.mission.*;
+import java.util.Arrays;
 import com.legymernok.backend.dto.quiz.QuizDefinition;
 import com.legymernok.backend.exception.ExternalServiceException;
 import com.legymernok.backend.exception.ResourceConflictException;
@@ -17,7 +18,16 @@ import com.legymernok.backend.model.mission.VerificationStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAnswerDetailRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankBlankRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankDefinitionRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankOptionRepository;
+import com.legymernok.backend.repository.mission.MissionGroupRepository;
+import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
+import com.legymernok.backend.repository.quiz.QuizSessionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -45,6 +55,15 @@ public class MissionService {
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
     private final ObjectMapper objectMapper;
+    private final MissionGroupStepCompletionRepository stepCompletionRepository;
+    private final MissionResultRepository missionResultRepository;
+    private final QuizSessionRepository quizSessionRepository;
+    private final FillInBlankAnswerDetailRepository fillInBlankAnswerDetailRepository;
+    private final FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    private final FillInBlankOptionRepository fillInBlankOptionRepository;
+    private final FillInBlankBlankRepository fillInBlankBlankRepository;
+    private final FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
+    private final MissionGroupRepository missionGroupRepository;
 
     @Value("${gitea.template.js.owner}")
     private String jsTemplateRepoOwner;
@@ -85,10 +104,13 @@ public class MissionService {
             throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
-        // Ellenőrzés: Sorrend ütközés (ha a sorrend már foglalt, eltoljuk a többit)
-        if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
-            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
+        // Ellenőrzés: Sorrend ütközés (missions ÉS groups ellen)
+        if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
             missionRepository.flush();
+            missionGroupRepository.flush();
         }
 
         Mission mission = Mission.builder()
@@ -97,12 +119,21 @@ public class MissionService {
                 .descriptionMarkdown(request.getDescriptionMarkdown())
                 .missionType(request.getMissionType())
                 .difficulty(request.getDifficulty())
-                .orderInSystem(request.getOrderInSystem())
+                .orderIndex(request.getOrderIndex())
                 .owner(currentUser)
                 .verificationStatus(VerificationStatus.DRAFT)
-                .templateRepositoryUrl("PENDING_INITIALIZATION")
                 .build();
 
+        // CONTENT és FILL_IN_BLANK típusú missziókhoz nincs Gitea repo
+        if (request.getMissionType() == MissionType.CONTENT
+                || request.getMissionType() == MissionType.FILL_IN_BLANK) {
+            Mission savedMission = missionRepository.save(mission);
+            log.info("New {} mission '{}' created by user '{}'.",
+                    request.getMissionType(), savedMission.getName(), currentUser.getUsername());
+            return mapToResponse(savedMission);
+        }
+
+        mission.setTemplateRepositoryUrl("PENDING_INITIALIZATION");
         Mission savedMission = missionRepository.save(mission);
 
         String newRepoName = savedMission.getId().toString();
@@ -115,14 +146,11 @@ public class MissionService {
                     savedMission.getMissionType()
             );
 
-            // 3. Frissítsük a rekordot a valódi Gitea URL-lel
             savedMission.setTemplateRepositoryUrl(templateRepositoryUrl);
-            // Ez már egy valódi UPDATE lesz, ami működni fog
             savedMission = missionRepository.save(savedMission);
 
         } catch (Exception e) {
             log.error("Gitea repository creation failed for mission {}. Error: {}", newRepoName, e.getMessage());
-            // Mivel @Transactional, ha itt kivételt dobsz, a DB-ből is visszagörgeti a missziót!
             throw new ExternalServiceException("Gitea", "Failed to create repository: " + e.getMessage());
         }
 
@@ -148,7 +176,9 @@ public class MissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getMissionId()));
 
         // Ellenőrzés: User a tulajdonos, vagy van edit_any joga
-        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+        if (mission.getOwner() != null
+                && !mission.getOwner().getId().equals(currentUser.getId())
+                && !hasAuthority(currentUser, "mission:edit_any")) {
             throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
         }
 
@@ -236,6 +266,46 @@ public class MissionService {
     }
 
     @Transactional
+    public MissionResponse createMission(CreateMissionRequest request) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        StarSystem starSystem = starSystemRepository.findById(request.getStarSystemId())
+                .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
+
+        if (!starSystem.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:create_any_system")) {
+            throw new UnauthorizedAccessException("You can only add missions to your own star systems.");
+        }
+
+        if (missionRepository.existsByStarSystemIdAndName(request.getStarSystemId(), request.getName())) {
+            throw new ResourceConflictException("Mission", "name", request.getName());
+        }
+
+        if (request.getOrderIndex() != null &&
+                (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex()))) {
+            missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+            missionRepository.flush();
+            missionGroupRepository.flush();
+        }
+
+        Mission mission = Mission.builder()
+                .starSystem(starSystem)
+                .name(request.getName())
+                .descriptionMarkdown(request.getDescriptionMarkdown())
+                .missionType(request.getMissionType())
+                .difficulty(request.getDifficulty())
+                .orderIndex(request.getOrderIndex())
+                .owner(currentUser)
+                .verificationStatus(VerificationStatus.PENDING)
+                .content(request.getContent())
+                .build();
+
+        Mission saved = missionRepository.save(mission);
+        log.info("Admin mission '{}' (ID: {}) created by '{}'.", saved.getName(), saved.getId(), currentUser.getUsername());
+        return mapToResponse(saved);
+    }
+
+    @Transactional
     public MissionResponse updateMission(UUID id, CreateMissionRequest request) {
         Cadet currentUser = getCurrentAuthenticatedUser();
         Mission missionToUpdate = missionRepository.findById(id)
@@ -258,11 +328,14 @@ public class MissionService {
             throw new ResourceConflictException("Mission", "name", request.getName());
         }
 
-        // Sorrend ütközés (ha a sorrend változik)
-        if (missionToUpdate.getOrderInSystem() != request.getOrderInSystem()) {
-            if (missionRepository.existsByStarSystemIdAndOrderInSystem(request.getStarSystemId(), request.getOrderInSystem())) {
-                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderInSystem());
-                missionRepository.flush(); // Biztosítjuk, hogy a shift lefusson
+        // Sorrend ütközés (ha a sorrend változik — missions ÉS groups ellen)
+        if (!java.util.Objects.equals(missionToUpdate.getOrderIndex(), request.getOrderIndex())) {
+            if (missionRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())
+                    || missionGroupRepository.existsByStarSystemIdAndOrderIndex(request.getStarSystemId(), request.getOrderIndex())) {
+                missionRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+                missionGroupRepository.shiftOrdersUp(request.getStarSystemId(), request.getOrderIndex());
+                missionRepository.flush();
+                missionGroupRepository.flush();
             }
         }
 
@@ -277,7 +350,10 @@ public class MissionService {
         missionToUpdate.setDescriptionMarkdown(request.getDescriptionMarkdown());
         missionToUpdate.setMissionType(request.getMissionType());
         missionToUpdate.setDifficulty(request.getDifficulty());
-        missionToUpdate.setOrderInSystem(request.getOrderInSystem());
+        missionToUpdate.setOrderIndex(request.getOrderIndex());
+        if (request.getContent() != null) {
+            missionToUpdate.setContent(request.getContent());
+        }
         missionToUpdate.setUpdatedAt(Instant.now());
 
         Mission updatedMission = missionRepository.save(missionToUpdate);
@@ -348,17 +424,64 @@ public class MissionService {
 
     @Transactional(readOnly = true)
     public List<MissionResponse> getMissionsByStarSystem(UUID starSystemId) {
-        return missionRepository.findAllByStarSystemIdOrderByOrderInSystemAsc(starSystemId)
+        return missionRepository.findAllByStarSystemIdAndGroupIsNullOrderByOrderIndexAsc(starSystemId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     public Integer getNextOrderForStarSystem(UUID starSystemId) {
-        return missionRepository.findMaxOrderInSystem(starSystemId) + 1;
+        int missionMax = missionRepository.findMaxOrderIndex(starSystemId);
+        int groupMax = missionGroupRepository.findMaxOrderIndex(starSystemId);
+        return Math.max(missionMax, groupMax) + 1;
+    }
+
+    @Transactional(readOnly = true)
+    public ContentPageResponse getContentPage(UUID missionId, int page, int pageSize) {
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+        if (mission.getMissionType() != MissionType.CONTENT) {
+            throw new IllegalArgumentException("Mission is not CONTENT type");
+        }
+        String rawContent = mission.getContent();
+        String fullContent = (rawContent != null && !rawContent.isBlank())
+                ? rawContent
+                : (mission.getDescriptionMarkdown() != null ? mission.getDescriptionMarkdown() : "");
+        String[] lines = fullContent.split("\n", -1);
+        int totalLines = lines.length;
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalLines / pageSize));
+        int from = page * pageSize;
+        int to = Math.min(from + pageSize, totalLines);
+        String pageContent = from < totalLines
+                ? String.join("\n", Arrays.copyOfRange(lines, from, to))
+                : "";
+        return ContentPageResponse.builder()
+                .missionId(missionId)
+                .missionName(mission.getName())
+                .content(pageContent)
+                .page(page)
+                .pageSize(pageSize)
+                .totalLines(totalLines)
+                .totalPages(totalPages)
+                .hasNextPage(page < totalPages - 1)
+                .hasPreviousPage(page > 0)
+                .build();
     }
 
     @Transactional
+    public MissionResponse updateMissionContent(UUID id, String content) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
+
+        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+
+        mission.setContent(content);
+        return mapToResponse(missionRepository.save(mission));
+    }
+
     public void updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus) {
         Mission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
@@ -386,7 +509,7 @@ public class MissionService {
         }
 
         UUID starSystemId = mission.getStarSystem().getId();
-        Integer deletedOrder = mission.getOrderInSystem();
+        Integer deletedOrder = mission.getOrderIndex();
         String repoUrl = mission.getTemplateRepositoryUrl();
 
         // 1. Gitea Repo törlése (Best Effort - ha nem sikerül, nem állítjuk meg a folyamatot, csak logolunk)
@@ -402,7 +525,16 @@ public class MissionService {
             // Nem dobunk hibát, hogy a DB törlés attól még végbemenjen
         }
 
-        // 2. DB törlés
+        // 2. DB törlés — child rekordok helyes sorrendben
+        fillInBlankAnswerDetailRepository.deleteAllByMissionId(id);
+        fillInBlankAttemptRepository.deleteAllByMissionId(id);
+        stepCompletionRepository.deleteAllByMissionId(id);
+        missionResultRepository.deleteAllByMissionId(id);
+        quizSessionRepository.deleteAllByMissionId(id);
+        cadetMissionRepository.deleteAllByMissionId(id);
+        fillInBlankOptionRepository.deleteAllByMissionId(id);
+        fillInBlankBlankRepository.deleteAllByMissionId(id);
+        fillInBlankDefinitionRepository.deleteByMissionId(id);
         missionRepository.delete(mission);
         log.info("Mission deleted: ID {}, Name '{}'", id, mission.getName());
 
@@ -428,7 +560,7 @@ public class MissionService {
         return lastPart;
     }
 
-    private MissionResponse mapToResponse(Mission mission) {
+    public MissionResponse mapToResponse(Mission mission) {
         String repoUrl = null;
 
         if (isAdmin()) {
@@ -443,11 +575,14 @@ public class MissionService {
                 .templateRepositoryUrl(repoUrl)
                 .missionType(mission.getMissionType())
                 .difficulty(mission.getDifficulty())
-                .orderInSystem(mission.getOrderInSystem())
+                .orderIndex(mission.getOrderIndex())
+                .groupId(mission.getGroup() != null ? mission.getGroup().getId() : null)
+                .groupOrder(mission.getGroupOrder())
                 .ownerId(mission.getOwner() != null ? mission.getOwner().getId() : null)
                 .ownerUsername(mission.getOwner() != null ? mission.getOwner().getUsername() : null)
                 .verificationStatus(mission.getVerificationStatus())
                 .createdAt(mission.getCreatedAt())
+                .content(mission.getContent())
                 .build();
     }
 

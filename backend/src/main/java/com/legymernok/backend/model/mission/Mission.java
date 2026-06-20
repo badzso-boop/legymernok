@@ -25,9 +25,9 @@ public class Mission {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY) // Sok küldetés tartozhat egy csillagrendszerhez
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "star_system_id", nullable = false)
-    private StarSystem starSystem; // Foreign key a StarSystem-hez
+    private StarSystem starSystem;
 
     @Column(nullable = false)
     private String name;
@@ -35,7 +35,7 @@ public class Mission {
     @Column(columnDefinition = "TEXT")
     private String descriptionMarkdown;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String templateRepositoryUrl;
 
     @Enumerated(EnumType.STRING)
@@ -46,8 +46,8 @@ public class Mission {
     @Column(nullable = false)
     private Difficulty difficulty;
 
-    @Column(nullable = false)
-    private Integer orderInSystem;
+    @Column(nullable = true)
+    private Integer orderIndex;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
@@ -57,7 +57,18 @@ public class Mission {
     @Enumerated(EnumType.STRING)
     private VerificationStatus verificationStatus = VerificationStatus.DRAFT;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private MissionGroup group;
+
+    @Column(nullable = true)
+    private Integer groupOrder;
+
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
     @CreationTimestamp
+    @Column(updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp

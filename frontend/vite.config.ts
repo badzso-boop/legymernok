@@ -31,6 +31,10 @@ export default defineConfig(() => {
       environment: "jsdom",
       setupFiles: "./src/setupTests.ts",
       css: false,
+      // WSL2-ben a thread pool hajlamos timeout-olni; forks stabilabb
+      pool: "forks",
+      testTimeout: 15000,
+      hookTimeout: 15000,
       server: {
         deps: {
           inline: [/@mui\/x-data-grid/],

@@ -1,8 +1,10 @@
 package com.legymernok.backend.web.starsystem;
 
+import com.legymernok.backend.dto.group.ReorderResponse;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
+import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
-import com.legymernok.backend.dto.starsystem.StarSystemWithMissionResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
 import com.legymernok.backend.service.starsystem.StarSystemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -55,8 +57,14 @@ public class StarSystemController {
 
     @GetMapping("/{id}/with-missions")
     @PreAuthorize("hasAuthority('starsystem:read')")
-    public ResponseEntity<StarSystemWithMissionResponse> getStarSystemWithMissions(@PathVariable UUID id) {
-        return ResponseEntity.ok(starSystemService.getStarSystemWithMissions(id));
+    public ResponseEntity<StarSystemWithItemsResponse> getStarSystemWithItems(@PathVariable UUID id) {
+        return ResponseEntity.ok(starSystemService.getStarSystemWithItems(id));
+    }
+
+    @PostMapping("/{id}/reorder-items")
+    @PreAuthorize("hasAuthority('starsystem:edit')")
+    public ResponseEntity<ReorderResponse> reorderItems(@PathVariable UUID id, @RequestBody ReorderItemsRequest request) {
+        return ResponseEntity.ok(starSystemService.reorderItems(id, request));
     }
 
     @GetMapping("/my-systems")
