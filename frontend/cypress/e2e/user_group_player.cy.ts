@@ -155,7 +155,6 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: mockStarSystemWithGroup,
     }).as("getStarSystem");
 
-    // ── VISIT előtt regisztrálva: GroupPlayer szinkron mountolódik HashRouter navigációkor ──
     cy.intercept("GET", `**/api/mission-groups/${groupId}`, {
       statusCode: 200,
       body: mockGroup,
@@ -166,19 +165,25 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: makeProgress("content-m1"),
     }).as("startProgress");
 
-    // LIFO: getProgressStep1 előbb → getProgressNotStarted utóbb (utolsó = első illeszkedés)
-    // Eredmény: első GET 404 (not started), utána 200 (content-m1 progress)
-    cy.intercept("GET", `**/api/group-progress/${groupId}`, {
-      statusCode: 200,
-      body: makeProgress("content-m1"),
-    }).as("getProgressStep1");
+    // Counter-alapú: 1. hívás (StarSystem oldal) + 2. hívás (GroupPlayer első GET) → 404
+    // 3. hívástól (GroupPlayer a POST start után) → 200
+    // StrictMode dev módban a useEffect kétszer fut (mount → cleanup → remount),
+    // ezért StarSystemDetailPage 2× hívja group-progress-t, GroupPlayer 1× előtte → összesen 3 db 404 kell
+    let progressGetCount = 0;
+    cy.intercept("GET", `**/api/group-progress/${groupId}`, (req) => {
+      progressGetCount++;
+      if (progressGetCount <= 3) {
+        req.reply({ statusCode: 404, body: {} });
+      } else {
+        req.reply({ statusCode: 200, body: makeProgress("content-m1") });
+      }
+    }).as("groupProgressGet");
 
     cy.intercept("GET", `**/api/missions/content-m1/content*`, {
       statusCode: 200,
       body: mockContentPage,
     }).as("getContent");
 
-    // FIB: FillInBlankView szinkron mountolódik amint setProgress(fib progress) lefut
     cy.intercept("GET", `**/api/missions/fib-m1/fill-in-blank`, {
       statusCode: 200,
       body: mockFibDefinition,
@@ -189,18 +194,10 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: {},
     }).as("getLastAttempt");
 
-    // Quiz: QuizPlayerComponent szinkron mountolódik amint setProgress(quiz progress) lefut
     cy.intercept("POST", `**/api/quiz/quiz-m1/start`, {
       statusCode: 200,
       body: mockQuiz,
     }).as("startQuiz");
-
-    // LIFO utolsó → első group-progress GET kapja el (404 = nem indult még)
-    cy.intercept("GET", `**/api/group-progress/${groupId}`, {
-      statusCode: 404,
-      body: {},
-      times: 1,
-    }).as("getProgressNotStarted");
 
     cy.visit(`/#/star-systems/${starSystemId}`, {
       onBeforeLoad(win) {
@@ -211,20 +208,17 @@ describe("User Group Player Flow (Mocked Backend)", () => {
     cy.wait("@getMe");
     cy.wait("@getStarSystem");
 
-    // completeStep1: "KÖVETKEZŐ" (content→fib) kattintás előtt kell
     cy.intercept("POST", `**/api/group-progress/${groupId}/complete-step`, {
       statusCode: 200,
       body: makeProgress("fib-m1", false, 1),
       times: 1,
     }).as("completeStep1");
 
-    // "KEZDD EL" gomb
     cy.contains("KEZDD EL").closest(".button-group").find("button").click();
 
     cy.url().should("include", `/play/group/${groupId}`);
     cy.wait("@getGroup");
     cy.wait("@startProgress");
-    cy.wait("@getProgressStep1");
     cy.wait("@getContent");
 
     cy.contains("Bevezetés").should("be.visible");
@@ -349,23 +343,22 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: makeProgress("fib-m1", false, 1),
     }).as("getProgressFib");
 
+    // FIB betölt közvetlenül a progress után (szinkron mount) — click előtt kell regisztrálni
+    cy.intercept("GET", `**/api/missions/fib-m1/fill-in-blank`, {
+      statusCode: 200,
+      body: mockFibDefinition,
+    }).as("getFib");
+
+    cy.intercept("GET", `**/api/missions/fib-m1/fill-in-blank/last-attempt`, {
+      statusCode: 404,
+      body: {},
+    }).as("getLastAttempt");
+
     cy.contains("FOLYTATÁS").closest(".button-group").find("button").click({ force: true });
 
     cy.url().should("include", `/play/group/${groupId}`);
     cy.wait("@getGroup");
     cy.wait("@getProgressFib");
-
-    // FIB betölt (nem a CONTENT)
-    cy.intercept("GET", `**/api/fill-in-blank/fib-m1`, {
-      statusCode: 200,
-      body: mockFibDefinition,
-    }).as("getFib");
-
-    cy.intercept("GET", `**/api/fill-in-blank/fib-m1/last-attempt`, {
-      statusCode: 404,
-      body: {},
-    }).as("getLastAttempt");
-
     cy.wait("@getFib");
     cy.wait("@getLastAttempt");
 
@@ -387,12 +380,12 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: makeProgress("fib-m1", false, 1),
     }).as("getProgress");
 
-    cy.intercept("GET", `**/api/fill-in-blank/fib-m1`, {
+    cy.intercept("GET", `**/api/missions/fib-m1/fill-in-blank`, {
       statusCode: 200,
       body: mockFibDefinition,
     }).as("getFib");
 
-    cy.intercept("GET", `**/api/fill-in-blank/fib-m1/last-attempt`, {
+    cy.intercept("GET", `**/api/missions/fib-m1/fill-in-blank/last-attempt`, {
       statusCode: 200,
       body: {
         passed: true,
