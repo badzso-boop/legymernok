@@ -5,6 +5,47 @@
 - **NE futtass tesztet, buildet, ne commitolj, ne pusholj.** Minden ilyen műveletnél jelezd a usernek mit futtasson.
 - A kommunikáció magyarul folyik.
 - Ha hibajavítást kérsz, csak azt változtasd meg ami szükséges — ne refaktorálj, ne adj hozzá felesleges kommentet.
+- **Nagyobb módosítás után (3+ fájl, vagy új service/komponens) indítsd el a `code-quality-reviewer` agentet** mielőtt azt mondod "kész". Hívás: `Agent({ subagent_type: "code-quality-reviewer", prompt: "..." })`
+
+---
+
+## Implementálás előtt — kötelező ellenőrzések
+
+Mielőtt implementálni kezdesz, olvasd el az érintett területek kontextusát:
+
+- **Új React komponens elhelyezése előtt:** olvasd el `frontend/src/App.tsx` és `frontend/src/router/index.tsx` — azonosítsd hol lesz a komponens a fa-hierarchiában
+- **Docker módosítás előtt:** olvasd el a teljes `docker-compose.yml`-t — ellenőrizd az image verziókat és a volume-mountokat
+- **Új backend endpoint előtt:** ellenőrizd kell-e `SecurityConfig.java`-ban fehérlistázni
+- **`@Transactional` használatakor:** write-ot végző metódus soha ne legyen `readOnly=true`, és ne hívj write-ot `readOnly` outer tranzakcióból
+
+---
+
+## Implementálás után — kötelező ellenőrzések
+
+Minden változtatás után, mielőtt "kész"-t mondasz:
+
+1. **TypeScript ellenőrzés** (ha frontend módosult): jelezd a usernek futtassa: `cd frontend && npx tsc --noEmit`
+2. **Docker rebuild** (ha `docker-compose.yml` vagy backend módosult): jelezd a usernek futtassa: `docker compose up <service> --build -d`
+3. **3+ fájl módosítása esetén:** indítsd el a `code-quality-reviewer` agentet
+
+---
+
+## Architektúra megszorítások és Ismert Gotchas
+
+### Docker / Infrastruktúra
+- **pgvector:** A `postgres` service image-nek `pgvector/pgvector:pg16` kell lenni, **NEM** `postgres:16` — különben a `vector` extension nem érhető el
+- **Ollama GGUF modellek:** A GGUF fájl mountolva van `/gguf/` alá, de az Ollamának regisztrálni kell: `ollama create <név> -f Modelfile` (ahol a Modelfile: `FROM /gguf/<fájlnév>.gguf`). A `CHAT_MODEL` env változónak ez a regisztrált név kell legyen
+- **Backend rebuild:** `--force-recreate` NEM fordítja újra a Java kódot — ahhoz `--build` flag kell (vagy `mvn package` + image rebuild)
+- **AI Service modell config:** `CHAT_MODEL` és `EMBED_MODEL` a `.env`-ből jön; default értékek: `nomic-embed-text` (embed) és `gemma4-coding` (chat)
+
+### Frontend — React Router
+- **Router hook-ok** (`useLocation`, `useParams`, `useNavigate`, `useNavigate`) **kizárólag a Router kontextuson belül** működnek. Ez azt jelenti: minden komponens, ami ezeket használja, a `createHashRouter`-en belül kell legyen — azaz az `App.tsx`-ben `<RouterProvider>` alá, NEM mellé
+- **`ChatWidget` elhelyezése:** A widget a `RootLayout`-ban van (`router/index.tsx`), mert `useLocation()`-t használ. Ha valaha ki kell mozgatni, nem mehet `App.tsx`-be `RouterProvider` mellé
+- **`AuthContext`** hasonlóan: `AuthProvider` az `App.tsx` gyökerén van, minden komponens alatta kell legyen
+
+### Backend — Spring
+- **`@Transactional(readOnly=true)`:** Belső repository hívás join-olja az outer tranzakciót, de ha az outer `readOnly`, write műveletek hibát dobnak. Write-ot végző service metódus mindig sima `@Transactional` legyen
+- **Új permission:** Ha új permission-t vezetsz be, a `DataInitializer`-ben is fel kell venni a megfelelő szerepkörökhöz
 
 ---
 

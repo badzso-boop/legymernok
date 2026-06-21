@@ -7,6 +7,7 @@ import type {
 import type {
   StarSystemResponse,
   StarSystemWithItemsResponse,
+  StarSystemSearchResult,
 } from "../types/starSystem";
 import type { MissionResponse, ContentPageResponse } from "../types/mission";
 import type { QuizDefinition, MissionResult } from "../types/quiz";
@@ -278,6 +279,55 @@ export const groupProgressApi = {
 
   completeStep: async (groupId: string): Promise<GroupProgressResponse> => {
     const response = await apiClient.post<GroupProgressResponse>(`/group-progress/${groupId}/complete-step`);
+    return response.data;
+  },
+};
+
+export const searchApi = {
+  searchStarSystems: async (q: string, limit = 5): Promise<StarSystemSearchResult[]> => {
+    const response = await apiClient.get<StarSystemSearchResult[]>(
+      `/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    );
+    return response.data;
+  },
+
+  getEmbeddingStatus: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+    const response = await apiClient.get<{ hasEmbedding: boolean }>(
+      `/star-systems/${starSystemId}/embedding-status`,
+    );
+    return response.data;
+  },
+
+  embedStarSystem: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+    const response = await apiClient.post<{ hasEmbedding: boolean }>(
+      `/star-systems/${starSystemId}/embed`,
+    );
+    return response.data;
+  },
+
+  deleteEmbedding: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+    const response = await apiClient.delete<{ hasEmbedding: boolean }>(
+      `/star-systems/${starSystemId}/embed`,
+    );
+    return response.data;
+  },
+};
+
+interface ChatContextPayload {
+  currentPage: string;
+  pageType: string;
+  formFields: Record<string, string>;
+  language: string;
+}
+
+interface ChatResponsePayload {
+  response: string;
+  action?: { type: string; fields: Record<string, string> };
+}
+
+export const chatApi = {
+  send: async (message: string, context: ChatContextPayload): Promise<ChatResponsePayload> => {
+    const response = await apiClient.post<ChatResponsePayload>("/chat", { message, context });
     return response.data;
   },
 };

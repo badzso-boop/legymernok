@@ -31,8 +31,10 @@ import {
   Rocket,
   MoveToInbox,
   MoveUp,
+  Psychology as PsychologyIcon,
 } from "@mui/icons-material";
-import apiClient, { missionGroupApi, starSystemApi } from "../../../api/client";
+import apiClient, { missionGroupApi, starSystemApi, searchApi } from "../../../api/client";
+import { useChatContext } from "../../../context/ChatContext";
 import { useTranslation } from "react-i18next";
 import type {
   StarSystemWithItemsResponse,
@@ -204,6 +206,7 @@ const StarSystemEdit: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isNew = !id;
+  const { setFormFields, registerFillCallback } = useChatContext();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -216,6 +219,9 @@ const StarSystemEdit: React.FC = () => {
 
   const [snackMsg, setSnackMsg] = useState<string | null>(null);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [hasEmbedding, setHasEmbedding] = useState<boolean | null>(null);
+  const [embedding, setEmbedding] = useState(false);
+  const [deletingEmbedding, setDeletingEmbedding] = useState(false);
   const [addToGroupState, setAddToGroupState] = useState<{ open: boolean; groupId: string } | null>(null);
 
   useEffect(() => {
@@ -230,6 +236,8 @@ const StarSystemEdit: React.FC = () => {
           setDescription(data.description ?? "");
           setIconUrl(data.iconUrl ?? "");
           setItems(data.items);
+          const statusData = await searchApi.getEmbeddingStatus(id!);
+          setHasEmbedding(statusData.hasEmbedding);
         } catch {
           setError(t("errorFetchStarSystemDetails"));
         } finally {
@@ -239,6 +247,47 @@ const StarSystemEdit: React.FC = () => {
       load();
     }
   }, [id, isNew]);
+
+  useEffect(() => {
+    setFormFields({ name, description, iconUrl });
+  }, [name, description, iconUrl]);
+
+  useEffect(() => {
+    registerFillCallback((fields) => {
+      if (fields.name !== undefined) setName(fields.name);
+      if (fields.description !== undefined) setDescription(fields.description);
+      if (fields.iconUrl !== undefined) setIconUrl(fields.iconUrl);
+    });
+    return () => registerFillCallback(null);
+  }, []);
+
+  const handleEmbed = async () => {
+    if (!id) return;
+    setEmbedding(true);
+    try {
+      await searchApi.embedStarSystem(id);
+      setHasEmbedding(true);
+      setSnackMsg(t("embeddingSuccess"));
+    } catch {
+      setSnackMsg(t("embeddingError"));
+    } finally {
+      setEmbedding(false);
+    }
+  };
+
+  const handleDeleteEmbedding = async () => {
+    if (!id) return;
+    setDeletingEmbedding(true);
+    try {
+      await searchApi.deleteEmbedding(id);
+      setHasEmbedding(false);
+      setSnackMsg(t("embeddingDeleted"));
+    } catch {
+      setSnackMsg(t("embeddingError"));
+    } finally {
+      setDeletingEmbedding(false);
+    }
+  };
 
   const reload = async () => {
     if (!id) return;
@@ -376,6 +425,45 @@ const StarSystemEdit: React.FC = () => {
           </Grid>
         </Grid>
       </Paper>
+
+      {!isNew && (
+        <Paper sx={{ p: 3, mb: 4, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <PsychologyIcon color="action" />
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+              {t("embeddingStatus")}
+            </Typography>
+            {hasEmbedding === null ? (
+              <CircularProgress size={16} />
+            ) : hasEmbedding ? (
+              <Chip label={t("hasEmbedding")} color="success" size="small" />
+            ) : (
+              <Chip label={t("noEmbedding")} color="default" size="small" />
+            )}
+          </Box>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={embedding ? <CircularProgress size={16} /> : <PsychologyIcon />}
+            onClick={handleEmbed}
+            disabled={embedding || deletingEmbedding}
+          >
+            {hasEmbedding ? t("updateEmbedding") : t("generateEmbedding")}
+          </Button>
+          {hasEmbedding && (
+            <Button
+              variant="outlined"
+              size="small"
+              color="error"
+              startIcon={deletingEmbedding ? <CircularProgress size={16} /> : <DeleteIcon />}
+              onClick={handleDeleteEmbedding}
+              disabled={embedding || deletingEmbedding}
+            >
+              {t("deleteEmbedding")}
+            </Button>
+          )}
+        </Paper>
+      )}
 
       {!isNew && (
         <Box>

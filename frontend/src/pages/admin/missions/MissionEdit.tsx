@@ -25,6 +25,7 @@ import {
   RocketLaunch as MissionIcon,
 } from "@mui/icons-material";
 import apiClient, { forgeApi } from "../../../api/client";
+import { useChatContext } from "../../../context/ChatContext";
 import type { StarSystemResponse } from "../../../types/starSystem";
 import { useTranslation } from "react-i18next";
 import ContentEditor from "../../../components/admin/ContentEditor";
@@ -65,6 +66,7 @@ const MissionEdit: React.FC = () => {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { setFormFields, registerFillCallback } = useChatContext();
 
   useEffect(() => {
     const fetchContext = async () => {
@@ -96,6 +98,28 @@ const MissionEdit: React.FC = () => {
 
     fetchContext();
   }, [id, isNew, starSystemIdFromQuery]);
+
+  useEffect(() => {
+    setFormFields({
+      name: mission.name,
+      descriptionMarkdown: mission.descriptionMarkdown,
+      difficulty: mission.difficulty,
+      missionType: mission.missionType,
+    });
+  }, [mission.name, mission.descriptionMarkdown, mission.difficulty, mission.missionType]);
+
+  useEffect(() => {
+    registerFillCallback((fields) => {
+      setMission((prev) => ({
+        ...prev,
+        ...(fields.name !== undefined && { name: fields.name }),
+        ...(fields.descriptionMarkdown !== undefined && { descriptionMarkdown: fields.descriptionMarkdown }),
+        ...(fields.difficulty !== undefined && { difficulty: fields.difficulty }),
+        ...(fields.missionType !== undefined && { missionType: fields.missionType }),
+      }));
+    });
+    return () => registerFillCallback(null);
+  }, []);
 
   const handleSystemChange = async (e: SelectChangeEvent<string>) => {
     const newSystemId = e.target.value;

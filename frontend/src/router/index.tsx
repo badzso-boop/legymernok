@@ -1,4 +1,12 @@
-import { createHashRouter, Navigate } from "react-router-dom";
+import { createHashRouter, Navigate, Outlet } from "react-router-dom";
+import ChatWidget from "../components/chat/ChatWidget";
+
+const RootLayout = () => (
+  <>
+    <Outlet />
+    <ChatWidget />
+  </>
+);
 import { CircularProgress } from "@mui/material";
 import MainLayout from "../layouts/MainLayout";
 import AdminLayout from "../layouts/AdminLayout";
@@ -98,6 +106,9 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
 };
 
 export const router = createHashRouter([
+  {
+    element: <RootLayout />,
+    children: [
   // Publikus útvonalak (MainLayout alatt)
   {
     path: "/",
@@ -271,4 +282,5 @@ export const router = createHashRouter([
       },
     ],
   },
+  ]},  // RootLayout children zárás
 ]);

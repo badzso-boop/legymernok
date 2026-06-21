@@ -15,7 +15,6 @@ const StarSystemList: React.FC = () => {
   const [starSystems, setStarSystems] = useState<StarSystemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const fetchStarSystems = async () => {
     try {
       setLoading(true);
