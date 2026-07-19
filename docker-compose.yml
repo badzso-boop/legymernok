@@ -5,7 +5,7 @@ services:
   # Database Service (PostgreSQL)
   # ---------------------------------------------------------------------------
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: legymernok-postgres
     restart: always
     environment:
@@ -99,6 +99,44 @@ services:
       - legymernok-net
 
   # ---------------------------------------------------------------------------
+  # Ollama — lokális LLM szerver
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama
+    container_name: legymernok-ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_REQUEST_TIMEOUT: "600"
+    volumes:
+      - /mnt/g/Projects/AI Models:/gguf:ro
+      - ollama_data:/root/.ollama
+    networks:
+      - legymernok-net
+
+  # ---------------------------------------------------------------------------
+  # AI Service — embedding + generálás FastAPI wrapper
+  # ---------------------------------------------------------------------------
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: legymernok-ai-service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      CHAT_MODEL: ${CHAT_MODEL:-gemma3:8b-q4_K_M}
+    depends_on:
+      - ollama
+    networks:
+      - legymernok-net
+
+  # ---------------------------------------------------------------------------
   # Gitea Actions Runner Service
   # ---------------------------------------------------------------------------
 
@@ -127,6 +165,7 @@ volumes:
   postgres_data:
   gitea_data:
   gitea_runner_data:
+  ollama_data:
 
 networks:
   legymernok-net:

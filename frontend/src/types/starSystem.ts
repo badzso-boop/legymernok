@@ -34,3 +34,11 @@ export interface StarSystemWithItemsResponse {
   updatedAt: string;
   items: StarSystemItemResponse[];
 }
+
+export interface StarSystemSearchResult {
+  id: string;
+  name: string;
+  description: string | null;
+  iconUrl: string | null;
+  similarity: number;
+}

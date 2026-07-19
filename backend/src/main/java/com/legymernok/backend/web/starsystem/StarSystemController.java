@@ -72,4 +72,26 @@ public class StarSystemController {
     public ResponseEntity<List<StarSystemResponse>> getMyStarSystems() {
         return ResponseEntity.ok(starSystemService.getSystemsByCurrentUser());
     }
+
+    @GetMapping("/{id}/embedding-status")
+    @PreAuthorize("hasAuthority('starsystem:read')")
+    public ResponseEntity<EmbeddingStatusResponse> getEmbeddingStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(new EmbeddingStatusResponse(starSystemService.hasEmbedding(id)));
+    }
+
+    @PostMapping("/{id}/embed")
+    @PreAuthorize("hasAuthority('starsystem:edit_any')")
+    public ResponseEntity<EmbeddingStatusResponse> generateEmbedding(@PathVariable UUID id) {
+        starSystemService.generateAndSaveEmbedding(id);
+        return ResponseEntity.ok(new EmbeddingStatusResponse(true));
+    }
+
+    @DeleteMapping("/{id}/embed")
+    @PreAuthorize("hasAuthority('starsystem:edit_any')")
+    public ResponseEntity<EmbeddingStatusResponse> deleteEmbedding(@PathVariable UUID id) {
+        starSystemService.deleteEmbedding(id);
+        return ResponseEntity.ok(new EmbeddingStatusResponse(false));
+    }
+
+    record EmbeddingStatusResponse(boolean hasEmbedding) {}
 }

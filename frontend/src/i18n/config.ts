@@ -227,6 +227,22 @@ const resources = {
         data: "DATA",
         lang: "LANGUAGE",
       },
+      // SEARCH
+      search: {
+        title: "GALACTIC SEARCH",
+        placeholder: "Search star systems...",
+        scanning: "SCANNING...",
+        noResults: "NO MATCHES FOUND",
+      },
+      embeddingStatus: "AI Search Embedding",
+      hasEmbedding: "Embedding active",
+      noEmbedding: "No embedding",
+      generateEmbedding: "Generate Embedding",
+      updateEmbedding: "Update Embedding",
+      embeddingSuccess: "Embedding generated!",
+      embeddingDeleted: "Embedding deleted",
+      deleteEmbedding: "Delete Embedding",
+      embeddingError: "Error generating embedding",
       // Fill-in-blank
       fillInBlank: {
         addBlank: "ADD BLANK",
@@ -508,6 +524,22 @@ const resources = {
         data: "ADAT",
         lang: "NYELV",
       },
+      // SEARCH
+      search: {
+        title: "GALAKTIKUS KERESÉS",
+        placeholder: "Keresés csillagrendszerek között...",
+        scanning: "KERESÉS FOLYAMATBAN...",
+        noResults: "NEM TALÁLHATÓ EGYEZÉS",
+      },
+      embeddingStatus: "AI Keresési Embedding",
+      hasEmbedding: "Embedding aktív",
+      noEmbedding: "Nincs embedding",
+      generateEmbedding: "Embedding generálása",
+      updateEmbedding: "Embedding frissítése",
+      embeddingSuccess: "Embedding sikeresen generálva!",
+      embeddingDeleted: "Embedding törölve",
+      deleteEmbedding: "Embedding törlése",
+      embeddingError: "Hiba az embedding generáláskor",
       // Star System detail
       // Fill-in-blank
       fillInBlank: {

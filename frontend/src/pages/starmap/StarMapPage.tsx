@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Box, Typography, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next"; // <--- Import
+import { useTranslation } from "react-i18next";
 import StarMapCanvas from "./StarMapCanvas";
+import SearchPanel from "../../components/search/SearchPanel";
 import apiClient from "../../api/client";
 import type { StarSystemResponse } from "../../types/starSystem";
 import "../../styles/RetroUI.css";
@@ -13,6 +14,7 @@ const StarMapPage: React.FC = () => {
   const [systems, setSystems] = useState<StarSystemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBtn, setActiveBtn] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const fetchSystems = async () => {
@@ -127,7 +129,7 @@ const StarMapPage: React.FC = () => {
               <button
                 className={`retro-btn blue ${activeBtn === "scan" ? "active" : ""}`}
                 onClick={() =>
-                  handleBtnClick("scan", () => alert("Deep Scan Initiated..."))
+                  handleBtnClick("scan", () => setSearchOpen(true))
                 }
               />
               <div className="label-plate">{t("starMap.scan")}</div>
@@ -155,7 +157,9 @@ const StarMapPage: React.FC = () => {
                 style={{ pointerEvents: "none" }}
               />
 
-              {loading ? (
+              {searchOpen ? (
+                <SearchPanel onClose={() => setSearchOpen(false)} />
+              ) : loading ? (
                 <Box
                   sx={{
                     display: "flex",

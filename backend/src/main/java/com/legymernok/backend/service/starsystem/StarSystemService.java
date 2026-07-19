@@ -3,6 +3,7 @@ package com.legymernok.backend.service.starsystem;
 import com.legymernok.backend.dto.group.MissionGroupResponse;
 import com.legymernok.backend.dto.group.ReorderResponse;
 import com.legymernok.backend.dto.mission.MissionResponse;
+import com.legymernok.backend.dto.search.StarSystemSearchResult;
 import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
 import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemItemResponse;
@@ -20,9 +21,11 @@ import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import com.legymernok.backend.service.ai.AiEmbeddingService;
 import com.legymernok.backend.service.mission.MissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -46,6 +49,8 @@ public class StarSystemService {
     private final MissionGroupRepository missionGroupRepository;
     private final MissionGroupProgressRepository missionGroupProgressRepository;
     private final CadetRepository cadetRepository;
+    private final AiEmbeddingService embeddingService;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional
     public StarSystemResponse createStarSystem(CreateStarSystemRequest request) {
@@ -65,6 +70,7 @@ public class StarSystemService {
 
         StarSystem savedStarSystem = starSystemRepository.save(starSystem);
         log.info("StarSystem created: {}", savedStarSystem);
+        generateAndSaveEmbedding(savedStarSystem.getId());
         return mapToResponse(savedStarSystem);
     }
 
@@ -131,6 +137,7 @@ public class StarSystemService {
         starSystemToUpdate.setUpdatedAt(Instant.now());
 
         StarSystem updatedStarSystem = starSystemRepository.save(starSystemToUpdate);
+        generateAndSaveEmbedding(updatedStarSystem.getId());
         return mapToResponse(updatedStarSystem);
     }
 
@@ -268,5 +275,79 @@ public class StarSystemService {
         return user.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority -> authority.equals(authorityName));
+    }
+
+    public void generateAndSaveEmbedding(UUID starSystemId) {
+        StarSystem ss = starSystemRepository.findById(starSystemId).orElse(null);
+        if (ss == null) return;
+
+        List<String> missionNames = missionRepository.findAllByStarSystemId(starSystemId)
+                .stream().map(Mission::getName).collect(Collectors.toList());
+
+        String text = ss.getName()
+                + (ss.getDescription() != null ? " - " + ss.getDescription() : "")
+                + (missionNames.isEmpty() ? "" : ". Missziók: " + String.join(", ", missionNames));
+
+        float[] embedding = embeddingService.embed(text);
+        if (embedding == null) {
+            log.warn("Embedding generation failed for StarSystem {}", starSystemId);
+            return;
+        }
+
+        String vectorStr = embeddingService.toVectorString(embedding);
+        jdbcTemplate.update(
+                "UPDATE star_systems SET content_embedding = ?::vector WHERE id = ?::uuid",
+                vectorStr, starSystemId.toString()
+        );
+        log.info("Embedding saved for StarSystem {}", starSystemId);
+    }
+
+    public void deleteEmbedding(UUID starSystemId) {
+        jdbcTemplate.update(
+                "UPDATE star_systems SET content_embedding = NULL WHERE id = ?::uuid",
+                starSystemId.toString()
+        );
+        log.info("Embedding deleted for StarSystem {}", starSystemId);
+    }
+
+    public boolean hasEmbedding(UUID starSystemId) {
+        Boolean result = jdbcTemplate.queryForObject(
+                "SELECT content_embedding IS NOT NULL FROM star_systems WHERE id = ?::uuid",
+                Boolean.class, starSystemId.toString()
+        );
+        return Boolean.TRUE.equals(result);
+    }
+
+    public List<StarSystemSearchResult> searchByEmbedding(String vectorStr, int limit) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, name, description, icon_url,
+                       1 - (content_embedding <=> ?::vector) AS similarity
+                FROM star_systems
+                WHERE content_embedding IS NOT NULL
+                ORDER BY similarity DESC
+                LIMIT ?
+                """,
+                (rs, i) -> StarSystemSearchResult.builder()
+                        .id(UUID.fromString(rs.getString("id")))
+                        .name(rs.getString("name"))
+                        .description(rs.getString("description"))
+                        .iconUrl(rs.getString("icon_url"))
+                        .similarity(rs.getDouble("similarity"))
+                        .build(),
+                vectorStr, limit
+        );
+    }
+
+    @Transactional
+    public int reindexAllStarSystems() {
+        List<StarSystem> all = starSystemRepository.findAll();
+        int count = 0;
+        for (StarSystem ss : all) {
+            generateAndSaveEmbedding(ss.getId());
+            count++;
+        }
+        log.info("Reindex complete: {} star systems processed", count);
+        return count;
     }
 }

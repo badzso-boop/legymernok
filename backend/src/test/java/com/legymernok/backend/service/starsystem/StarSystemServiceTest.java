@@ -8,9 +8,13 @@ import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import com.legymernok.backend.service.ai.AiEmbeddingService;
+import com.legymernok.backend.service.mission.MissionService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +38,10 @@ public class StarSystemServiceTest {
     @Mock private CadetRepository cadetRepository;
     @Mock private MissionRepository missionRepository;
     @Mock private MissionGroupRepository missionGroupRepository;
+    @Mock private MissionGroupProgressRepository missionGroupProgressRepository;
+    @Mock private MissionService missionService;
+    @Mock private AiEmbeddingService embeddingService;
+    @Mock private JdbcTemplate jdbcTemplate;
     @InjectMocks private StarSystemService starSystemService;
 
     private Cadet owner;

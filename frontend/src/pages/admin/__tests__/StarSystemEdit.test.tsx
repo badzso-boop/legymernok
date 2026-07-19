@@ -28,6 +28,15 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+vi.mock("../../../context/ChatContext", () => ({
+  useChatContext: () => ({
+    formFields: {},
+    setFormFields: vi.fn(),
+    registerFillCallback: vi.fn(),
+    triggerFill: vi.fn(),
+  }),
+}));
+
 const mockedNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
