@@ -129,6 +129,69 @@ Ez elindítja a következő szolgáltatásokat:
     - _Tipp:_ A `docker-compose.yml` és `application.properties` már előre konfigurált értékeket tartalmaz, ezeket használd!
 2.  **Backend Admin:** Hozz létre egy admint a Backend oldalon is (vagy használd a Gitea szinkronizációt).
 
+### Nem-interaktív / automatizált setup (szkriptekhez, CI-hez, home serverhez)
+
+A fenti webes telepítő-varázsló kihagyható — a Gitea CLI-je és a `docker compose`
+env változói teljesen non-interaktívan is felállítják a rendszert. Ez akkor hasznos,
+ha egy szerveren (pl. otthoni home serveren) automatizáltan, kattintgatás nélkül
+kell felhúzni a stacket.
+
+**1. Gitea telepítés kihagyása (`INSTALL_LOCK`)**
+
+Alapból a `docker-compose.yml`-ben a Gitea `INSTALL_LOCK` nincs beállítva, ezért a
+konténer "nem telepített" állapotban indul, és a CLI parancsok (`gitea admin ...`)
+elutasítják magukat, amíg a webes telepítő le nem fut. Ezt megkerülve — miután a
+stack már fut egyszer (`docker compose up --build -d`) — a Gitea konténer még
+"nem telepített" állapotban is tud titkokat generálni:
+
+```bash
+docker exec -u git legymernok-gitea gitea generate secret SECRET_KEY
+docker exec -u git legymernok-gitea gitea generate secret INTERNAL_TOKEN
+docker exec -u git legymernok-gitea gitea generate secret JWT_SECRET
+```
+
+A kapott 3 értéket írd be a `.env`-be (`GITEA_SECRET_KEY`, `GITEA_INTERNAL_TOKEN`,
+`GITEA_JWT_SECRET` — lásd `.env.example`); a `docker-compose.yml` már ezekre az env
+változókra hivatkozik, nem kell hozzá kódot módosítani. Majd:
+
+```bash
+docker compose up -d gitea
+```
+
+— a konténer a webes varázsló nélkül, "telepített" állapotban indul újra
+(`INSTALL_LOCK = true` az `app.ini`-ben ellenőrizhető).
+
+**2. Admin fiók + tokenek CLI-vel**
+
+```bash
+# Admin user létrehozása (jelszó a .env GITEA_ADMIN_PASSWORD-jából)
+docker exec -u git legymernok-gitea gitea admin user create \
+  --username legymernok_admin \
+  --password "<GITEA_ADMIN_PASSWORD>" \
+  --email admin@legymernok.local \
+  --admin \
+  --must-change-password=false
+
+# Backend API token (ez kell a .env GITEA_ADMIN_TOKEN-jébe)
+docker exec -u git legymernok-gitea gitea admin user generate-access-token \
+  --username legymernok_admin \
+  --token-name backend-integration \
+  --scopes all
+
+# Actions runner regisztrációs token (ez kell a .env REGISTRATION_TOKEN-jébe)
+docker exec -u git legymernok-gitea gitea actions generate-runner-token
+```
+
+A két kapott tokent írd be a `.env`-be (`GITEA_ADMIN_TOKEN`, `REGISTRATION_TOKEN`),
+majd `docker compose up -d backend runner` — a backend felveszi a Gitea API tokent,
+a runner pedig sikeresen regisztrál (`docker logs legymernok-gitea-runner` mutatja
+a `Runner registered successfully` sort).
+
+Ezzel a teljes stack (Postgres, Gitea, admin fiók, backend↔Gitea integráció,
+Actions runner) egyetlen script/CI job részeként, kattintgatás nélkül felállítható.
+Fontos: a `GITEA_SECRET_KEY`/`GITEA_INTERNAL_TOKEN`/`GITEA_JWT_SECRET`/tokenek csak
+a `.env`-be kerülnek (git-ignored), sosem a verziókezelt `docker-compose.yml`-be.
+
 ---
 
 ## 🧪 Fejlesztés és Tesztelés
