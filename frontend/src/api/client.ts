@@ -178,6 +178,20 @@ export const starSystemApi = {
   },
 };
 
+export const missionApi = {
+  /**
+   * Elindítja (vagy folytatja) a missziót a bejelentkezett kadét számára —
+   * létrehozza (vagy visszaadja a már meglévő) kadét-specifikus Gitea repót.
+   * @returns A kadét saját repójának URL-je.
+   */
+  start: async (missionId: string): Promise<string> => {
+    const response = await apiClient.post<string>(
+      `/missions/${missionId}/start`,
+    );
+    return response.data;
+  },
+};
+
 export const quizApi = {
   // Kvíz indítása vagy folytatása
   startQuiz: async (missionId: string): Promise<QuizDefinition> => {

@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -60,6 +61,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleUnauthorizedAccessException(UnauthorizedAccessException ex) {
         log.warn("Unauthorized access attempt: {}", ex.getMessage());
         return buildResponse(HttpStatus.FORBIDDEN, "Forbidden", ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Object> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException ex) {
+        log.warn("Invalid request parameter: {}", ex.getMessage());
+        String message = String.format("'%s' paraméter érvénytelen: %s", ex.getName(), ex.getValue());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
     }
 
     @ExceptionHandler(Exception.class)

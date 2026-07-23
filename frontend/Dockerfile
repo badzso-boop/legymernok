@@ -29,10 +29,9 @@ FROM nginx:alpine
 # Copy the built assets from the builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy a custom Nginx configuration if needed (e.g., for routing or proxying API calls)
-# If you need specific Nginx configurations (e.g. for React Router or API proxy),
-# you can create a 'nginx.conf' file in your frontend directory and uncomment the line below.
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Custom Nginx config: proxies /api and the WebSocket (STOMP/SockJS) endpoints
+# to the backend service, since the frontend build only knows relative paths.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80 for web traffic
 EXPOSE 80

@@ -192,7 +192,7 @@ const resources = {
       missionTypes: {
         coding: "Coding",
         quiz: "Quiz",
-        challenge: "Challenge",
+        circuit: "Circuit Simulation",
       },
       // CONTROL PANEL
       controlPanel: {
@@ -489,7 +489,7 @@ const resources = {
       missionTypes: {
         coding: "Programozás",
         quiz: "Kvíz",
-        challenge: "Kihívás",
+        circuit: "Áramkör szimuláció",
       },
       // CONTROL PANEL
       controlPanel: {

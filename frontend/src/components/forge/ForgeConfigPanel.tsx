@@ -317,8 +317,8 @@ const ForgeConfigPanel: React.FC<ForgeConfigPanelProps> = ({
                             <MenuItem value="QUIZ">
                               {t("missionTypes.quiz").toUpperCase()}
                             </MenuItem>
-                            <MenuItem value="CHALLENGE">
-                              {t("missionTypes.challenge").toUpperCase()}
+                            <MenuItem value="CIRCUIT_SIMULATION">
+                              {t("missionTypes.circuit").toUpperCase()}
                             </MenuItem>
                           </Select>
                         )}

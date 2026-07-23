@@ -43,6 +43,9 @@ services:
       - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY}
       - GITEA__security__INTERNAL_TOKEN=${GITEA_INTERNAL_TOKEN}
       - GITEA__oauth2__JWT_SECRET=${GITEA_JWT_SECRET}
+      # Enélkül Gitea a belső HTTP_PORT-ot (3000) írja bele a generált
+      # clone URL-ekbe, holott a host felé ez 3001-en van kiadva.
+      - GITEA__server__ROOT_URL=http://localhost:3001/
     ports:
       - "3001:3000" # Web UI: http://localhost:3001
       - "2222:22" # SSH port
