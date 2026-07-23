@@ -39,6 +39,10 @@ services:
       - GITEA__database__USER=postgres
       - GITEA__database__PASSWD=postgres
       - GITEA__actions__ENABLED=true
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY}
+      - GITEA__security__INTERNAL_TOKEN=${GITEA_INTERNAL_TOKEN}
+      - GITEA__oauth2__JWT_SECRET=${GITEA_JWT_SECRET}
     ports:
       - "3001:3000" # Web UI: http://localhost:3001
       - "2222:22" # SSH port
@@ -76,7 +80,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       MISSION_VERIFICATION_SECRET: ${MISSION_VERIFICATION_SECRET}
     ports:
-      - "8080:8080"
+      - "8090:8080"
     depends_on:
       - postgres
     networks:
