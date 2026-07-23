@@ -20,6 +20,14 @@ export default defineConfig(() => {
       fs: {
         allow: [".."],
       },
+      // VITE_API_URL relatív (/api), hogy a prod buildben az nginx tudja
+      // proxyzni — dev módban ugyanezt itt kell megoldani, különben a
+      // localhost:5173/api hívások a semmibe mennek.
+      proxy: {
+        "/api": "http://localhost:8080",
+        "/ws-mission-logs": { target: "http://localhost:8080", ws: true },
+        "/ws-log": { target: "http://localhost:8080", ws: true },
+      },
     },
     resolve: {
       alias: {
