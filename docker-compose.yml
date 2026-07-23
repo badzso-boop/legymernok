@@ -39,6 +39,9 @@ services:
       - GITEA__database__USER=postgres
       - GITEA__database__PASSWD=postgres
       - GITEA__actions__ENABLED=true
+      # Enélkül Gitea a belső HTTP_PORT-ot (3000) írja bele a generált
+      # clone URL-ekbe, holott a host felé ez 3001-en van kiadva.
+      - GITEA__server__ROOT_URL=http://localhost:3001/
     ports:
       - "3001:3000" # Web UI: http://localhost:3001
       - "2222:22" # SSH port
