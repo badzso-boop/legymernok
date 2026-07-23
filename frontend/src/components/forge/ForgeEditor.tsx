@@ -62,7 +62,13 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
   }, [logs]);
 
   useEffect(() => {
-    const socketUrl = `${import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:8080"}/ws-mission-logs`;
+    // A második `||` itt bug volt: "/api".replace("/api", "") === "" ami
+    // JS-ben falsy, tehát a fallback (http://localhost:8080) mindig
+    // lefutott relatív VITE_API_URL esetén is — pontosan úgy, mint a
+    // LogList.tsx-ben, a fallback csak az apiUrl-en kell, a replace()
+    // eredményén már nem.
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+    const socketUrl = `${apiUrl.replace(/\/api$/, "")}/ws-mission-logs`;
 
     const client = new Client({
       webSocketFactory: () => new SockJS(socketUrl),
