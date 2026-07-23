@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Box, Typography, Paper, Chip } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
-import { starSystemApi, groupProgressApi } from "../../api/client";
+import { starSystemApi, groupProgressApi, missionApi } from "../../api/client";
 import type {
   StarSystemWithItemsResponse,
   StarSystemItemResponse,
@@ -19,17 +19,6 @@ const getDifficultyColor = (diff: string) => {
   if (diff === "MEDIUM") return "#ff0";
   if (diff === "HARD") return "#f00";
   return "#fff";
-};
-
-const getMissionRoute = (mission: MissionResponse): string => {
-  switch (mission.missionType) {
-    case "QUIZ":
-      return `/play/quiz/${mission.id}`;
-    case "CONTENT":
-      return `/play/content/${mission.id}`;
-    default:
-      return `/play/quiz/${mission.id}`;
-  }
 };
 
 // ─────────────────────────────────────────────
@@ -122,6 +111,43 @@ const StarSystemDetailPage: React.FC = () => {
     Map<string, GroupDisplayProgress>
   >(new Map());
   const [loading, setLoading] = useState(true);
+  const [startingMissionId, setStartingMissionId] = useState<string | null>(
+    null,
+  );
+  const [startError, setStartError] = useState<string | null>(null);
+
+  const handleMissionStart = async (mission: MissionResponse) => {
+    setStartError(null);
+
+    if (mission.missionType === "QUIZ") {
+      navigate(`/play/quiz/${mission.id}`);
+      return;
+    }
+    if (mission.missionType === "CONTENT") {
+      navigate(`/play/content/${mission.id}`);
+      return;
+    }
+    if (mission.missionType === "FILL_IN_BLANK") {
+      // Nincs még kadét-oldali lejátszó felület ehhez a típushoz.
+      setStartError(
+        `"${mission.name}" típusa (FILL_IN_BLANK) még nem játszható a felületen.`,
+      );
+      return;
+    }
+
+    // CODING / CIRCUIT_SIMULATION — nincs még dedikált kadét-oldali
+    // munkakörnyezet, a saját Gitea repó a jelenlegi munkaterület.
+    setStartingMissionId(mission.id);
+    try {
+      const repoUrl = await missionApi.start(mission.id);
+      window.open(repoUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error(err);
+      setStartError(`Nem sikerült elindítani: ${mission.name}`);
+    } finally {
+      setStartingMissionId(null);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -250,6 +276,10 @@ const StarSystemDetailPage: React.FC = () => {
               AVAILABLE CONTENT
             </Typography>
 
+            {startError && (
+              <Typography sx={{ color: "#f00", mb: 2 }}>{startError}</Typography>
+            )}
+
             {data.items.map((item) => {
               if (item.type === "GROUP") {
                 const groupId = item.group!.id;
@@ -302,7 +332,8 @@ const StarSystemDetailPage: React.FC = () => {
                   <RetroButton
                     color="green"
                     labelKey="play.start"
-                    onClick={() => navigate(getMissionRoute(mission))}
+                    disabled={startingMissionId === mission.id}
+                    onClick={() => handleMissionStart(mission)}
                   />
                 </Paper>
               );
