@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
@@ -67,6 +68,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException ex) {
         log.warn("Invalid request parameter: {}", ex.getMessage());
         String message = String.format("'%s' paraméter érvénytelen: %s", ex.getName(), ex.getValue());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Object> handleMissingServletRequestParameterException(MissingServletRequestParameterException ex) {
+        log.warn("Missing request parameter: {}", ex.getMessage());
+        String message = String.format("Hiányzó kötelező paraméter: '%s'", ex.getParameterName());
         return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
     }
 
