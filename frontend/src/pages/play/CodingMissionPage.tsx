@@ -2,11 +2,13 @@ import React from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { missionApi } from "../../api/client";
 import CodingMissionPlayer from "../../components/play/CodingMissionPlayer";
 import "../../styles/RetroUI.css";
 
 const CodingMissionPage: React.FC = () => {
+  const { t } = useTranslation();
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
 
@@ -34,7 +36,7 @@ const CodingMissionPage: React.FC = () => {
       {isLoading && <CircularProgress color="inherit" />}
       {isError && (
         <Typography sx={{ color: "#fff" }}>
-          Nem sikerült elindítani a missziót.
+          {t("forge.codingMissionStartError")}
         </Typography>
       )}
       {!isLoading && !isError && missionId && (

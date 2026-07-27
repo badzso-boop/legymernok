@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { Box, Typography, Alert } from "@mui/material";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { forgeApi } from "../../api/client";
 import FileExplorer from "../forge/FileExplorer";
 import RetroButton from "../RetroButton";
@@ -16,6 +17,7 @@ interface MissionFileEditorProps {
 const MissionFileEditor: React.FC<MissionFileEditorProps> = ({
   missionId,
 }) => {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<Record<string, string>>({});
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -83,11 +85,8 @@ const MissionFileEditor: React.FC<MissionFileEditorProps> = ({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Alert severity="info">
-        Ez a fájlstruktúra kerül átmásolásra minden kadét saját
-        munkarepójába, amikor elindítja ezt a missziót.
-      </Alert>
-      {saved && <Alert severity="success">Elmentve.</Alert>}
+      <Alert severity="info">{t("forge.fileEditorTemplateNote")}</Alert>
+      {saved && <Alert severity="success">{t("forge.fileEditorSaved")}</Alert>}
 
       <Box sx={{ display: "flex", height: "500px", border: "1px solid #333" }}>
         <Box sx={{ width: "220px", flexShrink: 0, bgcolor: "#111" }}>
@@ -127,8 +126,8 @@ const MissionFileEditor: React.FC<MissionFileEditorProps> = ({
             >
               <Typography sx={{ color: "#555" }}>
                 {fileNames.length === 0
-                  ? "Nincs még fájl — hozz létre egyet."
-                  : "Válassz egy fájlt a szerkesztéshez."}
+                  ? t("forge.fileEditorNoFiles")
+                  : t("forge.fileEditorSelectFile")}
               </Typography>
             </Box>
           )}

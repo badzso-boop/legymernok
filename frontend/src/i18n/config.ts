@@ -85,6 +85,7 @@ const resources = {
       starSystem: "Star System",
       orderInSystem: "Order in System",
       missionType: "Mission Type",
+      filesTab: "File Structure",
       descriptionMarkdown: "Description (Markdown)",
       deleteMissionConfirm: "Are you sure you want to delete this mission?",
       errorFetchMissions: "Failed to load missions",
@@ -192,6 +193,12 @@ const resources = {
         codingPlayerBackButton: "Back to system",
         codingPlayerSavedNote: "Changes are saved to your own personal repository.",
         codingPlayerNoFiles: "This mission has no files yet.",
+        fileEditorTemplateNote:
+          "This file structure is copied into every cadet's own working repository when they start this mission.",
+        fileEditorSaved: "Saved.",
+        fileEditorNoFiles: "No files yet — create one.",
+        fileEditorSelectFile: "Select a file to edit.",
+        codingMissionStartError: "Failed to start the mission.",
       },
       difficultyType: {
         easy: "Easy",
@@ -391,6 +398,7 @@ const resources = {
       starSystem: "Csillagrendszer",
       orderInSystem: "Sorszám a rendszerben",
       missionType: "Típus",
+      filesTab: "Fájlstruktúra",
       descriptionMarkdown: "Leírás (Markdown)",
       deleteMissionConfirm: "Biztosan törölni szeretnéd ezt a küldetést?",
       errorFetchMissions: "Nem sikerült betölteni a küldetéseket",
@@ -499,6 +507,12 @@ const resources = {
         codingPlayerBackButton: "Vissza a rendszerhez",
         codingPlayerSavedNote: "A módosítások a saját, személyes repódba mentődnek.",
         codingPlayerNoFiles: "Ehhez a küldetéshez még nincsenek fájlok.",
+        fileEditorTemplateNote:
+          "Ez a fájlstruktúra kerül átmásolásra minden kadét saját munkarepójába, amikor elindítja ezt a missziót.",
+        fileEditorSaved: "Elmentve.",
+        fileEditorNoFiles: "Nincs még fájl — hozz létre egyet.",
+        fileEditorSelectFile: "Válassz egy fájlt a szerkesztéshez.",
+        codingMissionStartError: "Nem sikerült elindítani a missziót.",
       },
       difficultyType: {
         easy: "Könnyű",

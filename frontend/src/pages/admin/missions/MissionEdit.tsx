@@ -212,7 +212,7 @@ const MissionEdit: React.FC = () => {
           <Tab label="Alap adatok" />
           {showContentTab && <Tab label="Tartalom" />}
           {showFillInBlankTab && <Tab label="Kitöltős szerkesztő" />}
-          {showFilesTab && <Tab label="Fájlstruktúra" />}
+          {showFilesTab && <Tab label={t("filesTab")} />}
         </Tabs>
       )}
 
