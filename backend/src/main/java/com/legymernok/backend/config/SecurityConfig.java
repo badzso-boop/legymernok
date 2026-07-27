@@ -64,7 +64,13 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                // A böngésző mindig Origin fejlécet küld XHR/fetch kéréseknél, és a
+                // Spring CORS-ellenőrzése a request tényleges (proxyzott, belső)
+                // Host-ja alapján dönt "saját origin"-ről — a nyilvános domaint
+                // emiatt itt is fel kell venni, nem elég, hogy a frontend relatív
+                // "/api"-t hív.
+                "https://legymernok.ujjweb.hu"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
