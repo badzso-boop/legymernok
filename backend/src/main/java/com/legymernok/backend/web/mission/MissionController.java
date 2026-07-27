@@ -2,6 +2,7 @@ package com.legymernok.backend.web.mission;
 
 import com.legymernok.backend.dto.mission.*;
 import com.legymernok.backend.model.mission.MissionType;
+import jakarta.validation.Valid;
 import com.legymernok.backend.service.mission.MissionService;
 import com.legymernok.backend.service.quiz.QuizService;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,84 @@ public class MissionController {
     public ResponseEntity<Map<String, String>> getMissionFiles(@PathVariable UUID missionId) {
         Map<String, String> files = missionService.getMissionFiles(missionId);
         return ResponseEntity.ok(files);
+    }
+
+    /**
+     * Új (üres) fájlt hoz létre egy misszió saját (template) repójában —
+     * admin/tulajdonos állíthatja elő előre a fájlstruktúrát.
+     */
+    @PostMapping("/{missionId}/forge/files")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<MissionResponse> createMissionFile(
+            @PathVariable UUID missionId,
+            @Valid @RequestBody FilePathRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(missionService.createMissionFile(missionId, request.getPath()));
+    }
+
+    /** Töröl egy fájlt egy misszió saját (template) repójából. */
+    @DeleteMapping("/{missionId}/forge/files")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<Void> deleteMissionFile(
+            @PathVariable UUID missionId,
+            @RequestParam String path) {
+        missionService.deleteMissionFile(missionId, path);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Átnevez egy fájlt egy misszió saját (template) repójában. */
+    @PatchMapping("/{missionId}/forge/files/rename")
+    @PreAuthorize("hasAuthority('mission:edit')")
+    public ResponseEntity<Void> renameMissionFile(
+            @PathVariable UUID missionId,
+            @Valid @RequestBody RenameFileRequest request) {
+        missionService.renameMissionFile(missionId, request.getOldPath(), request.getNewPath());
+        return ResponseEntity.noContent().build();
+    }
+
+    // ─── Play — a bejelentkezett kadét saját (startMission által
+    // létrehozott) munkarepója egy CODING misszióhoz ───
+
+    @GetMapping("/{missionId}/play/files")
+    @PreAuthorize("hasAuthority('mission:start')")
+    public ResponseEntity<Map<String, String>> getPlayFiles(@PathVariable UUID missionId) {
+        return ResponseEntity.ok(missionService.getPlayFiles(missionId));
+    }
+
+    @PutMapping("/{missionId}/play/files")
+    @PreAuthorize("hasAuthority('mission:start')")
+    public ResponseEntity<Void> savePlayFiles(
+            @PathVariable UUID missionId,
+            @RequestBody Map<String, String> files) {
+        missionService.savePlayFiles(missionId, files);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{missionId}/play/files")
+    @PreAuthorize("hasAuthority('mission:start')")
+    public ResponseEntity<Void> createPlayFile(
+            @PathVariable UUID missionId,
+            @Valid @RequestBody FilePathRequest request) {
+        missionService.createPlayFile(missionId, request.getPath());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @DeleteMapping("/{missionId}/play/files")
+    @PreAuthorize("hasAuthority('mission:start')")
+    public ResponseEntity<Void> deletePlayFile(
+            @PathVariable UUID missionId,
+            @RequestParam String path) {
+        missionService.deletePlayFile(missionId, path);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{missionId}/play/files/rename")
+    @PreAuthorize("hasAuthority('mission:start')")
+    public ResponseEntity<Void> renamePlayFile(
+            @PathVariable UUID missionId,
+            @Valid @RequestBody RenameFileRequest request) {
+        missionService.renamePlayFile(missionId, request.getOldPath(), request.getNewPath());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}")

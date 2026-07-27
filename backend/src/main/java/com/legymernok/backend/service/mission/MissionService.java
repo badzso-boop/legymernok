@@ -204,6 +204,164 @@ public class MissionService {
         return mapToResponse(updatedMission);
     }
 
+    // Ellenőrzés a mission "saját" (Forge/template) repójának módosításához:
+    // tulajdonos vagy edit_any jog kell — ugyanaz a szabály, mint
+    // saveForgeMissionContent-nél.
+    private void requireMissionEditAccess(Mission mission, Cadet currentUser) {
+        if (mission.getOwner() != null
+                && !mission.getOwner().getId().equals(currentUser.getId())
+                && !hasAuthority(currentUser, "mission:edit_any")) {
+            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
+        }
+    }
+
+    // Ha egy CODING misszióhoz (akár régi, még createMission()-nel, template
+    // repó nélkül létrehozotthoz) még nincs Gitea repója, itt hozzuk létre —
+    // Stage 2 "admin előre beállíthatja a fájlstruktúrát" ehhez a lusta
+    // provisioninghoz kellett, hogy a meglévő missziók se törjenek.
+    private Mission ensureMissionRepository(Mission mission) {
+        if (mission.getTemplateRepositoryUrl() != null) return mission;
+
+        String repoName = mission.getId().toString();
+        String repoUrl = giteaService.createEmptyRepository(repoName, true);
+        mission.setTemplateRepositoryUrl(repoUrl);
+        mission.setUpdatedAt(Instant.now());
+        return missionRepository.save(mission);
+    }
+
+    /**
+     * Új (üres) fájlt hoz létre egy misszió saját (template) repójában —
+     * admin/tulajdonos állíthatja elő előre a fájlstruktúrát, mielőtt egy
+     * kadét elindítaná a missziót.
+     */
+    @Transactional
+    public MissionResponse createMissionFile(UUID missionId, String path) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+        requireMissionEditAccess(mission, currentUser);
+
+        mission = ensureMissionRepository(mission);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = mission.getId().toString();
+
+        giteaService.uploadFile(repoOwner, repoName, path, "", currentUser);
+        log.info("File '{}' created in mission '{}' (ID: {}) template repo by '{}'.",
+                path, mission.getName(), mission.getId(), currentUser.getUsername());
+        return mapToResponse(mission);
+    }
+
+    /** Töröl egy fájlt egy misszió saját (template) repójából. */
+    @Transactional
+    public void deleteMissionFile(UUID missionId, String path) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+        requireMissionEditAccess(mission, currentUser);
+
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = mission.getId().toString();
+        giteaService.deleteFile(repoOwner, repoName, path, currentUser);
+        log.info("File '{}' deleted from mission '{}' (ID: {}) template repo by '{}'.",
+                path, mission.getName(), mission.getId(), currentUser.getUsername());
+    }
+
+    /** Átnevez egy fájlt egy misszió saját (template) repójában. */
+    @Transactional
+    public void renameMissionFile(UUID missionId, String oldPath, String newPath) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        Mission mission = missionRepository.findById(missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
+        requireMissionEditAccess(mission, currentUser);
+
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = mission.getId().toString();
+        giteaService.renameFile(repoOwner, repoName, oldPath, newPath, currentUser);
+        log.info("File '{}' renamed to '{}' in mission '{}' (ID: {}) template repo by '{}'.",
+                oldPath, newPath, mission.getName(), mission.getId(), currentUser.getUsername());
+    }
+
+    // ─── Play — a kadét SAJÁT (startMission által létrehozott) repója ───
+    // Ugyanaz a fájlkezelés, mint a template/Forge oldalon, de itt a
+    // CadetMission.repositoryUrl a cél, nem a Mission saját repója —
+    // mert egy admin-készítette CODING missziót sok kadét is elindíthat,
+    // mindenki a saját (admin-owned, ő maga collaborator) másolatában dolgozik.
+    private CadetMission requirePlayRepository(UUID missionId, Cadet cadet) {
+        CadetMission cadetMission = cadetMissionRepository.findByCadetIdAndMissionId(cadet.getId(), missionId)
+                .orElseThrow(() -> new ResourceNotFoundException("CadetMission", "missionId", missionId));
+        if (cadetMission.getRepositoryUrl() == null) {
+            throw new ExternalServiceException("Gitea", "This mission has no repository yet — start it first.");
+        }
+        // Csak CODING missziónál engedélyezett — a QUIZ saját repó-másolata
+        // a teljes megoldókulcsot (quiz.json, isCorrect mezőkkel) tartalmazza,
+        // amit a getMissionFiles()-nél máshol tudatosan kiszűrünk. Ez a
+        // végpontcsalád nem szűr, tehát QUIZ-re nem szabad kiszolgálnia.
+        if (cadetMission.getMission().getMissionType() != MissionType.CODING) {
+            throw new UnauthorizedAccessException("File management is only available for CODING missions.");
+        }
+        return cadetMission;
+    }
+
+    /** Lekéri a bejelentkezett kadét saját munkarepójának fájljait egy elindított misszióhoz. */
+    @Transactional(readOnly = true)
+    public Map<String, String> getPlayFiles(UUID missionId) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+
+        Map<String, String> filesContent = new HashMap<>();
+        for (GiteaService.GiteaContent content : giteaService.getRepoContents(repoOwner, repoName, "")) {
+            if ("file".equals(content.getType())) {
+                String fileContent = giteaService.getFileContent(repoOwner, repoName, content.getPath());
+                if (fileContent != null) filesContent.put(content.getName(), fileContent);
+            }
+        }
+        return filesContent;
+    }
+
+    /** Elmenti (batch) a kadét saját munkarepójának fájltartalmait. */
+    @Transactional
+    public void savePlayFiles(UUID missionId, Map<String, String> files) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+
+        if (files == null || files.isEmpty()) return;
+        giteaService.uploadFiles(repoOwner, repoName, files, "Save from mission player", currentUser);
+    }
+
+    /** Új (üres) fájlt hoz létre a kadét saját munkarepójában. */
+    @Transactional
+    public void createPlayFile(UUID missionId, String path) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+        giteaService.uploadFile(repoOwner, repoName, path, "", currentUser);
+    }
+
+    /** Töröl egy fájlt a kadét saját munkarepójából. */
+    @Transactional
+    public void deletePlayFile(UUID missionId, String path) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+        giteaService.deleteFile(repoOwner, repoName, path, currentUser);
+    }
+
+    /** Átnevez egy fájlt a kadét saját munkarepójában. */
+    @Transactional
+    public void renamePlayFile(UUID missionId, String oldPath, String newPath) {
+        Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        String repoOwner = giteaService.getAdminUsername();
+        String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+        giteaService.renameFile(repoOwner, repoName, oldPath, newPath, currentUser);
+    }
+
     /**
      * Lekéri egy adott misszióhoz tartozó Gitea repó tartalmát a Monaco Editorba való betöltéshez.
      *
@@ -301,6 +459,15 @@ public class MissionService {
                 .build();
 
         Mission saved = missionRepository.save(mission);
+
+        // CODING missziónál rögtön létrehozzuk az üres (admin-owned) template
+        // repót is, hogy az admin a mentés után azonnal be tudja állítani a
+        // kezdő fájlstruktúrát — enélkül nem lenne mit a kadét saját repójába
+        // másolni startMission()-kor.
+        if (saved.getMissionType() == MissionType.CODING) {
+            saved = ensureMissionRepository(saved);
+        }
+
         log.info("Admin mission '{}' (ID: {}) created by '{}'.", saved.getName(), saved.getId(), currentUser.getUsername());
         return mapToResponse(saved);
     }
@@ -372,6 +539,13 @@ public class MissionService {
         if (existing.isPresent()) {
             log.info("User '{}' resumed mission '{}'", username, mission.getName());
             return existing.get().getRepositoryUrl();
+        }
+
+        // 2b. Régebbi (a Stage 2 lusta-provisioning bevezetése előtt létrehozott)
+        // CODING misszióknak lehet, hogy még nincs template repójuk — enélkül
+        // nem lenne mit másolni a kadét saját repójába.
+        if (mission.getMissionType() == MissionType.CODING) {
+            mission = ensureMissionRepository(mission);
         }
 
         // 3. User Repó Létrehozása Giteán (a mission template alapján)

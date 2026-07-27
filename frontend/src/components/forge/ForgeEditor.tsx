@@ -10,8 +10,6 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
-  FileCode,
-  FileText,
   Terminal as TerminalIcon,
   FolderOpen,
 } from "lucide-react";
@@ -27,6 +25,7 @@ import type {
 } from "../../types/mission-forge";
 import { RetroPanel } from "./RetroPanel";
 import RetroButton from "../RetroButton";
+import FileExplorer from "./FileExplorer";
 
 interface ForgeEditorProps {
   missionId: string;
@@ -151,15 +150,50 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
     },
   });
 
-  // --- Segédfüggvények ---
-  const getFileIcon = (fileName: string) => {
-    if (fileName.endsWith(".md")) return <FileText size={16} color="#007acc" />;
-    if (fileName.endsWith(".js") || fileName.endsWith(".ts"))
-      return <FileCode size={16} color="#f1e05a" />;
-    if (fileName.endsWith(".py")) return <FileCode size={16} color="#3572A5" />;
-    return <FileCode size={16} color="#ccc" />;
-  };
+  const createFileMutation = useMutation({
+    mutationFn: (path: string) => forgeApi.createFile(missionId, path),
+    onSuccess: (_data, path) => {
+      setCurrentFileContents((prev) => ({ ...prev, [path]: "" }));
+      setActiveFileName(path);
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    },
+  });
 
+  const deleteFileMutation = useMutation({
+    mutationFn: (path: string) => forgeApi.deleteFile(missionId, path),
+    onSuccess: (_data, path) => {
+      setCurrentFileContents((prev) => {
+        const next = { ...prev };
+        delete next[path];
+        return next;
+      });
+      setActiveFileName((prev) => (prev === path ? null : prev));
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    },
+  });
+
+  const renameFileMutation = useMutation({
+    mutationFn: ({ oldPath, newPath }: { oldPath: string; newPath: string }) =>
+      forgeApi.renameFile(missionId, oldPath, newPath),
+    onSuccess: (_data, { oldPath, newPath }) => {
+      setCurrentFileContents((prev) => {
+        const next = { ...prev };
+        next[newPath] = next[oldPath];
+        delete next[oldPath];
+        return next;
+      });
+      setActiveFileName((prev) => (prev === oldPath ? newPath : prev));
+    },
+    onError: (err: any) => {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    },
+  });
+
+  // --- Segédfüggvények ---
   const getStatusColor = (
     status: VerificationStatus,
   ): "default" | "warning" | "success" | "error" | "primary" => {
@@ -302,54 +336,18 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
               flexShrink: 0,
               bgcolor: "#111",
               borderRight: "1px solid #222",
-              display: "flex",
-              flexDirection: "column",
             }}
           >
-            <Typography
-              variant="caption"
-              sx={{
-                p: 1.5,
-                color: "#666",
-                fontWeight: "bold",
-                borderBottom: "1px solid #222",
-              }}
-            >
-              {t("forge.explorerFiles").toUpperCase()}
-            </Typography>
-            <Box sx={{ py: 1 }}>
-              {Object.keys(currentFileContents).map((name) => (
-                <Box
-                  key={name}
-                  onClick={() => setActiveFileName(name)}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    px: 2,
-                    py: 0.8,
-                    cursor: "pointer",
-                    bgcolor: activeFileName === name ? "#222" : "transparent",
-                    borderLeft:
-                      activeFileName === name
-                        ? "2px solid #fff"
-                        : "2px solid transparent",
-                    "&:hover": { bgcolor: "#1a1a1a" },
-                  }}
-                >
-                  {getFileIcon(name)}
-                  <Typography
-                    sx={{
-                      color: activeFileName === name ? "#fff" : "#aaa",
-                      fontSize: "0.85rem",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {name}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
+            <FileExplorer
+              fileNames={Object.keys(currentFileContents)}
+              activeFileName={activeFileName}
+              onSelect={setActiveFileName}
+              onCreate={(path) => createFileMutation.mutate(path)}
+              onDelete={(path) => deleteFileMutation.mutate(path)}
+              onRename={(oldPath, newPath) =>
+                renameFileMutation.mutate({ oldPath, newPath })
+              }
+            />
           </Box>
         )}
 
