@@ -175,12 +175,7 @@ public class MissionService {
         Mission mission = missionRepository.findById(request.getMissionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", request.getMissionId()));
 
-        // Ellenőrzés: User a tulajdonos, vagy van edit_any joga
-        if (mission.getOwner() != null
-                && !mission.getOwner().getId().equals(currentUser.getId())
-                && !hasAuthority(currentUser, "mission:edit_any")) {
-            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
-        }
+        requireMissionEditAccess(mission, currentUser);
 
         String repoName = mission.getId().toString(); // A repó neve a Mission UUID-ja
         String repoOwner = giteaService.getAdminUsername(); // Az admin a tulajdonos
@@ -478,9 +473,7 @@ public class MissionService {
         Mission missionToUpdate = missionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
 
-        if (!missionToUpdate.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
-            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
-        }
+        requireMissionEditAccess(missionToUpdate, currentUser);
 
         StarSystem newStarSystem = starSystemRepository.findById(request.getStarSystemId())
                 .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", request.getStarSystemId()));
@@ -648,9 +641,7 @@ public class MissionService {
         Mission mission = missionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", id));
 
-        if (!mission.getOwner().getId().equals(currentUser.getId()) && !hasAuthority(currentUser, "mission:edit_any")) {
-            throw new UnauthorizedAccessException("You do not have permission to edit this mission.");
-        }
+        requireMissionEditAccess(mission, currentUser);
 
         mission.setContent(content);
         return mapToResponse(missionRepository.save(mission));
