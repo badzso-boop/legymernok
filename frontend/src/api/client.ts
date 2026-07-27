@@ -107,6 +107,30 @@ export const forgeApi = {
     return response.data;
   },
 
+  /** Új (üres) fájlt hoz létre egy misszió saját (template) repójában. */
+  createFile: async (missionId: string, path: string) => {
+    const response = await apiClient.post<MissionForgeResponse>(
+      `/missions/${missionId}/forge/files`,
+      { path },
+    );
+    return response.data;
+  },
+
+  /** Töröl egy fájlt egy misszió saját (template) repójából. */
+  deleteFile: async (missionId: string, path: string) => {
+    await apiClient.delete(`/missions/${missionId}/forge/files`, {
+      params: { path },
+    });
+  },
+
+  /** Átnevez egy fájlt egy misszió saját (template) repójában. */
+  renameFile: async (missionId: string, oldPath: string, newPath: string) => {
+    await apiClient.patch(`/missions/${missionId}/forge/files/rename`, {
+      oldPath,
+      newPath,
+    });
+  },
+
   /**
    * Lekéri a jelenlegi felhasználó tulajdonában lévő csillagrendszereket.
    * @returns StarSystemResponse objektumok listája.
@@ -189,6 +213,39 @@ export const missionApi = {
       `/missions/${missionId}/start`,
     );
     return response.data;
+  },
+
+  /** Lekéri a bejelentkezett kadét saját munkarepójának fájljait egy elindított CODING misszióhoz. */
+  getPlayFiles: async (missionId: string) => {
+    const response = await apiClient.get<Record<string, string>>(
+      `/missions/${missionId}/play/files`,
+    );
+    return response.data;
+  },
+
+  /** Elmenti (batch) a kadét saját munkarepójának fájltartalmait. */
+  savePlayFiles: async (missionId: string, files: Record<string, string>) => {
+    await apiClient.put(`/missions/${missionId}/play/files`, files);
+  },
+
+  /** Új (üres) fájlt hoz létre a kadét saját munkarepójában. */
+  createPlayFile: async (missionId: string, path: string) => {
+    await apiClient.post(`/missions/${missionId}/play/files`, { path });
+  },
+
+  /** Töröl egy fájlt a kadét saját munkarepójából. */
+  deletePlayFile: async (missionId: string, path: string) => {
+    await apiClient.delete(`/missions/${missionId}/play/files`, {
+      params: { path },
+    });
+  },
+
+  /** Átnevez egy fájlt a kadét saját munkarepójában. */
+  renamePlayFile: async (missionId: string, oldPath: string, newPath: string) => {
+    await apiClient.patch(`/missions/${missionId}/play/files/rename`, {
+      oldPath,
+      newPath,
+    });
   },
 };
 

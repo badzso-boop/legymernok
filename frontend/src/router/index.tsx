@@ -33,6 +33,7 @@ import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPa
 import MyForgePage from "../pages/mission-forge/MyForgePage";
 import GroupPlayerPage from "../pages/play/GroupPlayerPage";
 import ContentMissionPage from "../pages/play/ContentMissionPage";
+import CodingMissionPage from "../pages/play/CodingMissionPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -177,6 +178,14 @@ export const router = createHashRouter([
     element: (
       <ProtectedRoute>
         <ContentMissionPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/play/coding/:missionId",
+    element: (
+      <ProtectedRoute>
+        <CodingMissionPage />
       </ProtectedRoute>
     ),
   },

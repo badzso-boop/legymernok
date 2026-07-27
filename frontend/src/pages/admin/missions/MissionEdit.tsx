@@ -30,6 +30,7 @@ import type { StarSystemResponse } from "../../../types/starSystem";
 import { useTranslation } from "react-i18next";
 import ContentEditor from "../../../components/admin/ContentEditor";
 import FillInBlankEditor from "../../../components/admin/FillInBlankEditor";
+import MissionFileEditor from "../../../components/admin/MissionFileEditor";
 
 const DIFFICULTIES = ["EASY", "MEDIUM", "HARD", "EXPERT"];
 const MISSION_TYPES = ["CODING", "CIRCUIT_SIMULATION", "QUIZ", "CONTENT", "FILL_IN_BLANK"];
@@ -182,6 +183,7 @@ const MissionEdit: React.FC = () => {
 
   const showContentTab = !isNew && mission.missionType === "CONTENT";
   const showFillInBlankTab = mission.missionType === "FILL_IN_BLANK";
+  const showFilesTab = !isNew && mission.missionType === "CODING";
 
   if (loading) return <CircularProgress />;
 
@@ -205,11 +207,12 @@ const MissionEdit: React.FC = () => {
         </Alert>
       )}
 
-      {(showContentTab || showFillInBlankTab) && (
+      {(showContentTab || showFillInBlankTab || showFilesTab) && (
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
           <Tab label="Alap adatok" />
           {showContentTab && <Tab label="Tartalom" />}
           {showFillInBlankTab && <Tab label="Kitöltős szerkesztő" />}
+          {showFilesTab && <Tab label={t("filesTab")} />}
         </Tabs>
       )}
 
@@ -387,6 +390,12 @@ const MissionEdit: React.FC = () => {
               Mentsd el először az alap adatokat, majd automatikusan ide kerülsz a szerkesztőbe.
             </Alert>
           )}
+        </Paper>
+      )}
+
+      {tab === 1 && showFilesTab && id && (
+        <Paper sx={{ p: 4 }}>
+          <MissionFileEditor missionId={id} />
         </Paper>
       )}
     </Box>

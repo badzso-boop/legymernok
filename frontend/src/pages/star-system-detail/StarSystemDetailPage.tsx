@@ -135,7 +135,14 @@ const StarSystemDetailPage: React.FC = () => {
       return;
     }
 
-    // CODING / CIRCUIT_SIMULATION — nincs még dedikált kadét-oldali
+    if (mission.missionType === "CODING") {
+      // A missionApi.start()-ot maga a CodingMissionPage hívja meg
+      // (idempotens, biztonságos ott is meghívni).
+      navigate(`/play/coding/${mission.id}`);
+      return;
+    }
+
+    // CIRCUIT_SIMULATION — nincs még dedikált kadét-oldali
     // munkakörnyezet, a saját Gitea repó a jelenlegi munkaterület.
     setStartingMissionId(mission.id);
     try {

@@ -322,6 +322,7 @@ public class GiteaService {
      * @throws ExternalServiceException Ha hiba történik a művelet során.
      */
     public String uploadFile(String repoOwner, String repoName, String filePath, String content, Cadet user) {
+        validateFilePath(filePath);
         String encodedContent = Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8));
 
         String now = OffsetDateTime.now().toString();
@@ -393,6 +394,78 @@ public class GiteaService {
             log.error("Error getting file info for {}: {}", filePath, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Töröl egy fájlt a megadott repository-ban.
+     * @param repoOwner A repository tulajdonosának neve.
+     * @param repoName A repository neve.
+     * @param filePath A törlendő fájl útvonala a repón belül.
+     * @param user A műveletet végző Cadet (commit author), vagy null (admin).
+     * @throws ExternalServiceException Ha a fájl nem létezik, vagy a törlés sikertelen.
+     */
+    public void deleteFile(String repoOwner, String repoName, String filePath, Cadet user) {
+        validateFilePath(filePath);
+        Map<String, Object> fileInfo = getFileInfo(repoOwner, repoName, filePath);
+        if (fileInfo == null || !fileInfo.containsKey("sha")) {
+            throw new ExternalServiceException("Gitea", "File not found, cannot delete: " + filePath);
+        }
+
+        String authorName = (user != null) ? user.getUsername() : adminUsername;
+        String authorEmail = (user != null && user.getEmail() != null) ? user.getEmail() : adminUsername + "@legymernok.hu";
+        Map<String, String> identity = new HashMap<>();
+        identity.put("name", authorName);
+        identity.put("email", authorEmail);
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("sha", fileInfo.get("sha"));
+        requestBody.put("message", "Delete " + filePath);
+        requestBody.put("author", identity);
+        requestBody.put("committer", identity);
+
+        String uri = String.format("/repos/%s/%s/contents/%s", repoOwner, repoName, filePath);
+        try {
+            restClient.method(org.springframework.http.HttpMethod.DELETE)
+                    .uri(uri)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Deleted file {} from {}/{}", filePath, repoOwner, repoName);
+        } catch (Exception e) {
+            log.error("Failed to delete file {} from {}/{}. Error: {}", filePath, repoOwner, repoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to delete file: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Átnevez (áthelyez) egy fájlt a repositoryn belül. A Gitea contents API-nak
+     * nincs natív "rename" művelete, ezért ez összetett: lekéri a jelenlegi
+     * tartalmat, létrehozza az új útvonalon, majd törli a régit.
+     * @param repoOwner A repository tulajdonosának neve.
+     * @param repoName A repository neve.
+     * @param oldPath A fájl jelenlegi útvonala.
+     * @param newPath A fájl új útvonala.
+     * @param user A műveletet végző Cadet (commit author), vagy null (admin).
+     */
+    public void renameFile(String repoOwner, String repoName, String oldPath, String newPath, Cadet user) {
+        validateFilePath(oldPath);
+        validateFilePath(newPath);
+        if (oldPath.equals(newPath)) return;
+
+        Map<String, Object> existingAtNewPath = getFileInfo(repoOwner, repoName, newPath);
+        if (existingAtNewPath != null) {
+            throw new ExternalServiceException("Gitea", "A file already exists at the target path: " + newPath);
+        }
+
+        String content = getFileContent(repoOwner, repoName, oldPath);
+        if (content == null) {
+            throw new ExternalServiceException("Gitea", "File not found, cannot rename: " + oldPath);
+        }
+
+        uploadFile(repoOwner, repoName, newPath, content, user);
+        deleteFile(repoOwner, repoName, oldPath, user);
+        log.info("Renamed file {} -> {} in {}/{}", oldPath, newPath, repoOwner, repoName);
     }
 
     public void setRepositorySecret(String repoName, String secretName, String secretValue) {
