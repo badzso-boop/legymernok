@@ -2,7 +2,8 @@
 
 ## Együttműködési szabályok
 
-- **NE futtass tesztet, buildet, ne commitolj, ne pusholj.** Minden ilyen műveletnél jelezd a usernek mit futtasson.
+- **NE futtass tesztet, buildet.** Jelezd a usernek mit futtasson.
+- **Commitolhatsz és pusholhatsz** — a repo ezen a szerveren fut (nem a user lokális gépén), neki macerás itt kódolni, szóval ez alapértelmezetten megengedett, nem kell külön kérni minden alkalommal. (Feature-branchre dolgozz, PR-t nyiss, ne közvetlenül a `main`-re pusholj.)
 - A kommunikáció magyarul folyik.
 - Ha hibajavítást kérsz, csak azt változtasd meg ami szükséges — ne refaktorálj, ne adj hozzá felesleges kommentet.
 - **Nagyobb módosítás után (3+ fájl, vagy új service/komponens) indítsd el a `code-quality-reviewer` agentet** mielőtt azt mondod "kész". Hívás: `Agent({ subagent_type: "code-quality-reviewer", prompt: "..." })`
