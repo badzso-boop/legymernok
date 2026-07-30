@@ -120,11 +120,11 @@ const StarSystemDetailPage: React.FC = () => {
     setStartError(null);
 
     if (mission.missionType === "QUIZ") {
-      navigate(`/play/quiz/${mission.id}`);
+      navigate(`/play/quiz/${mission.id}`, { state: { starSystemId: id } });
       return;
     }
     if (mission.missionType === "CONTENT") {
-      navigate(`/play/content/${mission.id}`);
+      navigate(`/play/content/${mission.id}`, { state: { starSystemId: id } });
       return;
     }
     if (mission.missionType === "FILL_IN_BLANK") {
@@ -138,7 +138,7 @@ const StarSystemDetailPage: React.FC = () => {
     if (mission.missionType === "CODING") {
       // A missionApi.start()-ot maga a CodingMissionPage hívja meg
       // (idempotens, biztonságos ott is meghívni).
-      navigate(`/play/coding/${mission.id}`);
+      navigate(`/play/coding/${mission.id}`, { state: { starSystemId: id } });
       return;
     }
 
@@ -261,7 +261,7 @@ const StarSystemDetailPage: React.FC = () => {
 
             <Box sx={{ mt: 2, display: "flex", justifyContent: "space-around" }}>
               <div className="button-group">
-                <button className="retro-btn red" onClick={() => navigate(-1)} />
+                <button className="retro-btn red" onClick={() => navigate("/star-map")} />
                 <div className="label-plate">BACK</div>
               </div>
             </Box>
