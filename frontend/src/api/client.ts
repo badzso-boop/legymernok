@@ -26,6 +26,10 @@ import type {
   FillInBlankResultResponse,
   LastAttemptResponse,
 } from "../types/fillinblank";
+import type {
+  FeatureFlagResponse,
+  UpdateFeatureFlagRequest,
+} from "../types/featureFlag";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -448,6 +452,32 @@ export const fillInBlankApi = {
   getLastAttempt: async (missionId: string): Promise<LastAttemptResponse> => {
     const response = await apiClient.get<LastAttemptResponse>(
       `/missions/${missionId}/fill-in-blank/last-attempt`,
+    );
+    return response.data;
+  },
+};
+
+export const featureFlagApi = {
+  /** Admin: összes feature flag listázása kezeléshez (feature_flag:read szükséges). */
+  getAll: async (): Promise<FeatureFlagResponse[]> => {
+    const response = await apiClient.get<FeatureFlagResponse[]>("/feature-flags");
+    return response.data;
+  },
+
+  /** Bármely bejelentkezett felhasználó lekérheti egy flag aktuális értékét. */
+  getByKey: async (key: string): Promise<FeatureFlagResponse> => {
+    const response = await apiClient.get<FeatureFlagResponse>(`/feature-flags/${key}`);
+    return response.data;
+  },
+
+  /** Admin: flag engedélyezés/tiltás + leírás módosítása (feature_flag:write szükséges). */
+  update: async (
+    key: string,
+    data: UpdateFeatureFlagRequest,
+  ): Promise<FeatureFlagResponse> => {
+    const response = await apiClient.put<FeatureFlagResponse>(
+      `/feature-flags/${key}`,
+      data,
     );
     return response.data;
   },
