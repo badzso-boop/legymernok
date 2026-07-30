@@ -11,12 +11,12 @@ const SpaceStationCanvas: React.FC<Props> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Rakéták definíciója (szín, pozíció arányosan)
+  // Rakéták definíciója (szín, pozíció arányosan) — pozíció szerint kell
+  // egyeznie a router/index.tsx `mainNavigationControls` tömbjével.
   const rockets = [
-    { color: "#ef4444", label: "STAR-SYS" }, // Piros (World)
-    { color: "#3b82f6", label: "BASE" }, // Kék (Base)
-    { color: "#eab308", label: "LOBBY" }, // Sárga (Lobby)
-    { color: "#22c55e", label: "ARENA" }, // Zöld (Arena)
+    { color: "#ef4444", label: "STAR-SYS" }, // Piros (Csillagrendszerek)
+    { color: "#3b82f6", label: "FORGE" }, // Kék (Saját Kohó)
+    { color: "#eab308", label: "FEEDBACK" }, // Sárga (Visszajelzés)
   ];
 
   useEffect(() => {
