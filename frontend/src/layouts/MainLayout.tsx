@@ -79,20 +79,38 @@ const MainLayout: React.FC = () => {
         }}
       >
         <Toolbar>
-          <Typography
-            variant="h6"
-            component="div"
+          <Box
+            onClick={() => navigate("/")}
             sx={{
               flexGrow: 1,
               cursor: "pointer",
-              fontWeight: "bold",
-              letterSpacing: 1,
-              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              minWidth: 0,
             }}
-            onClick={() => navigate("/")}
           >
-            🚀 LÉGYMÉRNÖK.HU
-          </Typography>
+            <img
+              src="/astronaut-logo.svg"
+              alt=""
+              width={28}
+              height={28}
+              style={{ flexShrink: 0 }}
+            />
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{
+                fontWeight: "bold",
+                letterSpacing: 1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              LÉGYMÉRNÖK.HU
+            </Typography>
+          </Box>
 
           {isMobile ? (
             <IconButton
@@ -147,6 +165,9 @@ const MainLayout: React.FC = () => {
                     open={Boolean(accountMenuAnchor)}
                     onClose={() => setAccountMenuAnchor(null)}
                   >
+                    <MenuItem onClick={() => go("/feedback")}>
+                      {t("nav.feedback")}
+                    </MenuItem>
                     {isAdmin && (
                       <MenuItem onClick={() => go("/admin")}>
                         {t("adminDashboard")}
@@ -189,6 +210,9 @@ const MainLayout: React.FC = () => {
                 </ListItemButton>
                 <ListItemButton onClick={() => go("/my-forge")}>
                   <ListItemText primary={t("nav.myForge")} />
+                </ListItemButton>
+                <ListItemButton onClick={() => go("/feedback")}>
+                  <ListItemText primary={t("nav.feedback")} />
                 </ListItemButton>
                 {isAdmin && (
                   <ListItemButton onClick={() => go("/admin")}>

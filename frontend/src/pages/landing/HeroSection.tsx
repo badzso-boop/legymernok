@@ -19,6 +19,17 @@ const HeroSection: React.FC = () => {
         px: { xs: 1, sm: 2 },
       }}
     >
+      <Box
+        component="img"
+        src="/astronaut-logo.svg"
+        alt={t("landingPage.hero.logoAlt")}
+        sx={{
+          width: { xs: 56, md: 72 },
+          height: { xs: 56, md: 72 },
+          mb: 2,
+          filter: "drop-shadow(0 0 12px rgba(51,255,0,0.35))",
+        }}
+      />
       <Typography
         className="retro-font-header"
         sx={{

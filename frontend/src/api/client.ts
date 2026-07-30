@@ -26,6 +26,10 @@ import type {
   FillInBlankResultResponse,
   LastAttemptResponse,
 } from "../types/fillinblank";
+import type {
+  FeedbackIssueResponse,
+  CreateFeedbackRequest,
+} from "../types/feedback";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -448,6 +452,23 @@ export const fillInBlankApi = {
   getLastAttempt: async (missionId: string): Promise<LastAttemptResponse> => {
     const response = await apiClient.get<LastAttemptResponse>(
       `/missions/${missionId}/fill-in-blank/last-attempt`,
+    );
+    return response.data;
+  },
+};
+
+export const feedbackApi = {
+  list: async (): Promise<FeedbackIssueResponse[]> => {
+    const response = await apiClient.get<FeedbackIssueResponse[]>("/feedback");
+    return response.data;
+  },
+
+  submit: async (
+    data: CreateFeedbackRequest,
+  ): Promise<FeedbackIssueResponse> => {
+    const response = await apiClient.post<FeedbackIssueResponse>(
+      "/feedback",
+      data,
     );
     return response.data;
   },

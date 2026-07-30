@@ -220,8 +220,7 @@ const resources = {
         redirecting: "REDIRECTING...",
         starSystems: "STAR SYSTEMS",
         myForge: "MY FORGE",
-        lobby: "LOBBY",
-        arena: "ARENA",
+        feedback: "FEEDBACK",
         wipMessage: "COMING SOON // UNDER CONSTRUCTION...",
       },
       // NAV
@@ -233,6 +232,7 @@ const resources = {
         language: "Language",
         menu: "Menu",
         account: "Account",
+        feedback: "Feedback",
       },
       // STAR MAP
       starMap: {
@@ -323,6 +323,7 @@ const resources = {
           subtitle:
             "A gamified learning platform for engineering students. Complete real coding missions in your browser, backed by real Git repositories, take on timed quizzes, and level up through star systems — all wrapped in a retro space-cadet story.",
           ctaContinue: "Go to the Star Map",
+          logoAlt: "LégyMérnök.hu cadet helmet logo",
         },
         about: {
           title: "MISSION BRIEFING // WHAT IS THIS?",
@@ -398,8 +399,26 @@ const resources = {
         launchConsole: {
           title: "LAUNCH CONSOLE",
           subtitle:
-            "The shortcuts on this console jump straight to the Star Map, your own missions in Mission Forge, and more — some destinations are still under construction.",
+            "The shortcuts on this console jump straight to the Star Map, your own missions in Mission Forge, and the feedback board.",
         },
+      },
+      // FEEDBACK / ISSUE BOARD
+      feedbackPage: {
+        title: "Feedback & feature requests",
+        subtitle:
+          "Missing something, or found a bug? Submit it here — it becomes a real GitHub issue in the project repository, and you can see what other cadets have already requested.",
+        formTitle: "Submit new feedback",
+        titleLabel: "Title",
+        descriptionLabel: "Description",
+        submitButton: "Submit",
+        validationError: "Please fill in both the title and the description.",
+        submitError: "Something went wrong while submitting your feedback. Please try again later.",
+        submitSuccess: "Thanks! Your feedback was submitted as GitHub issue",
+        listTitle: "Previously submitted feedback",
+        listError: "Couldn't load the feedback list right now.",
+        emptyList: "No feedback yet — be the first to submit one!",
+        stateOpen: "Open",
+        stateClosed: "Closed",
       },
     },
   },
@@ -622,8 +641,7 @@ const resources = {
         redirecting: "ÁTIRÁNYÍTÁS...",
         starSystems: "CSILLAG RENDSZER",
         myForge: "FORGE-JAIM",
-        lobby: "LOBBY",
-        arena: "ARÉNA",
+        feedback: "VISSZAJELZÉS",
         wipMessage: "HAMAROSAN // FEJLESZTÉS ALATT...",
       },
       // NAV
@@ -634,6 +652,7 @@ const resources = {
         back: "Vissza",
         language: "Nyelv",
         menu: "Menü",
+        feedback: "Visszajelzés",
         account: "Fiók",
       },
       // STAR MAP
@@ -726,6 +745,7 @@ const resources = {
           subtitle:
             "Gamifikált oktatási platform mérnökhallgatóknak. Oldj meg valódi kódolási küldetéseket közvetlenül a böngésződben, valódi Git-tárhelyekre építve, tölts ki időzített kvízeket, és haladj végig a csillagrendszereken — mindezt egy retro-futurisztikus űrkadét-történetbe csomagolva.",
           ctaContinue: "Ugrás a csillagtérképre",
+          logoAlt: "LégyMérnök.hu kadét sisak logó",
         },
         about: {
           title: "KÜLDETÉS BRIEFING // MIRŐL SZÓL AZ OLDAL?",
@@ -801,8 +821,26 @@ const resources = {
         launchConsole: {
           title: "INDÍTÓPULT",
           subtitle:
-            "A konzol gombjai közvetlenül a csillagtérképre, a saját Mission Forge küldetéseidre és egyebekre visznek — néhány célpont még fejlesztés alatt áll.",
+            "A konzol gombjai közvetlenül a csillagtérképre, a saját Mission Forge küldetéseidre és a visszajelzés-felületre visznek.",
         },
+      },
+      // VISSZAJELZÉS / ISSUE TÁBLA
+      feedbackPage: {
+        title: "Visszajelzés és funkciókérés",
+        subtitle:
+          "Hiányzik valami, vagy hibát találtál? Itt jelezheted — a beküldött visszajelzés valódi GitHub issue-ként jön létre a projekt repójában, és láthatod, mit kértek már más kadétok.",
+        formTitle: "Új visszajelzés beküldése",
+        titleLabel: "Cím",
+        descriptionLabel: "Leírás",
+        submitButton: "Beküldés",
+        validationError: "Kérjük, töltsd ki a címet és a leírást is.",
+        submitError: "Hiba történt a visszajelzés beküldése közben. Próbáld újra később.",
+        submitSuccess: "Köszönjük! A visszajelzésed a következő GitHub issue-ként jött létre:",
+        listTitle: "Korábban beküldött visszajelzések",
+        listError: "A visszajelzés-lista jelenleg nem tölthető be.",
+        emptyList: "Még nincs egy visszajelzés sem — legyél te az első!",
+        stateOpen: "Nyitott",
+        stateClosed: "Lezárva",
       },
     },
   },
