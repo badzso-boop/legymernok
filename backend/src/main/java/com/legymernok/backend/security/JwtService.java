@@ -3,7 +3,6 @@ package com.legymernok.backend.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
@@ -77,12 +76,11 @@ public class JwtService {
                 .getBody();
     }
 
+    // A `jwt.secret` (.env: JWT_SECRET) nyers ASCII stringként kerül aláíró kulccsá,
+    // NEM Base64-dekódolva — ha valaha Base64-kódolt értéket tennél ide, itt kell
+    // Decoders.BASE64.decode(secretKey)-re váltani, különben a validáció csendben
+    // rossz kulccsal fog futni.
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey); // Vagy simán getBytes(), ha nem Base64 a secret
-        // Ha a fenti egyszerű stringet használod és hibát dob a Base64 miatt, használd ezt:
-        // return Keys.hmacShaKeyFor(secretKey.getBytes());
-        // De a szabványos az, ha Base64 kódolt kulcsot adsz meg a properties-ben.
-        // MOST A legegyszerűbb, ha a kulcsot bytes-ra konvertáljuk simán:
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 }
