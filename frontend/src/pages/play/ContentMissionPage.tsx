@@ -1,12 +1,13 @@
 import React from "react";
 import { Box } from "@mui/material";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import ContentMissionView from "../../components/play/ContentMissionView";
 import "../../styles/RetroUI.css";
 
 const ContentMissionPage: React.FC = () => {
   const { missionId } = useParams<{ missionId: string }>();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const starSystemId = (location.state as { starSystemId?: string } | null)?.starSystemId;
 
   return (
     <Box
@@ -36,7 +37,7 @@ const ContentMissionPage: React.FC = () => {
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <ContentMissionView
             missionId={missionId!}
-            onComplete={() => navigate(-1)}
+            starSystemId={starSystemId}
           />
         </Box>
       </div>

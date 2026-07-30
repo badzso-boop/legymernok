@@ -120,7 +120,7 @@ const StarMapPage: React.FC = () => {
             <div className="button-group">
               <button
                 className={`retro-btn red ${activeBtn === "back" ? "active" : ""}`}
-                onClick={() => handleBtnClick("back", () => navigate(-1))}
+                onClick={() => handleBtnClick("back", () => navigate("/"))}
               />
               <div className="label-plate">{t("starMap.back")}</div>
             </div>
