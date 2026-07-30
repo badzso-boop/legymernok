@@ -12,6 +12,7 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -32,7 +33,11 @@ import java.util.regex.Pattern;
 @Slf4j
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
-    private static final Pattern MISSION_TOPIC = Pattern.compile("^/topic/mission/([0-9a-fA-F-]{36})$");
+    // Szigorú UUID-formátum (8-4-4-4-12 hex csoport), nem csak "36 hex/kötőjel
+    // karakter valamilyen sorrendben" — így minden, ami illeszkedik, biztosan
+    // átmegy UUID.fromString()-en is (a lenti try/catch csak defenzív tartalék).
+    private static final Pattern MISSION_TOPIC = Pattern.compile(
+            "^/topic/mission/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$");
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
@@ -94,9 +99,11 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             return;
         }
 
-        UsernamePasswordAuthenticationToken principal =
-                (UsernamePasswordAuthenticationToken) accessor.getUser();
-        if (principal == null || !(principal.getPrincipal() instanceof Cadet cadet)) {
+        // instanceof mintaillesztés nyers cast helyett: ha valaha egy másik
+        // komponens más Principal-típust állítana be a session-ön, ez tiszta
+        // elutasítást ad ClassCastException helyett.
+        if (!(accessor.getUser() instanceof Authentication principal)
+                || !(principal.getPrincipal() instanceof Cadet cadet)) {
             log.warn("STOMP SUBSCRIBE rejected: unauthenticated ({})", destination);
             throw new AccessDeniedException("Unauthenticated");
         }
@@ -114,7 +121,16 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         Matcher matcher = MISSION_TOPIC.matcher(destination);
         if (matcher.matches()) {
-            UUID missionId = UUID.fromString(matcher.group(1));
+            UUID missionId;
+            try {
+                missionId = UUID.fromString(matcher.group(1));
+            } catch (IllegalArgumentException e) {
+                // A szigorú regex mellett ez elvileg sosem fut le — defenzív
+                // tartalék, hogy itt is AccessDeniedException-t dobjunk, ne
+                // kezeletlen IllegalArgumentException-t.
+                log.warn("STOMP SUBSCRIBE rejected: malformed mission id in '{}'", destination);
+                throw new AccessDeniedException("Invalid mission id");
+            }
             if (!missionService.canViewMissionLogs(missionId, cadet)) {
                 log.warn("STOMP SUBSCRIBE rejected: '{}' cannot view logs for mission {}", cadet.getUsername(), missionId);
                 throw new AccessDeniedException("Not allowed to view this mission's logs");
