@@ -313,6 +313,92 @@ const resources = {
         valueLabel: "VALUE",
         pointsShort: "PTS",
       },
+      // LANDING PAGE (marketing)
+      landingPage: {
+        hero: {
+          kicker: "LÉGYMÉRNÖK.HU // MISSION CONTROL",
+          title: "Learn engineering by actually building things.",
+          subtitle:
+            "A gamified learning platform for engineering students. Complete real coding missions in your browser, backed by real Git repositories, take on timed quizzes, and level up through star systems — all wrapped in a retro space-cadet story.",
+          ctaContinue: "Go to the Star Map",
+        },
+        about: {
+          title: "MISSION BRIEFING // WHAT IS THIS?",
+          intro:
+            "LégyMérnök.hu (\"Be an Engineer\") is a gamified education platform built for engineering students. Instead of watching lectures, you play a cadet in a space-themed academy: you complete missions, earn progress, and unlock new star systems as you go.",
+          narrative:
+            "Every course is a star system, and every exercise inside it is a mission. Star systems are organized on a galaxy map, missions inside them unlock in order as you complete the ones before them.",
+          missionsText:
+            "Coding missions are the real deal, not toy exercises: each one is backed by an actual Git repository hosted on our self-hosted Gitea server. You get your own working copy, write code directly in a browser-based editor, and can watch your submission's build/test feedback stream in live in a retro terminal. If you prefer working locally, you can clone the repository and push from your own machine too.",
+          starSystemsText:
+            "Besides coding missions (JavaScript and Python), you'll also find timed quiz missions with instant scoring, and reading-material missions for theory. Circuit-simulation missions exist as a mission type already, with a dedicated in-browser simulator on the roadmap.",
+        },
+        features: {
+          title: "WHAT YOU GET",
+          subtitle: "A quick overview of what's actually built and working today.",
+          coding: {
+            title: "Coding missions",
+            desc: "JavaScript & Python exercises. Real Git repo per mission, in-browser Monaco editor, live terminal feedback from the build pipeline.",
+          },
+          quiz: {
+            title: "Quiz missions",
+            desc: "Timed multiple-choice tests with automatic scoring and auto-submit when time runs out.",
+          },
+          circuit: {
+            title: "Circuit simulation",
+            desc: "A dedicated mission type for electronics/circuit exercises. In-browser simulator is on the roadmap — for now it opens your mission repository directly.",
+            badge: "IN DEVELOPMENT",
+          },
+          starSystems: {
+            title: "Star systems & Star Map",
+            desc: "Courses are organized into star systems on a navigable galaxy map. Missions unlock in order as you complete previous ones.",
+          },
+          forge: {
+            title: "Mission Forge",
+            desc: "Not just a student: cadets can create and publish their own coding and quiz missions using the built-in Mission Forge editor.",
+          },
+          ui: {
+            title: "Bilingual, retro sci-fi UI",
+            desc: "Fully usable in Hungarian and English, with a consistent retro-futuristic space console look throughout.",
+          },
+        },
+        faq: {
+          title: "FREQUENTLY ASKED QUESTIONS",
+          q1: {
+            q: "What exactly is LégyMérnök.hu?",
+            a: "A gamified learning platform for engineering students. You play as a cadet completing missions — coding exercises, quizzes and more — organized into course-like \"star systems\", instead of passively watching lecture videos.",
+          },
+          q2: {
+            q: "Is it free?",
+            a: "Yes. The platform has no payment or subscription features — registration and every mission are free to use.",
+          },
+          q3: {
+            q: "Do I need prior programming experience?",
+            a: "No. Missions are labeled by difficulty (Easy, Medium, Hard, Expert), so you can start with the easy ones and work your way up, even as a complete beginner.",
+          },
+          q4: {
+            q: "What topics and languages can I learn?",
+            a: "Coding missions currently cover JavaScript and Python. There are also quiz missions for testing theory, reading-material missions, and a circuit-simulation mission type for electronics topics (dedicated in-browser simulator coming soon).",
+          },
+          q5: {
+            q: "How do I get started?",
+            a: "Register, then open the Star Map, pick a star system (course), and start its first mission. Your progress and unlocked missions are tracked automatically.",
+          },
+          q6: {
+            q: "Do I need to install anything?",
+            a: "No. Every coding mission can be solved directly in the browser with a built-in code editor — we automatically create and manage a real Git repository for you behind the scenes. If you'd rather work from your own machine, you can clone that same repository and push your own commits.",
+          },
+        },
+        finalCta: {
+          title: "Ready for launch?",
+          subtitle: "Create your cadet account and start your first mission today.",
+        },
+        launchConsole: {
+          title: "LAUNCH CONSOLE",
+          subtitle:
+            "The shortcuts on this console jump straight to the Star Map, your own missions in Mission Forge, and more — some destinations are still under construction.",
+        },
+      },
     },
   },
   hu: {
@@ -627,6 +713,92 @@ const resources = {
         globalConfig: "GLOBÁLIS_KONFIGURÁCIÓ",
         valueLabel: "ÉRTÉK",
         pointsShort: "PONT",
+      },
+      // LANDING PAGE (marketing)
+      landingPage: {
+        hero: {
+          kicker: "LÉGYMÉRNÖK.HU // MISSZIÓ IRÁNYÍTÁS",
+          title: "Tanulj mérnöknek lenni — valódi küldetéseken keresztül.",
+          subtitle:
+            "Gamifikált oktatási platform mérnökhallgatóknak. Oldj meg valódi kódolási küldetéseket közvetlenül a böngésződben, valódi Git-tárhelyekre építve, tölts ki időzített kvízeket, és haladj végig a csillagrendszereken — mindezt egy retro-futurisztikus űrkadét-történetbe csomagolva.",
+          ctaContinue: "Ugrás a csillagtérképre",
+        },
+        about: {
+          title: "KÜLDETÉS BRIEFING // MIRŐL SZÓL AZ OLDAL?",
+          intro:
+            "A LégyMérnök.hu egy gamifikált oktatási platform mérnökhallgatóknak. Ahelyett, hogy videóelőadásokat néznél végig, egy kadét szerepébe bújsz egy űrakadémián: küldetéseket teljesítesz, fejlődsz, és újabb csillagrendszereket nyitsz meg útközben.",
+          narrative:
+            "Minden kurzus egy csillagrendszer, minden benne lévő feladat pedig egy küldetés. A csillagrendszerek egy galaxistérképen helyezkednek el, a bennük lévő küldetések pedig sorban nyílnak meg, ahogy az előzőeket teljesíted.",
+          missionsText:
+            "A kódolási küldetések nem játék kedvéért készült apró feladatok: mindegyik mögött egy valódi Git-tárhely áll a saját, self-hosted Gitea szerverünkön. Kapsz egy saját munkapéldányt, a kódot közvetlenül a böngészőbeli szerkesztőben írod, a beküldésed build/teszt visszajelzését pedig élőben, egy retro terminálon követheted végig. Ha inkább a saját gépeden dolgoznál, a tárhelyet le is klónozhatod és onnan is push-olhatsz.",
+          starSystemsText:
+            "A kódolási küldetések (JavaScript és Python) mellett időzített, azonnal értékelt kvízküldetéseket és elméleti anyagot bemutató, olvasós küldetéseket is találsz. Az áramkör-szimulációs küldetéstípus már létezik, a hozzá tartozó dedikált böngészős szimulátor fejlesztés alatt áll.",
+        },
+        features: {
+          title: "MIT KAPSZ?",
+          subtitle: "Gyors áttekintés arról, mi működik már ma is a platformon.",
+          coding: {
+            title: "Kódolási küldetések",
+            desc: "JavaScript és Python feladatok. Minden küldetéshez valódi Git-tárhely tartozik, böngészőben futó Monaco szerkesztővel, élő terminál visszajelzéssel a build folyamatból.",
+          },
+          quiz: {
+            title: "Kvíz küldetések",
+            desc: "Időzített, feleletválasztós tesztek automatikus pontozással, és automatikus beküldéssel, ha lejár az idő.",
+          },
+          circuit: {
+            title: "Áramkör-szimuláció",
+            desc: "Önálló küldetéstípus elektronikai/áramköri feladatokhoz. A böngészős szimulátor fejlesztés alatt áll — addig a küldetés a saját tárhelyedet nyitja meg.",
+            badge: "FEJLESZTÉS ALATT",
+          },
+          starSystems: {
+            title: "Csillagrendszerek & Csillagtérkép",
+            desc: "A kurzusok csillagrendszerekbe szerveződnek, egy bejárható galaxistérképen. A küldetések sorban nyílnak meg, ahogy haladsz előre.",
+          },
+          forge: {
+            title: "Mission Forge",
+            desc: "Nem csak diák lehetsz: a kadétok a beépített Mission Forge szerkesztővel saját kódolási és kvíz küldetéseket is létrehozhatnak és közzétehetnek.",
+          },
+          ui: {
+            title: "Kétnyelvű, retro sci-fi felület",
+            desc: "Teljesen használható magyarul és angolul is, végig egységes, retro-futurisztikus űrkonzol hangulattal.",
+          },
+        },
+        faq: {
+          title: "GYAKORI KÉRDÉSEK",
+          q1: {
+            q: "Mi ez pontosan, a LégyMérnök.hu?",
+            a: "Egy gamifikált oktatási platform mérnökhallgatóknak. Kadétként küldetéseket teljesítesz — kódolást, kvízeket és egyebeket —, amik kurzusszerű \"csillagrendszerekbe\" szerveződnek, ahelyett hogy passzívan videóelőadásokat néznél.",
+          },
+          q2: {
+            q: "Ingyenes?",
+            a: "Igen. A platformon nincs fizetős vagy előfizetéses funkció — a regisztráció és minden küldetés ingyenesen elérhető.",
+          },
+          q3: {
+            q: "Kell hozzá előzetes programozói tudás?",
+            a: "Nem. A küldetések nehézség szerint vannak jelölve (Könnyű, Közepes, Nehéz, Szakértő), így teljes kezdőként is a könnyű küldetésekkel indulhatsz, majd onnan haladhatsz tovább.",
+          },
+          q4: {
+            q: "Milyen témákat és nyelveket tanulhatok?",
+            a: "A kódolási küldetések jelenleg JavaScript-et és Python-t fednek le. Emellett vannak elméletet ellenőrző kvízküldetések, olvasós anyagot bemutató küldetések, és egy áramkör-szimulációs küldetéstípus elektronikai témákhoz (a dedikált böngészős szimulátor hamarosan érkezik).",
+          },
+          q5: {
+            q: "Hogyan kezdjek neki?",
+            a: "Regisztrálj, nyisd meg a csillagtérképet, válassz egy csillagrendszert (kurzust), és indítsd el az első küldetését. A haladásod és a megnyílt küldetések automatikusan követve vannak.",
+          },
+          q6: {
+            q: "Kell telepítenem bármit?",
+            a: "Nem. Minden kódolási küldetés közvetlenül a böngészőben megoldható, beépített kódszerkesztővel — a valódi Git-tárhelyet automatikusan létrehozzuk és kezeljük a háttérben. Ha szívesebben dolgoznál a saját gépeden, ugyanezt a tárhelyet le is klónozhatod, és onnan is push-olhatod a saját commitjaidat.",
+          },
+        },
+        finalCta: {
+          title: "Készen állsz a felszállásra?",
+          subtitle: "Hozd létre a kadét fiókodat, és indítsd el még ma az első küldetésedet.",
+        },
+        launchConsole: {
+          title: "INDÍTÓPULT",
+          subtitle:
+            "A konzol gombjai közvetlenül a csillagtérképre, a saját Mission Forge küldetéseidre és egyebekre visznek — néhány célpont még fejlesztés alatt áll.",
+        },
       },
     },
   },
