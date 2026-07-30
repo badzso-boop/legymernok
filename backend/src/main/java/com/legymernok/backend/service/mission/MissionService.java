@@ -210,6 +210,17 @@ public class MissionService {
         }
     }
 
+    // A /ws-mission-logs STOMP feliratkozás-ellenőrzéshez (StompAuthChannelInterceptor):
+    // ugyanaz az owner-vagy-edit_any szabály, mint a requireMissionEditAccess-ben, csak
+    // boolean-t ad vissza kivétel helyett, mert itt nem HTTP kontextusban dől el a hozzáférés.
+    public boolean canViewMissionLogs(UUID missionId, Cadet cadet) {
+        return missionRepository.findById(missionId)
+                .map(mission -> mission.getOwner() == null
+                        || mission.getOwner().getId().equals(cadet.getId())
+                        || hasAuthority(cadet, "mission:edit_any"))
+                .orElse(false);
+    }
+
     // Ha egy CODING misszióhoz (akár régi, még createMission()-nel, template
     // repó nélkül létrehozotthoz) még nincs Gitea repója, itt hozzuk létre —
     // Stage 2 "admin előre beállíthatja a fájlstruktúrát" ehhez a lusta

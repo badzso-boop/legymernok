@@ -131,8 +131,11 @@ const LogList: React.FC = () => {
     // "/api" levágása és "/ws-log" hozzáadása -> http://localhost:8080/ws-log
     const wsUrl = apiUrl.replace(/\/api$/, "") + "/ws-log";
 
+    const token = localStorage.getItem("token");
+
     const client = new Client({
       webSocketFactory: () => new SockJS(wsUrl),
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
       reconnectDelay: 5000,
       onConnect: () => {
         setConnected(true);
