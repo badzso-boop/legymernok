@@ -807,4 +807,58 @@ class MissionServiceTest {
         assertEquals(VerificationStatus.PENDING, finalResponse.getVerificationStatus());
         assertEquals("New Full Workflow Mission", finalResponse.getName());
     }
+
+    // =========================================================================
+    // canViewMissionLogs tesztek (StompAuthChannelInterceptor /ws-mission-logs)
+    // =========================================================================
+
+    @Test
+    void canViewMissionLogs_whenUserIsOwner_shouldReturnTrue() {
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .owner(testUser)
+                .build();
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+
+        assertTrue(missionService.canViewMissionLogs(mission.getId(), testUser));
+    }
+
+    @Test
+    void canViewMissionLogs_whenUserIsNotOwnerAndHasNoEditAny_shouldReturnFalse() {
+        Cadet otherOwner = new Cadet();
+        otherOwner.setId(UUID.randomUUID());
+        otherOwner.setUsername("other_owner");
+
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .owner(otherOwner)
+                .build();
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+
+        assertFalse(missionService.canViewMissionLogs(mission.getId(), testUser));
+    }
+
+    @Test
+    void canViewMissionLogs_whenUserHasEditAny_shouldReturnTrue() {
+        Cadet otherOwner = new Cadet();
+        otherOwner.setId(UUID.randomUUID());
+        otherOwner.setUsername("other_owner");
+
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .owner(otherOwner)
+                .build();
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+        mockUserAuthorities("mission:edit_any");
+
+        assertTrue(missionService.canViewMissionLogs(mission.getId(), testUser));
+    }
+
+    @Test
+    void canViewMissionLogs_whenMissionDoesNotExist_shouldReturnFalse() {
+        UUID missionId = UUID.randomUUID();
+        when(missionRepository.findById(missionId)).thenReturn(Optional.empty());
+
+        assertFalse(missionService.canViewMissionLogs(missionId, testUser));
+    }
 }

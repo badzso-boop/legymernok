@@ -71,7 +71,7 @@ public class CadetService {
                 .build();
 
         Cadet savedCadet = cadetRepository.save(cadet);
-        log.info("Saved Cadet: {}", savedCadet);
+        log.info("Saved Cadet: {}", savedCadet.getUsername());
         return mapToResponse(savedCadet);
     }
 
@@ -125,7 +125,7 @@ public class CadetService {
         }
 
         cadetMissionRepository.deleteAllByCadetId(id);
-        log.info("Deleted Cadet: {}", cadet);
+        log.info("Deleted Cadet: {}", cadet.getUsername());
 
         cadetRepository.delete(cadet);
     }
@@ -172,7 +172,7 @@ public class CadetService {
         cadetToUpdate.setFullName(request.getFullName());
 
         Cadet updatedCadet = cadetRepository.save(cadetToUpdate);
-        log.info("Updated Cadet: {}", updatedCadet);
+        log.info("Updated Cadet: {}", updatedCadet.getUsername());
         return mapToResponse(updatedCadet);
     }
 

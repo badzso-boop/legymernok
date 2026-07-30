@@ -68,9 +68,11 @@ const ForgeEditor: React.FC<ForgeEditorProps> = ({ missionId }) => {
     // eredményén már nem.
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
     const socketUrl = `${apiUrl.replace(/\/api$/, "")}/ws-mission-logs`;
+    const token = localStorage.getItem("token");
 
     const client = new Client({
       webSocketFactory: () => new SockJS(socketUrl),
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,

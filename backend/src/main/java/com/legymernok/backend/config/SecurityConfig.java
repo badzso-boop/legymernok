@@ -42,6 +42,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
+                                // A SockJS HTTP-handshake-hez a kliens nem tud egyedi
+                                // Authorization headert küldeni, ezért ez a szint permitAll —
+                                // a tényleges auth/authz a STOMP CONNECT/SUBSCRIBE frame-eken
+                                // történik, lásd StompAuthChannelInterceptor.
                                 "/ws-log/**",
                                 "/ws-mission-logs/**",
                                 "/api/mission-verification/**"
