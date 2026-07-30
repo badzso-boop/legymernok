@@ -3,8 +3,8 @@
 ## Együttműködési szabályok
 
 - **Tesztet és buildet futtathatsz saját döntésből, de kizárólag háttérben** (pl. `run_in_background`), hogy a futása alatt tudj más feladaton is dolgozni, ne blokkolja a session-t. A háttérfolyamat eredményét (siker/hiba, log) mindig oszd meg a userrel, mielőtt "kész"-nek mondanál egy feladatot.
-- **Commitot és pusholást NE végezz saját döntésből** — ezeknél jelezd a usernek mit futtasson, hacsak nem kérte kifejezetten másképp.
-- **Verziókezelési irányelv (ha a user jóváhagyja a commitolást):** kis, gyakori commitokban dolgozz — egy logikai változás egy commit, ne gyűjts össze mindent egybe. Minden változtatáshoz külön branch + Pull Request tartozzon (`gh pr create`), még akkor is, ha a módosítás mérete ezt önmagában nem indokolná — így a `main` mindig tiszta és review-zható marad. Ne javasolj/futtass közvetlen push-t `main`-re.
+- **Commitolhatsz és pusholhatsz is saját döntésből** — a repo ezen a szerveren fut (nem a user lokális gépén), neki macerás itt kódolni, szóval ez alapértelmezetten megengedett, nem kell külön kérni minden alkalommal.
+- **Verziókezelési irányelv:** kis, gyakori commitokban dolgozz — egy logikai változás egy commit, ne gyűjts össze mindent egybe. Minden változtatáshoz külön branch + Pull Request tartozzon (`gh pr create`), még akkor is, ha a módosítás mérete ezt önmagában nem indokolná — így a `main` mindig tiszta és review-zható marad. SOHA ne pusholj közvetlenül `main`-re.
 - A kommunikáció magyarul folyik.
 - Ha hibajavítást kérsz, csak azt változtasd meg ami szükséges — ne refaktorálj, ne adj hozzá felesleges kommentet.
 - **Nagyobb módosítás után (3+ fájl, vagy új service/komponens) indítsd el a `code-quality-reviewer` agentet** mielőtt azt mondod "kész". Hívás: `Agent({ subagent_type: "code-quality-reviewer", prompt: "..." })`
