@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Box, Grid } from "@mui/material";
+import { Box, Grid, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import SpaceStationCanvas from "./landing/SpaceStationCanvas";
+import HeroSection from "./landing/HeroSection";
+import AboutSection from "./landing/AboutSection";
+import FeaturesSection from "./landing/FeaturesSection";
+import FaqSection from "./landing/FaqSection";
+import FinalCtaSection from "./landing/FinalCtaSection";
 import { mainNavigationControls } from "../router/index";
 import "../styles/RetroUI.css";
 
-const LandingPage: React.FC = () => {
+const LaunchConsole: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -70,17 +75,20 @@ const LandingPage: React.FC = () => {
       sx={{
         width: "100%",
         height: "100%",
-        minHeight: "80vh",
+        minHeight: { xs: "auto", sm: "80vh" },
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        boxSizing: "border-box",
       }}
     >
       {/* A GÉP / KONZOL (Szélesebb, fekvő tájolás) */}
       <Box
         sx={{
-          aspectRatio: "16/9",
-          maxHeight: "80vh",
+          width: "100%",
+          maxWidth: 900,
+          aspectRatio: { xs: "auto", sm: "16/9" },
+          maxHeight: { xs: "none", sm: "80vh" },
           display: "flex",
           flexDirection: "column",
           border: "8px solid #2c2c2c",
@@ -88,12 +96,14 @@ const LandingPage: React.FC = () => {
           boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
           overflow: "hidden",
           bgcolor: "#111",
+          boxSizing: "border-box",
         }}
       >
         {/* ABLAK (Felső rész - Nagyobb arányban) */}
         <Box
           sx={{
-            flex: 2,
+            flex: { xs: "0 0 200px", sm: 2 },
+            height: { xs: 200, sm: "auto" },
             position: "relative",
             borderBottom: "8px solid #2c2c2c",
             overflow: "hidden",
@@ -107,18 +117,21 @@ const LandingPage: React.FC = () => {
         </Box>
 
         {/* CONTROL PANEL (Alsó rész - Kisebb, laposabb) */}
-        <div
+        <Box
           className="control-panel-casing"
-          style={{
-            flex: 1,
+          sx={{
+            flex: { xs: "1 1 auto", sm: 1 },
             borderRadius: 0,
             border: "none",
             borderTop: "2px solid #444",
             display: "flex",
-            flexDirection: "row",
+            flexDirection: { xs: "column", sm: "row" },
             alignItems: "center",
             justifyContent: "space-around",
             boxSizing: "border-box",
+            gap: { xs: 2, sm: 0 },
+            py: { xs: 2, sm: 0 },
+            position: "relative",
           }}
         >
           {/* Csavarok (csak a sarkokban) */}
@@ -142,17 +155,25 @@ const LandingPage: React.FC = () => {
           {/* BAL OLDAL: Kijelző (Monitor) */}
           <Box
             sx={{
-              width: "500px",
-              height: "100%",
+              width: { xs: "100%", sm: "500px" },
+              maxWidth: "100%",
+              height: { xs: "auto", sm: "100%" },
               display: "flex",
               alignItems: "center",
-              justifyContent: "flex-end",
-              paddingRight: "25px",
+              justifyContent: { xs: "center", sm: "flex-end" },
+              paddingRight: { xs: 0, sm: "25px" },
+              px: { xs: 2, sm: 0 },
+              boxSizing: "border-box",
             }}
           >
             <div
               className="crt-monitor"
-              style={{ width: "100%", height: "80%" }}
+              style={{
+                width: "100%",
+                height: "clamp(90px, 18vw, 160px)",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
             >
               <div className="screen-overlay" />
               <div
@@ -175,9 +196,11 @@ const LandingPage: React.FC = () => {
           {/* JOBB OLDAL: Gombok (Rácsban vagy sorban) */}
           <Box
             sx={{
+              width: { xs: "100%", sm: "auto" },
               display: "flex",
-              justifyContent: "flex-start",
+              justifyContent: "center",
               alignItems: "center",
+              boxSizing: "border-box",
             }}
           >
             <Grid container spacing={2} justifyContent="center">
@@ -215,8 +238,38 @@ const LandingPage: React.FC = () => {
               ))}
             </Grid>
           </Box>
-        </div>
+        </Box>
       </Box>
+    </Box>
+  );
+};
+
+const LandingPage: React.FC = () => {
+  const { t } = useTranslation();
+
+  return (
+    <Box sx={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+      <HeroSection />
+      <AboutSection />
+      <FeaturesSection />
+
+      <Box component="section" sx={{ py: { xs: 3, md: 5 } }}>
+        <Box sx={{ textAlign: "center", mb: 3, px: 2 }}>
+          <Typography
+            className="retro-font-header"
+            sx={{ color: "#ccc", fontSize: { xs: "1.2rem", md: "1.5rem" }, mb: 1 }}
+          >
+            {t("landingPage.launchConsole.title")}
+          </Typography>
+          <Typography sx={{ color: "#94a3b8", maxWidth: 640, mx: "auto" }}>
+            {t("landingPage.launchConsole.subtitle")}
+          </Typography>
+        </Box>
+        <LaunchConsole />
+      </Box>
+
+      <FaqSection />
+      <FinalCtaSection />
     </Box>
   );
 };
