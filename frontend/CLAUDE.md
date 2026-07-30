@@ -294,3 +294,4 @@ test.globals: true
 - **Form**: `react-hook-form` + `zod` validáció
 - **Típusbiztonság**: Mindig a `types/` mappából importálj, ne inline interfészt definiálj
 - **i18n**: `useTranslation()` hook, ne hardkódolt magyar szöveg a JSX-ben
+- **Verziókezelés**: kis, gyakori commitok (egy logikai változás = egy commit) + branch/PR minden változtatáshoz (`gh pr create`), a projekt gyökér `CLAUDE.md`-ben leírt irányelv szerint — ne push-olj közvetlenül `main`-re

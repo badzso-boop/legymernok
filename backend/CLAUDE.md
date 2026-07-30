@@ -281,3 +281,4 @@ mvn test -Dtest=MissionServiceTest     # Egy osztály
 - **Lombok**: `@Data`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor` — mindig
 - **Response wrap**: `ResponseEntity<T>` minden controllerből
 - **Tranzakció**: `@Transactional` a service rétegen, ahol szükséges
+- **Verziókezelés**: kis, gyakori commitok (egy logikai változás = egy commit) + branch/PR minden változtatáshoz (`gh pr create`), a projekt gyökér `CLAUDE.md`-ben leírt irányelv szerint — ne push-olj közvetlenül `main`-re
