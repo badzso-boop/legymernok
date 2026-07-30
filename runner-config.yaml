@@ -69,7 +69,14 @@ container:
   # Specifies the network to which the container will connect.
   # Could be host, bridge or the name of a custom network.
   # If it's empty, act_runner will create a network automatically.
-  network: "legymernok-net"
+  #
+  # SECURITY: this must stay off "legymernok-net" — that network also carries
+  # postgres/gitea/backend, and job containers run cadet-controlled
+  # .gitea/workflows/ci.yml (write-collaborator access to their own repo).
+  # "legymernok-runner-net" only reaches the backend (mission-verification
+  # callback) via docker-compose.yml's dual-network backend service — not
+  # postgres or gitea directly. See plans/security_audit_2026-07-30.md #2.
+  network: "legymernok-runner-net"
   # Whether to use privileged mode or not when launching task containers (privileged mode is required for Docker-in-Docker).
   privileged: false
   # Any other options to be used when the container is started (e.g., --add-host=my.gitea.url:host-gateway).

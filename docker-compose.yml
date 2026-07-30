@@ -10,7 +10,9 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # .env-ből jön, mint a többi secret — lásd .env.example. NEM biztonságos
+      # nyers értéket hagyni itt: lásd plans/security_audit_2026-07-30.md #3.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       # Inicializáló scriptek (létrehozza a 'legymernok' és 'gitea' DB-ket)
       - ./postgres-init:/docker-entrypoint-initdb.d
@@ -35,7 +37,7 @@ services:
       - GITEA__database__HOST=postgres:5432
       - GITEA__database__NAME=gitea
       - GITEA__database__USER=postgres
-      - GITEA__database__PASSWD=postgres
+      - GITEA__database__PASSWD=${POSTGRES_PASSWORD}
       - GITEA__actions__ENABLED=true
       - GITEA__security__INSTALL_LOCK=true
       - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY}
@@ -72,7 +74,7 @@ services:
       # Kapcsolódás a fenti 'postgres' service-hez
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/legymernok
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       # Automatikus séma frissítés (fejlesztéshez)
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       # Secrets - .env fájlból töltődnek be
@@ -86,6 +88,10 @@ services:
       - postgres
     networks:
       - legymernok-net
+      # A kadét-vezérelt CI job-konténerek (lásd runner-config.yaml network:)
+      # csak ezen a hálózaton érik el a backendet — a mission-verification
+      # callback-hoz kell, de innen SEM a postgres-t, SEM a gitea-t nem érik el.
+      - legymernok-runner-net
 
   # ---------------------------------------------------------------------------
   # Frontend Service (React + Vite + Nginx)
@@ -157,6 +163,12 @@ services:
       gitea:
         condition: service_healthy
     networks:
+      # A runner daemon-nak (ez a konténer) kell a gitea-t elérnie, hogy
+      # regisztráljon/job-ot pollozzon — ez marad a fő hálózaton. Az általa
+      # docker.sock-on keresztül indított, kadét-kódot futtató JOB-konténerek
+      # NEM ide, hanem a runner-config.yaml `network:` mezője által megadott,
+      # elkülönített `legymernok-runner-net`-re kerülnek — lásd ott a
+      # indoklást (plans/security_audit_2026-07-30.md #2).
       - legymernok-net
     volumes:
       - ./runner-config.yaml:/config.yaml
@@ -175,4 +187,10 @@ volumes:
 networks:
   legymernok-net:
     external: true
+    driver: bridge
+  # Elkülönített hálózat a Gitea Actions job-konténereknek (kadét write-joggal
+  # módosítható .gitea/workflows/ci.yml futtatja bennük a kódot) — csak a
+  # backendet érik el innen (mission-verification callback), a postgres-t,
+  # gitea-t és a többi belső service-t nem. Lásd runner-config.yaml `network:`.
+  legymernok-runner-net:
     driver: bridge
