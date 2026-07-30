@@ -125,6 +125,15 @@ const resources = {
       logsMessage: "Message",
       logsNoData: "No logs available yet.",
 
+      // Feature flags
+      featureFlags: "Feature Flags",
+      manageFeatureFlags: "Feature Flags",
+      featureFlagKey: "Key",
+      enabled: "Enabled",
+      editFeatureFlag: "Edit Feature Flag",
+      errorFetchFeatureFlags: "Failed to load feature flags",
+      errorUpdateFeatureFlag: "Error updating feature flag",
+
       // Mission Forge
       forge: {
         save: "SAVE",
@@ -545,6 +554,15 @@ const resources = {
       logsLevel: "Szint",
       logsMessage: "Üzenet",
       logsNoData: "Nincsenek elérhető naplóbejegyzések.",
+
+      // Feature flags
+      featureFlags: "Feature flag-ek",
+      manageFeatureFlags: "Feature flag-ek kezelése",
+      featureFlagKey: "Kulcs",
+      enabled: "Engedélyezve",
+      editFeatureFlag: "Feature flag szerkesztése",
+      errorFetchFeatureFlags: "Nem sikerült betölteni a feature flag-eket",
+      errorUpdateFeatureFlag: "Hiba a feature flag frissítésekor",
 
       // Mission Forge
       forge: {

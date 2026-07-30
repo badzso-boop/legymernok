@@ -25,6 +25,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Language as LanguageIcon,
   Terminal as TerminalIcon,
+  ToggleOn as ToggleOnIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
@@ -37,6 +38,7 @@ const menuItems = [
   { text: "missions", icon: <AssignmentIcon />, path: "/admin/missions" },
   { text: "roles", icon: <SecurityIcon />, path: "/admin/roles" },
   { text: "permissions", icon: <PermissionIcon />, path: "/admin/permissions" },
+  { text: "featureFlags", icon: <ToggleOnIcon />, path: "/admin/feature-flags" },
   { text: "logsTitle", icon: <TerminalIcon />, path: "/admin/logs" },
 ];
 

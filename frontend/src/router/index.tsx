@@ -1,12 +1,19 @@
 import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import ChatWidget from "../components/chat/ChatWidget";
+import { useFeatureFlag } from "../hooks/useFeatureFlag";
 
-const RootLayout = () => (
-  <>
-    <Outlet />
-    <ChatWidget />
-  </>
-);
+const RootLayout = () => {
+  // A chatbot widget alapértelmezetten KIKAPCSOLT (lásd V6 migráció seed adata),
+  // admin a /admin/feature-flags oldalon tudja bekapcsolni.
+  const chatbotEnabled = useFeatureFlag("ai_chatbot");
+
+  return (
+    <>
+      <Outlet />
+      {chatbotEnabled && <ChatWidget />}
+    </>
+  );
+};
 import { CircularProgress } from "@mui/material";
 import MainLayout from "../layouts/MainLayout";
 import AdminLayout from "../layouts/AdminLayout";
@@ -24,6 +31,7 @@ import MissionEdit from "../pages/admin/missions/MissionEdit";
 import MissionList from "../pages/admin/missions/MissionList";
 import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
+import FeatureFlagList from "../pages/admin/feature-flags/FeatureFlagList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
 import MissionForgePage from "../pages/mission-forge/MissionForgePage";
@@ -290,6 +298,10 @@ export const router = createHashRouter([
       {
         path: "permissions",
         element: <PermissionList />,
+      },
+      {
+        path: "feature-flags",
+        element: <FeatureFlagList />,
       },
       {
         path: "logs",

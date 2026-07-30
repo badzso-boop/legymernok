@@ -27,6 +27,10 @@ import type {
   LastAttemptResponse,
 } from "../types/fillinblank";
 import type {
+  FeatureFlagResponse,
+  UpdateFeatureFlagRequest,
+} from "../types/featureFlag";
+import type {
   FeedbackIssueResponse,
   CreateFeedbackRequest,
 } from "../types/feedback";
@@ -245,7 +249,11 @@ export const missionApi = {
   },
 
   /** Átnevez egy fájlt a kadét saját munkarepójában. */
-  renamePlayFile: async (missionId: string, oldPath: string, newPath: string) => {
+  renamePlayFile: async (
+    missionId: string,
+    oldPath: string,
+    newPath: string,
+  ) => {
     await apiClient.patch(`/missions/${missionId}/play/files/rename`, {
       oldPath,
       newPath,
@@ -296,18 +304,31 @@ export const quizApi = {
 };
 
 export const missionGroupApi = {
-  create: async (data: CreateMissionGroupRequest): Promise<MissionGroupResponse> => {
-    const response = await apiClient.post<MissionGroupResponse>("/mission-groups", data);
+  create: async (
+    data: CreateMissionGroupRequest,
+  ): Promise<MissionGroupResponse> => {
+    const response = await apiClient.post<MissionGroupResponse>(
+      "/mission-groups",
+      data,
+    );
     return response.data;
   },
 
   getById: async (id: string): Promise<MissionGroupWithMissionsResponse> => {
-    const response = await apiClient.get<MissionGroupWithMissionsResponse>(`/mission-groups/${id}`);
+    const response = await apiClient.get<MissionGroupWithMissionsResponse>(
+      `/mission-groups/${id}`,
+    );
     return response.data;
   },
 
-  update: async (id: string, data: Partial<CreateMissionGroupRequest>): Promise<MissionGroupResponse> => {
-    const response = await apiClient.put<MissionGroupResponse>(`/mission-groups/${id}`, data);
+  update: async (
+    id: string,
+    data: Partial<CreateMissionGroupRequest>,
+  ): Promise<MissionGroupResponse> => {
+    const response = await apiClient.put<MissionGroupResponse>(
+      `/mission-groups/${id}`,
+      data,
+    );
     return response.data;
   },
 
@@ -315,7 +336,10 @@ export const missionGroupApi = {
     await apiClient.delete(`/mission-groups/${id}`);
   },
 
-  addMission: async (groupId: string, missionId: string): Promise<MissionGroupResponse> => {
+  addMission: async (
+    groupId: string,
+    missionId: string,
+  ): Promise<MissionGroupResponse> => {
     const response = await apiClient.post<MissionGroupResponse>(
       `/mission-groups/${groupId}/missions/${missionId}`,
     );
@@ -326,14 +350,21 @@ export const missionGroupApi = {
     await apiClient.delete(`/mission-groups/${groupId}/missions/${missionId}`);
   },
 
-  reorderGroup: async (groupId: string, targetGroupId: string): Promise<ReorderResponse> => {
+  reorderGroup: async (
+    groupId: string,
+    targetGroupId: string,
+  ): Promise<ReorderResponse> => {
     const response = await apiClient.post<ReorderResponse>(
       `/mission-groups/${groupId}/reorder/${targetGroupId}`,
     );
     return response.data;
   },
 
-  reorderMissionInGroup: async (groupId: string, missionId: string, targetMissionId: string): Promise<ReorderResponse> => {
+  reorderMissionInGroup: async (
+    groupId: string,
+    missionId: string,
+    targetMissionId: string,
+  ): Promise<ReorderResponse> => {
     const response = await apiClient.post<ReorderResponse>(
       `/mission-groups/${groupId}/missions/${missionId}/reorder/${targetMissionId}`,
     );
@@ -343,44 +374,59 @@ export const missionGroupApi = {
 
 export const groupProgressApi = {
   get: async (groupId: string): Promise<GroupProgressResponse> => {
-    const response = await apiClient.get<GroupProgressResponse>(`/group-progress/${groupId}`);
+    const response = await apiClient.get<GroupProgressResponse>(
+      `/group-progress/${groupId}`,
+    );
     return response.data;
   },
 
   start: async (groupId: string): Promise<GroupProgressResponse> => {
-    const response = await apiClient.post<GroupProgressResponse>(`/group-progress/${groupId}/start`);
+    const response = await apiClient.post<GroupProgressResponse>(
+      `/group-progress/${groupId}/start`,
+    );
     return response.data;
   },
 
   completeStep: async (groupId: string): Promise<GroupProgressResponse> => {
-    const response = await apiClient.post<GroupProgressResponse>(`/group-progress/${groupId}/complete-step`);
+    const response = await apiClient.post<GroupProgressResponse>(
+      `/group-progress/${groupId}/complete-step`,
+    );
     return response.data;
   },
 };
 
 export const searchApi = {
-  searchStarSystems: async (q: string, limit = 5): Promise<StarSystemSearchResult[]> => {
+  searchStarSystems: async (
+    q: string,
+    limit = 5,
+  ): Promise<StarSystemSearchResult[]> => {
     const response = await apiClient.get<StarSystemSearchResult[]>(
       `/search?q=${encodeURIComponent(q)}&limit=${limit}`,
     );
     return response.data;
   },
 
-  getEmbeddingStatus: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+  getEmbeddingStatus: async (
+    starSystemId: string,
+  ): Promise<{ hasEmbedding: boolean }> => {
     const response = await apiClient.get<{ hasEmbedding: boolean }>(
       `/star-systems/${starSystemId}/embedding-status`,
     );
     return response.data;
   },
 
-  embedStarSystem: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+  embedStarSystem: async (
+    starSystemId: string,
+  ): Promise<{ hasEmbedding: boolean }> => {
     const response = await apiClient.post<{ hasEmbedding: boolean }>(
       `/star-systems/${starSystemId}/embed`,
     );
     return response.data;
   },
 
-  deleteEmbedding: async (starSystemId: string): Promise<{ hasEmbedding: boolean }> => {
+  deleteEmbedding: async (
+    starSystemId: string,
+  ): Promise<{ hasEmbedding: boolean }> => {
     const response = await apiClient.delete<{ hasEmbedding: boolean }>(
       `/star-systems/${starSystemId}/embed`,
     );
@@ -401,14 +447,23 @@ interface ChatResponsePayload {
 }
 
 export const chatApi = {
-  send: async (message: string, context: ChatContextPayload): Promise<ChatResponsePayload> => {
-    const response = await apiClient.post<ChatResponsePayload>("/chat", { message, context });
+  send: async (
+    message: string,
+    context: ChatContextPayload,
+  ): Promise<ChatResponsePayload> => {
+    const response = await apiClient.post<ChatResponsePayload>("/chat", {
+      message,
+      context,
+    });
     return response.data;
   },
 };
 
 export const fillInBlankApi = {
-  save: async (missionId: string, data: SaveFillInBlankRequest): Promise<FillInBlankAdminResponse> => {
+  save: async (
+    missionId: string,
+    data: SaveFillInBlankRequest,
+  ): Promise<FillInBlankAdminResponse> => {
     const response = await apiClient.post<FillInBlankAdminResponse>(
       `/missions/${missionId}/fill-in-blank`,
       data,
@@ -416,7 +471,10 @@ export const fillInBlankApi = {
     return response.data;
   },
 
-  update: async (missionId: string, data: SaveFillInBlankRequest): Promise<FillInBlankAdminResponse> => {
+  update: async (
+    missionId: string,
+    data: SaveFillInBlankRequest,
+  ): Promise<FillInBlankAdminResponse> => {
     const response = await apiClient.put<FillInBlankAdminResponse>(
       `/missions/${missionId}/fill-in-blank`,
       data,
@@ -452,6 +510,35 @@ export const fillInBlankApi = {
   getLastAttempt: async (missionId: string): Promise<LastAttemptResponse> => {
     const response = await apiClient.get<LastAttemptResponse>(
       `/missions/${missionId}/fill-in-blank/last-attempt`,
+    );
+    return response.data;
+  },
+};
+
+export const featureFlagApi = {
+  /** Admin: összes feature flag listázása kezeléshez (feature_flag:read szükséges). */
+  getAll: async (): Promise<FeatureFlagResponse[]> => {
+    const response =
+      await apiClient.get<FeatureFlagResponse[]>("/feature-flags");
+    return response.data;
+  },
+
+  /** Bármely bejelentkezett felhasználó lekérheti egy flag aktuális értékét. */
+  getByKey: async (key: string): Promise<FeatureFlagResponse> => {
+    const response = await apiClient.get<FeatureFlagResponse>(
+      `/feature-flags/${key}`,
+    );
+    return response.data;
+  },
+
+  /** Admin: flag engedélyezés/tiltás + leírás módosítása (feature_flag:write szükséges). */
+  update: async (
+    key: string,
+    data: UpdateFeatureFlagRequest,
+  ): Promise<FeatureFlagResponse> => {
+    const response = await apiClient.put<FeatureFlagResponse>(
+      `/feature-flags/${key}`,
+      data,
     );
     return response.data;
   },
