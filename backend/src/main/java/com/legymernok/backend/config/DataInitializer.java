@@ -57,6 +57,10 @@ public class DataInitializer implements CommandLineRunner {
         // Log jogok
         Permission logsRead = createPermissionIfNotFound("logs:read", "Rendszernaplók megtekintése");
 
+        // Feature flag jogok
+        Permission featureFlagRead = createPermissionIfNotFound("feature_flag:read", "Feature flag-ek megtekintése (admin lista)");
+        Permission featureFlagWrite = createPermissionIfNotFound("feature_flag:write", "Feature flag-ek kezelése (engedélyezés/tiltás)");
+
         // Group jogok
         Permission groupCreate = createPermissionIfNotFound("group:create", "Mission csoport létrehozása");
         Permission groupEdit   = createPermissionIfNotFound("group:edit",   "Mission csoport szerkesztése");
@@ -107,6 +111,9 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(roleWrite);
         // Logs
         adminPermissions.add(logsRead);
+        // Feature flags
+        adminPermissions.add(featureFlagRead);
+        adminPermissions.add(featureFlagWrite);
         // Group
         adminPermissions.add(groupCreate);
         adminPermissions.add(groupEdit);
