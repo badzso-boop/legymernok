@@ -231,6 +231,8 @@ const resources = {
         changelog: "Changelog",
         back: "Back",
         language: "Language",
+        menu: "Menu",
+        account: "Account",
       },
       // STAR MAP
       starMap: {
@@ -631,6 +633,8 @@ const resources = {
         changelog: "Változásnapló",
         back: "Vissza",
         language: "Nyelv",
+        menu: "Menü",
+        account: "Fiók",
       },
       // STAR MAP
       starMap: {
