@@ -1,12 +1,19 @@
 import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import ChatWidget from "../components/chat/ChatWidget";
+import { useFeatureFlag } from "../hooks/useFeatureFlag";
 
-const RootLayout = () => (
-  <>
-    <Outlet />
-    <ChatWidget />
-  </>
-);
+const RootLayout = () => {
+  // A chatbot widget alapértelmezetten KIKAPCSOLT (lásd V6 migráció seed adata),
+  // admin a /admin/feature-flags oldalon tudja bekapcsolni.
+  const chatbotEnabled = useFeatureFlag("ai_chatbot");
+
+  return (
+    <>
+      <Outlet />
+      {chatbotEnabled && <ChatWidget />}
+    </>
+  );
+};
 import { CircularProgress } from "@mui/material";
 import MainLayout from "../layouts/MainLayout";
 import AdminLayout from "../layouts/AdminLayout";
@@ -24,6 +31,7 @@ import MissionEdit from "../pages/admin/missions/MissionEdit";
 import MissionList from "../pages/admin/missions/MissionList";
 import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
+import FeatureFlagList from "../pages/admin/feature-flags/FeatureFlagList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
 import MissionForgePage from "../pages/mission-forge/MissionForgePage";
@@ -34,6 +42,7 @@ import MyForgePage from "../pages/mission-forge/MyForgePage";
 import GroupPlayerPage from "../pages/play/GroupPlayerPage";
 import ContentMissionPage from "../pages/play/ContentMissionPage";
 import CodingMissionPage from "../pages/play/CodingMissionPage";
+import FeedbackPage from "../pages/feedback/FeedbackPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -48,6 +57,10 @@ interface NavControl {
   disabled?: boolean;
 }
 
+// A LOBBY és ARENA korábban itt állt, "disabled: true"-val, WIP-célpont
+// nélkül (a /lobby és /arena route-ok sosem léteztek) — ezek a funkciók
+// egyelőre elnapolásra kerültek. Helyettük a VISSZAJELZÉS gomb egy valódi,
+// most elkészült funkcióra mutat, nem egy üres helyfoglalóra.
 export const mainNavigationControls: NavControl[] = [
   {
     id: "STAR_SYSTEMS",
@@ -62,18 +75,10 @@ export const mainNavigationControls: NavControl[] = [
     path: "/my-forge",
   },
   {
-    id: "LOBBY",
-    labelKey: "controlPanel.lobby",
+    id: "FEEDBACK",
+    labelKey: "controlPanel.feedback",
     color: "yellow",
-    path: "/lobby",
-    disabled: true,
-  },
-  {
-    id: "ARENA",
-    labelKey: "controlPanel.arena",
-    color: "green",
-    path: "/arena",
-    disabled: true,
+    path: "/feedback",
   },
 ];
 
@@ -209,6 +214,15 @@ export const router = createHashRouter([
     ),
   },
 
+  {
+    path: "/feedback",
+    element: (
+      <ProtectedRoute>
+        <FeedbackPage />
+      </ProtectedRoute>
+    ),
+  },
+
   // Védett Admin útvonalak
   {
     path: "/admin",
@@ -284,6 +298,10 @@ export const router = createHashRouter([
       {
         path: "permissions",
         element: <PermissionList />,
+      },
+      {
+        path: "feature-flags",
+        element: <FeatureFlagList />,
       },
       {
         path: "logs",
