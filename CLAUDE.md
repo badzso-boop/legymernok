@@ -39,6 +39,8 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 - **Ollama GGUF modellek:** A GGUF fájl mountolva van `/gguf/` alá, de az Ollamának regisztrálni kell: `ollama create <név> -f Modelfile` (ahol a Modelfile: `FROM /gguf/<fájlnév>.gguf`). A `CHAT_MODEL` env változónak ez a regisztrált név kell legyen
 - **Backend rebuild:** `--force-recreate` NEM fordítja újra a Java kódot — ahhoz `--build` flag kell (vagy `mvn package` + image rebuild)
 - **AI Service modell config:** `CHAT_MODEL` és `EMBED_MODEL` a `.env`-ből jön; default értékek: `nomic-embed-text` (embed) és `gemma4-coding` (chat)
+- **Build-time bebakeolt érték (pl. `VITE_API_URL`) módosítása "nem fog":** `docker compose build <service>` cache nélkül gyakran egy régi rétegből hasznosítja újra az `npm run build`/`mvn package` eredményét. Ha egy `.env`-ben módosított, build-időben beégetett érték élesben nem változik, próbáld újra `--no-cache`-lel, mielőtt más okot keresnél
+- **Backend konténer újraindítása/újraépítése után mindig indítsd újra a `frontend` konténert is** (`docker restart legymernok-frontend`) — a frontend saját nginx-e (`proxy_pass http://backend:8080/...`) a régi, már halott backend-konténer IP-jére marad gyorsítótárazva, amíg rá nem kényszeríted az újrafeloldásra, addig 502-t ad
 
 ### Frontend — React Router
 - **Router hook-ok** (`useLocation`, `useParams`, `useNavigate`, `useNavigate`) **kizárólag a Router kontextuson belül** működnek. Ez azt jelenti: minden komponens, ami ezeket használja, a `createHashRouter`-en belül kell legyen — azaz az `App.tsx`-ben `<RouterProvider>` alá, NEM mellé
@@ -57,7 +59,6 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 - **Kadétok** küldetéseket teljesítenek **csillagrendszerekben** (kurzusok)
 - Kódolás, kvíz, áramkörszimuláció mission típusok
 - Gitea-alapú kódtárolás + CI/CD visszacsatolás
-- Jelenlegi ág: `mission-forge`, nyitott PR: #9 (mission-forge → main)
 
 ---
 
@@ -83,7 +84,7 @@ legymernok/
 |---|---|---|
 | `postgres` | 5432 | PostgreSQL 16 |
 | `gitea` | 3001 (UI), 2222 (SSH) | Gitea 1.25.0 self-hosted Git |
-| `backend` | 8080 | Spring Boot REST API |
+| `backend` | 8090 (hoszt) → 8080 (konténer) | Spring Boot REST API — a hoszt port 2026-07-21 óta 8090, korábban 8080 volt, de az ütközött a szerveren futó qbittorrenttel |
 | `frontend` | 3000 | React SPA (Nginx prod) |
 | `runner` | — | Gitea Actions runner |
 
