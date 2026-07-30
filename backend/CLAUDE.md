@@ -282,3 +282,27 @@ mvn test -Dtest=MissionServiceTest     # Egy osztály
 - **Response wrap**: `ResponseEntity<T>` minden controllerből
 - **Tranzakció**: `@Transactional` a service rétegen, ahol szükséges
 - **Verziókezelés**: kis, gyakori commitok (egy logikai változás = egy commit) + branch/PR minden változtatáshoz (`gh pr create`), a projekt gyökér `CLAUDE.md`-ben leírt irányelv szerint — ne push-olj közvetlenül `main`-re
+
+## Biztonsági minták — kötelező, konkrét hibaosztályok alapján
+
+A `plans/security_audit_2026-07-30.md` teljes átvilágítás talált olyan endpointokat, ahol ezek
+hiányoztak — új kód írásakor mindig kövesd ezeket:
+
+- **Owner-ellenőrzés minden mutáló service-metódusban, ne csak `@PreAuthorize`.** A helyes
+  minta a `MissionService.requireMissionEditAccess()`-ben van: `cadet == entity.owner` VAGY
+  `cadet.hasAuthority("<domain>:edit_any")`. Ha egy új entitáshoz (pl. `MissionGroup`,
+  `FillInBlank`) service-metódust írsz, EZT a mintát másold, ne csak a permission-annotációt.
+- **`GiteaService`-ben minden fájlműveleti metódus (olvasó ÉS író) hívja `validateFilePath()`-et**
+  amint bármelyik hívási útvonala user-supplied path-ot fogadhat — ne csak az író metódusok.
+- **`@Valid` a controlleren + validációs annotációk a DTO-n minden POST/PUT-nál.** Ha egy DTO-n
+  már van `@NotNull`/`@NotBlank`, de a controller metódus paraméterén nincs `@Valid`, az halott
+  kód — mindig ellenőrizd mindkettőt együtt.
+- **`GlobalExceptionHandler`-ben új `catch`-ághoz sose add vissza `ex.getMessage()`-et** nyersen
+  a kliensnek generikus/rendszerszintű kivételnél — csak üzleti kivételeknél (pl.
+  `ResourceNotFoundException`) szabad a specifikus üzenetet visszaadni.
+- **STOMP/WebSocket topicokhoz mindig auth + ownership-check kell a feliratkozásnál**, ha az
+  adott topic nem kifejezetten publikus tartalom. `permitAll()` + `setAllowedOriginPatterns("*")`
+  csak tudatos, indokolt döntéssel használható.
+- **Lombok `@Data` entitást (`Cadet` stb.) sose logolj ki teljes objektumként**
+  (`log.info("...", cadet)`) — a `passwordHash` mező bekerül a generált `toString()`-be. Csak a
+  szükséges mezőt logold.

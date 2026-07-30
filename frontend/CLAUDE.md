@@ -289,9 +289,35 @@ test.globals: true
 ## Konvenciók
 
 - **Stílus**: Material-UI komponensek + Tailwind utility class-ok, retro space témával (RetroUI.css)
-- **API hívások**: mindig az `api/client.ts` moduljain keresztül, ne direkt `axios`-szal
+- **API hívások**: mindig az `api/client.ts` moduljain keresztül, ne direkt `axios`-szal —
+  **ez nem csak stílus-konvenció**: a nyers `axios`-t használó admin oldalak (2026-07-30-i
+  audit szerint `pages/admin/**` egy része) kikerülik a `client.ts` 401-interceptorát, ezért
+  lejárt tokennél nem jelentkeznek ki automatikusan. Ha ilyen kódot látsz, jelezd/javítsd
+  hibajavítás részeként.
 - **Auth állapot**: `useContext(AuthContext)` — ne tárold külön
 - **Form**: `react-hook-form` + `zod` validáció
 - **Típusbiztonság**: Mindig a `types/` mappából importálj, ne inline interfészt definiálj
 - **i18n**: `useTranslation()` hook, ne hardkódolt magyar szöveg a JSX-ben
 - **Verziókezelés**: kis, gyakori commitok (egy logikai változás = egy commit) + branch/PR minden változtatáshoz (`gh pr create`), a projekt gyökér `CLAUDE.md`-ben leírt irányelv szerint — ne push-olj közvetlenül `main`-re
+
+## Biztonsági szempontok, amiket tarts szem előtt
+
+Lásd `plans/security_audit_2026-07-30.md` a teljes, aktuális állapotfelmérésért. Új
+kód/komponens írásakor:
+
+- **A JWT token `localStorage`-ban van** (`api/client.ts`), nem httpOnly cookie-ban — ez azt
+  jelenti, hogy bármilyen XSS a teljes tokent ellopja. Emiatt SOSE vezess be
+  `dangerouslySetInnerHTML`-t vagy a `react-markdown` `rehype-raw` pluginját (ami raw HTML-t
+  engedne a markdown mezőkben) anélkül, hogy alaposan átgondolnád a bemeneti forrást — jelenleg
+  a projekt tudatosan XSS-mentes ezen a ponton, ezt ne törd meg egy "gyors" markdown-bővítéssel.
+- **`ProtectedRoute` (`router/index.tsx`) kizárólag UX-célú elrejtés**, nem valódi védelmi
+  vonal — a tényleges jogosultság-ellenőrzés mindig a backend `@PreAuthorize`-jában van. Ne
+  írj olyan kódot/kommentet, ami azt sugallja, hogy egy admin-only route a frontenden "védett".
+- **Új `docker-compose.yml`-beli service/port hozzáadásakor** (pl. új mikroszolgáltatás) ne
+  publikálj portot kifelé alapból — csak ha kifejezetten szükséges a hoszt felőli közvetlen
+  eléréshez (lásd `plans/security_audit_2026-07-30.md` az `ai-service` és a `postgres` már
+  meglévő, hibásan publikált portjairól).
+- **`frontend/nginx.conf` módosításakor** gondolj a hiányzó biztonsági headerekre (CSP,
+  X-Frame-Options, X-Content-Type-Options, Referrer-Policy) — ha úgyis piszkálod a fájlt,
+  érdemes ezeket is pótolni, ne csak a konkrét kért változtatást (kivéve, ha a feladat
+  kifejezetten minimális hibajavítás).

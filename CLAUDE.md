@@ -181,10 +181,48 @@ cd frontend && npm run dev    # http://localhost:5173
 
 ---
 
+## Biztonsági alapelvek — kötelező ellenőrzőlista
+
+Ezek konkrét, a repóban ténylegesen előfordult hibaosztályok alapján lettek felvéve
+(lásd `plans/security_audit_2026-07-30.md` a teljes, aktuális állapotfelmérésért). Új
+funkció/endpoint írásakor ezeket MINDIG ellenőrizd, ne csak a "boldog utat":
+
+- **Minden mutáló endpoint owner-ellenőrzést igényel**, nem elég a `@PreAuthorize`
+  permission-check önmagában. Minta: `mission:edit` jogú user NEM férhet hozzá más
+  tulajdonában lévő entitáshoz, csak ha külön `*_any` permissionje is van (lásd
+  `MissionService.requireMissionEditAccess`). Ez a minta hiányzott a `FillInBlank` és a
+  `StarSystem.reorderItems`/`MissionGroup` végpontokon — mielőtt egy új service/controller
+  metódust írsz, nézd meg van-e hasonló meglévő minta, és kövesd azt.
+- **Minden Gitea-fájlkezelő metódus** (olvasó ÉS író) hívja a `GiteaService.validateFilePath`-et,
+  ne csak az író metódusok (`uploadFile`, `deleteFile`, `renameFile`) — az olvasók
+  (`getFileContent`, `getFileInfo`, `getRepoContents`) is, mihelyt bármelyik hívási útvonaluk
+  user-supplied path-ot kaphat.
+- **Minden POST/PUT DTO-hoz `@Valid` a controlleren + `@NotNull`/`@NotBlank`/`@Size`/`@Email`
+  a DTO mezőin.** Ne bízz abban, hogy a service réteg majd validál.
+- **Új WebSocket/STOMP endpoint SOSE legyen alapból `permitAll()` + wildcard origin.**
+  Ha publikusnak kell lennie, az explicit, tudatos döntés legyen, indoklással — alapértelmezés
+  a JWT-védelem + a topic-hoz tartozó ownership-ellenőrzés.
+- **Kivétel-kezelésben (`GlobalExceptionHandler`) sose engedj ki nyers `ex.getMessage()`-et**
+  a kliens felé generikus (nem üzleti) kivételeknél — csak fix, semmitmondó üzenetet.
+- **Lombok `@Data`/`@ToString` entitásnál, aminek van jelszó/hash/titkos mezője, sose logold
+  ki a teljes objektumot** (`log.info("...", entity)`) — a generált `toString()` mindent
+  kiír. Csak a szükséges mezőt (pl. `.getUsername()`) logold.
+- **`docker-compose.yml`-ben új service portot alapból NE publikálj kifelé** — csak akkor, ha
+  kifejezetten szükséges a hoszt felől való közvetlen elérés. Jelszót/secretet mindig `.env`-ből
+  vegyél át (`${VAR}`), sose írj nyers értéket közvetlenül a compose fájlba.
+- **Új entitásmező/constraint bevezetésekor mindig adj hozzá Flyway migrációt is**, még ha
+  `ddl-auto=validate` (jelenlegi beállítás) induláskor hibát is dobna eltérésnél — ez a
+  projektben már 3× előfordult hibaosztály (`order_in_system`→`order_index`,
+  `template_repository_url` NOT NULL, `mission_type` CHECK constraint).
+
 ## Nyitott ismert hibák
 
 - **Gitea orphan repo**: DB tranzakció buktán Gitea repo árva marad (nincs rollback)
-- **Hardkódolt titkos adatok** az `application.properties`-ben (részben javítva)
+- A korábbi "hardkódolt titkos adatok az `application.properties`-ben" hiba **teljesen javítva
+  van** (2026-07-30-i audit megerősítette — minden secret `${ENV_VAR}`-ból jön).
+- **A teljes, aktuális biztonsági/logikai állapotfelmérés**: `plans/security_audit_2026-07-30.md`
+  — ha biztonsági kérdésben dolgozol ezen a repón, először azt nézd meg, ne feltételezd hogy ez
+  a lista (fent) minden nyitott pontot tartalmaz.
 
 > A következő hibák **már javítva vannak** (ne reportáld újra):
 > - submissionHash NPE a MissionResult mentésekor
