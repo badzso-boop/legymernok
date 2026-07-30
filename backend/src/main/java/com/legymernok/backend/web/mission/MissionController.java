@@ -30,7 +30,7 @@ public class MissionController {
      */
     @PostMapping("/forge/initialize")
     @PreAuthorize("hasAuthority('mission:create')")
-    public ResponseEntity<MissionResponse> initializeForgeMission(@RequestBody CreateMissionInitialRequest request) {
+    public ResponseEntity<MissionResponse> initializeForgeMission(@Valid @RequestBody CreateMissionInitialRequest request) {
         MissionResponse newMission = missionService.initializeForgeMission(request);
         return new ResponseEntity<>(newMission, HttpStatus.CREATED);
     }
@@ -45,7 +45,7 @@ public class MissionController {
     @PreAuthorize("hasAuthority('mission:edit')")
     public ResponseEntity<MissionResponse> saveForgeMissionContent(
             @PathVariable UUID missionId,
-            @RequestBody MissionForgeContentRequest request) {
+            @Valid @RequestBody MissionForgeContentRequest request) {
         request.setMissionId(missionId);
         MissionResponse updatedMission = missionService.saveForgeMissionContent(request);
         return ResponseEntity.ok(updatedMission);

@@ -3,6 +3,7 @@ package com.legymernok.backend.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -10,6 +11,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @ControllerAdvice
@@ -78,10 +80,32 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
     }
 
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Object> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
+        log.warn("Validation failed: {}", ex.getMessage());
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(fieldError ->
+                fieldErrors.put(fieldError.getField(), fieldError.getDefaultMessage()));
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("error", "Bad Request");
+        body.put("message", "Érvénytelen kérés adatok");
+        body.put("fieldErrors", fieldErrors);
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    // Ide NEM szabad ex.getMessage()-et visszaadni: ez az ág minden előre nem
+    // látott (SQL-, NPE-, külső szolgáltatás-) kivételt elkap, aminek az üzenete
+    // belső részleteket (oszlopnév, fájl-útvonal, stacktrace-fragment) tartalmazhat.
+    // A specifikus üzenetet csak a fenti, üzleti kivételekhez tartozó ágak adják
+    // vissza, amik a saját exception/ csomagunkból jönnek, ismert, biztonságos szöveggel.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleGlobalException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",ex.getMessage());
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
+                "Váratlan szerverhiba történt. Kérjük, próbáld újra később.");
     }
 
     private ResponseEntity<Object> buildResponse(HttpStatus status, String error, String message) {
