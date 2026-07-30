@@ -75,8 +75,15 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/legymernok
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      # Automatikus séma frissítés (fejlesztéshez)
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # SPRING_JPA_HIBERNATE_DDL_AUTO SZÁNDÉKOSAN NINCS ITT: env-var-ként
+      # felülírta volna az application.properties-ben beállított
+      # `spring.jpa.hibernate.ddl-auto=validate` értéket (Spring Boot
+      # precedencia: env var > properties fájl) — a projekt ténylegesen
+      # Flyway-migrációkkal kezeli a sémát (db/migration/V1-V6), a Hibernate
+      # csak validál induláskor. Ha valaha ide kerülne, az csendben `update`-re
+      # váltaná a validate-et, elrejtve pont azt a séma-drift hibaosztályt
+      # (entitás vs. élő Postgres-constraint eltérés), ami ennél a projektnél
+      # már 3x okozott hibát (lásd CLAUDE.md "Biztonsági alapelvek").
       # Secrets - .env fájlból töltődnek be
       GITEA_ADMIN_PASSWORD: ${GITEA_ADMIN_PASSWORD}
       GITEA_ADMIN_TOKEN: ${GITEA_ADMIN_TOKEN}
