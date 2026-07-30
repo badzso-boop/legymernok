@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { quizApi } from "../../api/client";
 import QuizPlayer from "../../components/forge/quiz/QuizPlayer";
@@ -10,6 +10,12 @@ import RetroButton from "../../components/RetroButton";
 const QuizPlayerPage: React.FC = () => {
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const starSystemId = (location.state as { starSystemId?: string } | null)?.starSystemId;
+  const handleBack = () => {
+    if (starSystemId) navigate(`/star-systems/${starSystemId}`);
+    else navigate(-1);
+  };
   const queryClient = useQueryClient();
   const [result, setResult] = useState<any>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -82,7 +88,7 @@ const QuizPlayerPage: React.FC = () => {
         <RetroButton
           color="red"
           labelKey="starMap.back"
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
         />
       </Box>
     );
@@ -133,7 +139,7 @@ const QuizPlayerPage: React.FC = () => {
           <RetroButton
             color="blue"
             labelKey="starMap.back"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
           />
         </RetroPanel>
       </Box>

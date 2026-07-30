@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { missionApi } from "../../api/client";
@@ -11,6 +11,13 @@ const CodingMissionPage: React.FC = () => {
   const { t } = useTranslation();
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const starSystemId = (location.state as { starSystemId?: string } | null)?.starSystemId;
+
+  const handleBack = () => {
+    if (starSystemId) navigate(`/star-systems/${starSystemId}`);
+    else navigate(-1);
+  };
 
   // Idempotens: ha a kadét már elindította ezt a missziót, csak
   // visszaadja a meglévő repót — biztonságos itt is meghívni.
@@ -42,7 +49,7 @@ const CodingMissionPage: React.FC = () => {
       {!isLoading && !isError && missionId && (
         <CodingMissionPlayer
           missionId={missionId}
-          onBack={() => navigate(-1)}
+          onBack={handleBack}
         />
       )}
     </Box>
