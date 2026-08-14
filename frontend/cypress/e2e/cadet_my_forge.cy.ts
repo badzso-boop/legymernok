@@ -83,7 +83,13 @@ describe("Cadet My Forge Page", () => {
     cy.wait("@getEmptySystems");
     cy.wait("@getEmptyMissions");
 
-    cy.contains("0_MISSIONS_DETECTED").should("be.visible");
+    // A pontos szöveg nyelvfüggő (app alapértelmezett nyelve: hu) — a
+    // data-cy szelektorral nyelv-függetlenül ellenőrizzük, hogy a
+    // misszió-számláló 0-t mutat.
+    cy.get('[data-cy="my-forge-mission-count"]')
+      .should("be.visible")
+      .invoke("text")
+      .should("match", /^0_/);
   });
 
   it("should navigate to /forge when New Mission button is clicked", () => {

@@ -65,8 +65,12 @@ const MyForgePage: React.FC = () => {
           <Typography variant="h4" sx={{ fontWeight: "bold" }}>
             {t("nav.myForge")}
           </Typography>
-          <Typography variant="body2" sx={{ color: "var(--color-text-secondary)" }}>
-            {t("forge.personalInventory")}
+          <Typography
+            variant="body2"
+            sx={{ color: "var(--color-text-secondary)" }}
+            data-cy="my-forge-mission-count"
+          >
+            {missions?.length ?? 0}_{t("forge.detectedMissions")}
           </Typography>
         </Box>
         <NeonButton onClick={() => navigate("/forge")} data-cy="new-mission-btn">
