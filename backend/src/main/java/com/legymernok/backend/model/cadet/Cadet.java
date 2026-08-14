@@ -51,6 +51,21 @@ public class Cadet implements UserDetails {
 
     private Long giteaUserId;
 
+    @Builder.Default
+    @Column(name = "theme_preference", nullable = false)
+    private String themePreference = "SPACE";
+
+    @Builder.Default
+    @Column(name = "current_streak", nullable = false)
+    private int currentStreak = 0;
+
+    @Builder.Default
+    @Column(name = "longest_streak", nullable = false)
+    private int longestStreak = 0;
+
+    @Column(name = "last_activity_date")
+    private java.time.LocalDate lastActivityDate;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Instant createdAt;
