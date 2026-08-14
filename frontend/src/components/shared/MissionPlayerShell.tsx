@@ -129,7 +129,9 @@ export const MissionPlayerShell: React.FC<MissionPlayerShellProps> = ({
     [],
   );
 
-  const effectiveTitle = header?.title ?? title;
+  const rawTitle = header?.title ?? title;
+  const effectiveTitle =
+    typeof rawTitle === "string" ? rawTitle.toUpperCase() : rawTitle;
   const effectiveSubtitle = header?.subtitle ?? subtitle;
 
   return (
@@ -187,6 +189,7 @@ export const MissionPlayerShell: React.FC<MissionPlayerShellProps> = ({
                   fontWeight: 700,
                   fontSize: { xs: "1rem", sm: "1.15rem" },
                   color: "var(--color-text-primary)",
+                  textTransform: "uppercase",
                 }}
               >
                 {effectiveTitle}

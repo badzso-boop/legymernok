@@ -6,7 +6,10 @@ export const missionEditorBaseSchema = z.object({
   difficulty: z.enum(["EASY", "MEDIUM", "HARD", "EXPERT"]),
   missionType: z.enum(["CODING", "CIRCUIT_SIMULATION", "QUIZ", "CONTENT", "FILL_IN_BLANK"]),
   orderIndex: z.number().int().min(0),
-  starSystemId: z.string().min(1, "validation.starSystemRequired"),
+  // Üresen is engedélyezett: forge módban új csillagrendszer létrehozásakor
+  // (isNewStarSystem) még nincs starSystemId, csak a mentés után jön létre —
+  // a tényleges kötelezőség-ellenőrzést az onSubmit végzi a UI-állapot alapján.
+  starSystemId: z.string(),
 });
 
 export type MissionEditorBaseFormValues = z.infer<typeof missionEditorBaseSchema>;

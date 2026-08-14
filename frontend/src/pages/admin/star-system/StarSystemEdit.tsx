@@ -524,7 +524,7 @@ const StarSystemEdit: React.FC = () => {
               const group = item.group!;
               const groupMissions = item.groupMissions ?? [];
               return (
-                <GlowCard key={group.id} sx={{ mb: 2, p: 2 }}>
+                <GlowCard key={group.id} data-testid="group-card" sx={{ mb: 2, p: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                     <FolderOpen color="primary" />
                     <Typography variant="h6" sx={{ flex: 1, fontWeight: "bold" }}>
@@ -634,7 +634,7 @@ const StarSystemEdit: React.FC = () => {
             // MISSION (standalone)
             const mission = item.mission!;
             return (
-              <GlowCard key={mission.id} sx={{ mb: 1, p: 1.5 }}>
+              <GlowCard key={mission.id} data-testid="mission-card" sx={{ mb: 1, p: 1.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <MissionTypeIcon type={mission.missionType} />
                   <Typography sx={{ flex: 1 }}>{mission.name}</Typography>

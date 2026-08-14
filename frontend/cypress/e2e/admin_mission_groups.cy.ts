@@ -200,7 +200,7 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
 
     // A csoport "Misszió hozzáadása" gombjára kattintás (MoveToInbox ikon a GROUP-on)
     cy.contains("Alapok")
-      .closest(".MuiPaper-root")
+      .closest("[data-testid=\"group-card\"]")
       .find('[title="Misszió hozzáadása"]')
       .click({ force: true });
 
@@ -290,12 +290,10 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     cy.wait("@getSystems");
     cy.wait("@getMission");
 
-    // Szerkesztő tab váltás
-    cy.contains("Kitöltős szerkesztő").click();
-
-    // Template szöveg megadása
-    cy.get("textarea")
-      .first()
+    // Template szöveg megadása (a FILL_IN_BLANK szerkesztő most azonnal, tab nélkül
+    // látszik, DE a MissionEditorPage alap-form "Leírás" mezője is mindig a DOM-ban
+    // van előtte, ezért a data-cy-vel kell célozni, nem a textarea.first()-tel)
+    cy.get('[data-cy="fib-template-text"]')
       .clear()
       .type("A víz forráspontja [[blank_1]] Celsius.");
 
@@ -313,8 +311,6 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
     // Reload után előbb az alap adatok töltődnek be
     cy.wait("@getMe");
     cy.wait("@getMission");
-    // Vissza kell váltani a tabra (state resetelődik 0-ra), csak ezután fut a FIB query
-    cy.contains("Kitöltős szerkesztő").click();
     cy.wait("@getFibLoaded");
     cy.contains("[[blank_1]]").should("be.visible");
   });
@@ -370,7 +366,7 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
 
     // Törlés gombra kattintás
     cy.contains("FIB Csoport")
-      .closest(".MuiPaper-root")
+      .closest("[data-testid=\"group-card\"]")
       .find("[aria-label='Törlés']")
       .first()
       .click({ force: true });
@@ -453,7 +449,7 @@ describe("Admin Mission Group Management (Mocked Backend)", () => {
 
     // Az első csoport "Le" gombjára kattintunk
     cy.contains("Alapok")
-      .closest(".MuiPaper-root")
+      .closest("[data-testid=\"group-card\"]")
       .find("[aria-label='Le']")
       .first()
       .click({ force: true });

@@ -91,17 +91,6 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
     enabled: !isNew,
   });
 
-  const { data: nextOrder } = useQuery({
-    queryKey: ["nextOrder", starSystemIdFromQuery],
-    queryFn: async () => {
-      const res = await apiClient.get<number>("/missions/next-order", {
-        params: { starSystemId: starSystemIdFromQuery },
-      });
-      return res.data;
-    },
-    enabled: mode === "admin" && isNew && !!starSystemIdFromQuery,
-  });
-
   const { control, handleSubmit, watch, setValue, reset, formState } = useForm<MissionEditorBaseFormValues>({
     resolver: zodResolver(missionEditorBaseSchema),
     defaultValues: {
@@ -116,6 +105,17 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
 
   const missionType = watch("missionType");
   const starSystemId = watch("starSystemId");
+
+  const { data: nextOrder } = useQuery({
+    queryKey: ["nextOrder", starSystemId],
+    queryFn: async () => {
+      const res = await apiClient.get<number>("/missions/next-order", {
+        params: { starSystemId },
+      });
+      return res.data;
+    },
+    enabled: mode === "admin" && isNew && !!starSystemId,
+  });
 
   useEffect(() => {
     if (existingMission) {
@@ -144,6 +144,19 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
       setIsNewStarSystem(true);
     }
   }, [mode, isNew, starSystems]);
+
+  useEffect(() => {
+    if (
+      isNew &&
+      !starSystemIdFromQuery &&
+      starSystems &&
+      starSystems.length > 0 &&
+      !watch("starSystemId")
+    ) {
+      setValue("starSystemId", starSystems[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, starSystemIdFromQuery, starSystems, setValue]);
 
   useEffect(() => {
     if (mode !== "admin") return;
@@ -244,6 +257,11 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
 
   const onSubmit = (values: MissionEditorBaseFormValues) => {
     setSaveError(null);
+    const creatingNewStarSystem = mode === "forge" && isNewStarSystem;
+    if (!values.starSystemId && !creatingNewStarSystem) {
+      setSaveError(t("validation.starSystemRequired"));
+      return;
+    }
     if (isNew) {
       createMutation.mutate(values);
     } else {
@@ -320,6 +338,7 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
                 <Box sx={{ textAlign: "left" }}>
                   <TextField
                     fullWidth
+                    name="newStarSystemName"
                     label={t("newStarSystemTitle")}
                     value={newStarSystemName}
                     onChange={(e) => setNewStarSystemName(e.target.value)}
@@ -437,7 +456,7 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
                         <Select {...field} label={t("missionType")}>
                           {availableTypes.map((mt) => (
                             <MenuItem key={mt} value={mt}>
-                              {mt.replace(/_/g, " ")}
+                              {t(`missionTypes.${mt}`)}
                             </MenuItem>
                           ))}
                         </Select>
@@ -451,6 +470,7 @@ const MissionEditorPage: React.FC<MissionEditorPageProps> = ({ mode }) => {
                     <FormControl fullWidth>
                       <InputLabel>{t("forge.templateLanguage")}</InputLabel>
                       <Select
+                        name="templateLanguage"
                         value={templateLanguage}
                         label={t("forge.templateLanguage")}
                         onChange={(e) => setTemplateLanguage(e.target.value as "javascript" | "python")}

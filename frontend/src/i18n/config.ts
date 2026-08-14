@@ -196,6 +196,11 @@ const resources = {
         coding: "Coding",
         quiz: "Quiz",
         circuit: "Circuit Simulation",
+        CODING: "CODING",
+        QUIZ: "QUIZ",
+        CONTENT: "CONTENT",
+        FILL_IN_BLANK: "FILL IN BLANK",
+        CIRCUIT_SIMULATION: "CIRCUIT SIMULATION",
       },
       // CONTROL PANEL
       controlPanel: {
@@ -683,6 +688,11 @@ const resources = {
         coding: "Programozás",
         quiz: "Kvíz",
         circuit: "Áramkör szimuláció",
+        CODING: "KÓDOLÁS",
+        QUIZ: "KVÍZ",
+        CONTENT: "TARTALOM",
+        FILL_IN_BLANK: "KITÖLTŐS",
+        CIRCUIT_SIMULATION: "ÁRAMKÖR SZIMULÁCIÓ",
       },
       // CONTROL PANEL
       controlPanel: {
