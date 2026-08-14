@@ -4,6 +4,7 @@ import com.legymernok.backend.model.mission.MissionGroupProgress;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,4 +14,8 @@ public interface MissionGroupProgressRepository extends JpaRepository<MissionGro
     Optional<MissionGroupProgress> findByCadetIdAndGroupId(UUID cadetId, UUID groupId);
 
     void deleteAllByGroupId(UUID groupId);
+
+    List<MissionGroupProgress> findAllByCadetId(UUID cadetId);
+
+    long countByCadetIdAndCompletedTrue(UUID cadetId);
 }
