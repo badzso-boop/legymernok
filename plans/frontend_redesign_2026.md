@@ -35,6 +35,20 @@ barátok, saját profil).
 
 1. **Mobile-first, de desktop-kompatibilis.** Minden új oldal elsőként mobil viewportra
    (360–430px) tervezve, utána bővítve desktopra — nem fordítva, ahogy eddig.
+   **Fontos árnyalás, hol ér véget a "mobile-first" és hol kezdődik "mobile-usable":**
+   - **Kadét-oldali felületek (landing, dashboard, misszió-lejátszás, profil, barátok,
+     Star Map)** — ezek a termék *core* felülete, a doomscrolling-helyettesítő élmény. Ezeknél
+     a mobile-first nem csak reszponzivitást jelent, hanem hogy a fő interakció (thumb-reach
+     akció-sáv, egy oszlopos layout, nagy touch target, teljes képernyős player) **mobilon lesz
+     elsőként megtervezve és tesztelve**, a desktop nézet ebből származik.
+   - **Admin/content-creation felületek (Mission Editor, QuizBuilder, CodeMissionEditor, Star
+     System fa-szerkesztő)** — ezek **reszponzívak és használhatók** mobilon (nem törnek el, nem
+     kell vízszintesen scrollozni, a form-ok egy oszlopban rendeződnek), de **nem lesznek mobilra
+     optimalizálva elsődlegesen** — tartalom-szerkesztés (pl. kód-fájlfa kezelése, kvíz-kérdések
+     tömeges szerkesztése) inherensen több képernyő-helyet igényel, és irreális elvárás lenne,
+     hogy ez ugyanolyan élmény legyen egy 390px-es telefonon, mint egy adminisztrátornak
+     desktopon. **Ez tudatos, nem hanyagság** — a termék motivációja (doomscrolling-helyettesítés)
+     a *tanulói* oldalra vonatkozik, nem a tartalom-adminisztrációra.
 2. **Egy fogalom, egy szerkesztő.** Egy misszió (bármilyen típusú) létrehozása és szerkesztése
    **egyetlen oldalon** történjen, típusfüggő, beágyazott szerkesztő-panellel — sosem kell külön
    oldalra navigálni "a tényleges tartalom" szerkesztéséhez.
@@ -50,22 +64,102 @@ barátok, saját profil).
 
 ---
 
-## 3. Design system
+## 3. Theming rendszer — Light / Dark / Space
 
-**Döntés:** Material UI marad az alap (kevesebb átírás, a meglévő komponensek — Monaco Editor
-wrapper, admin táblák, form-ok — megmaradnak), de ráépül egy **tudatos MUI theme + token-réteg**:
+Az eredeti terv egyetlen, mindig-bekapcsolt "sci-fi csillagos háttér" témát feltételezett. Ez két
+szempontból is kevés: (1) nem mindenki akarja a teljes immerzív sci-fi élményt állandóan (pl.
+hosszabb CONTENT-olvasásnál zavaró lehet egy mozgó háttér), (2) egy statikus csillag-minta
+önmagában valóban "olcsónak" hat — egy modern, prémium-érzetű felülethez ennél többre van
+szükség: réteges mélység, finom mozgás, tudatos szín- és fény-nyelv.
 
-- `theme/tokens.ts` — színpaletta (mély űr-kék/fekete alap, cián/magenta/zöld neon accentek —
-  a `ux_ui_terv.md`-ben már lefektetett irány), tipográfia-skála (Orbitron/Space Grotesk fejléc,
-  Inter/Space Grotesk body, Fira Code kód), spacing-skála, border-radius, árnyék/glow stílusok.
-- `theme/components.ts` — MUI komponens-override-ok (`MuiButton`, `MuiCard`, `MuiTextField` stb.)
-  egy helyen, hogy minden gomb/kártya/input alapból a retro-sci-fi stílust kapja, ne kelljen
-  oldalanként `sx` prop-okkal újra megírni.
-- `components/shared/` — közös, projekt-specifikus komponensek: `GlowCard`, `NeonButton`,
-  `ProgressRing`, `StreakFlame`, `XpBadge`, `StarfieldBackground` (a landing oldal csillag-háttere
-  újrafelhasználható komponensként, nem csak a landing oldalra hardkódolva).
-- **`framer-motion`** egységesen az átmenetekhez/mikroanimációkhoz (már használatban, de
-  konzisztensen kell alkalmazni, nem csak néhol).
+**Döntés:** három választható téma, a Settings oldalon állítható, alkalmazásindításkor a mentett
+preferenciát (backend `cadets.theme_preference` mező + `localStorage` cache az azonnali
+alkalmazáshoz villanás nélkül) tölti be:
+
+| Téma | Kinek | Jelleg |
+|---|---|---|
+| **Space** (alapértelmezett) | Az igazi termék-élmény, ez adja a márka identitását | Teljes immerzív sci-fi: réteges parallax csillagmező, nebula-gradiensek, glow/HUD elemek |
+| **Dark** | Aki a funkcionalitást akarja a teljes sci-fi látvány nélkül (pl. hosszú olvasás, akkumulátor-kímélés) | Sötét, letisztult, a márka szín- és tipográfia-nyelvét megtartja, de statikus háttér, nincs animáció |
+| **Light** | Nappali/kültéri használat, elérhetőségi preferencia | Világos alap, ugyanaz a komponens-rendszer, kontraszt-optimalizált |
+
+Mindhárom **ugyanazt a komponens-készletet és layoutot** használja — a téma csak szín-tokeneket és
+(Space esetén) egy háttér-réteget cserél, nem külön implementáció.
+
+### 3.1 Token-architektúra
+
+- `theme/tokens.ts` — CSS custom property-alapú token-réteg (`--color-bg-base`,
+  `--color-accent-primary`, `--color-accent-secondary`, `--glow-sm/md/lg`, `--radius-*`,
+  `--spacing-*`), **témánként külön érték-halmazzal**, hogy a téma-váltás egy `data-theme`
+  attribútum cserével azonnal, újratöltés nélkül megtörténjen (MUI `ThemeProvider` ezekből a CSS
+  változókból építi a saját palettáját, hogy a Material komponensek és a saját komponensek
+  ugyanabból a forrásból színezzenek).
+- `theme/typography.ts` — közös minden témában: fejléc `Space Grotesk`, body `Inter`, kód
+  `Fira Code`. A tipográfia NEM téma-függő — a márka konzisztenciája a betűkészleten és a
+  spacing-en keresztül is érvényesül, nem csak a Space témán.
+- `theme/components.ts` — MUI komponens-override-ok egy helyen (`MuiButton`, `MuiCard`,
+  `MuiTextField` stb.), a fenti tokenekre hivatkozva — sosem hardkódolt szín/árnyék egy adott
+  komponensben.
+
+### 3.2 A "Space" téma kidolgozása — miért nem lesz "olcsó" hatású
+
+A cél nem egy PNG csillag-tapéta, hanem **réteges mélység + finom, ambient mozgás + fény-nyelv**,
+a mai prémium UI-trendek (Linear, Arc Browser, Stripe gradiens-hátterek) mintájára, sci-fi
+színvilágba öntve:
+
+1. **Réteges parallax csillagmező** (nem egy statikus kép): 3 réteg, eltérő sebességgel/mérettel —
+   távoli réteg (apró, halvány pontok, alig látható mozgás), középső réteg (közepes csillagok,
+   lassú, folyamatos "twinkle" — opacity-pulzálás, nem pozíció-animáció, hogy ne legyen zavaró),
+   közeli réteg (néhány nagyobb, halvány fényudvaros csillag, nagyon lassú driftel). CSS
+   transform + `requestAnimationFrame` throttle-lel, **canvas helyett DOM/SVG réteg** — kevesebb
+   akkumulátor-terhelés mobilon, és `prefers-reduced-motion`-nál egyetlen kapcsolóval teljesen
+   kikapcsolható (statikus csillagmezőre esik vissza).
+2. **Nebula-gradiens foltok a háttérben** — nagy, elmosott (`filter: blur()`), lassan pozíciót
+   váltó radiális gradiens-foltok (indigo → magenta → cián, alacsony opacitással), NEM éles
+   csillag-pontok, hanem szín-mélység a háttérnek — ez adja a "drága" érzetet a lapos fekete
+   helyett. A bázisszín is változik: nem tiszta fekete (`#000`), hanem mély indigo-fekete
+   (`#05040F`-hez közeli), ami melegebb, kevésbé "üres" hatású.
+3. **Alkalmi "hulló csillag"** — ritkán (30–90 másodpercenként, randomizált késleltetéssel), egy
+   rövid, halvány csóva-animáció fut át a képernyőn — `aria-hidden`, dekoratív, és
+   `prefers-reduced-motion`-nál teljesen kikapcsolva.
+4. **Glassmorphism HUD-panelek** — a kártyák (`GlowCard`) nem tömör Material-kártyák, hanem
+   félig-áttetsző, `backdrop-filter: blur()` panelek finom, halványan izzó szegéllyel — mintha egy
+   űrhajó kijelzőjén lenne az adott panel, nem "rálapozva" a háttérre.
+5. **Konzisztens glow-nyelv interakcióknál** — fókusz/hover/aktív állapotok egységes,
+   token-vezérelt glow-val (`--glow-accent`), nem oldalanként újra kitalált `box-shadow` értékek.
+6. **Mobil teljesítmény-védelem** — a rétegek száma és a csillag-darabszám kisebb viewport-on
+   automatikusan csökken (pl. mobil: 1-2 réteg, kevesebb elem), hogy alacsonyabb kategóriás
+   telefonokon se legyen frame-drop vagy érezhető akkumulátor-terhelés.
+
+A `StarfieldBackground`/`NebulaLayer` komponensek **paraméterezhetők** (réteg-szám, intenzitás),
+így a landing oldal kaphat egy teltebb, "hero" verziót, a dashboard/player felületek egy
+visszafogottabb, kevésbé figyelemelvonó verziót — ugyanabból a komponensből.
+
+### 3.3 Dark és Light téma
+
+Nem "Space téma mínusz animáció" egyszerű levágás, hanem saját, tudatos szín-döntés:
+
+- **Dark:** a Space téma alap-paletta-családjából indul (indigo-fekete alap, ugyanazok az accent
+  színek), de **statikus** háttér (nincs parallax/nebula-animáció), a glassmorphism helyett sima,
+  enyhén emelt felületű kártyák (`elevation`, nem `backdrop-blur`) — letisztultabb, kevésbé
+  figyelemelvonó, de vizuálisan még mindig egyértelműen "ugyanaz a márka".
+- **Light:** világos alap (nem tiszta fehér, enyhén hűvös szürkésfehér a szemkímélés miatt), az
+  accent-színek (cián/magenta) sötétebb, kontrasztosabb változatban (WCAG AA kontraszt-arány
+  ellenőrizve szöveg/háttér párokra), a márka-elemek (logó, ikonok) light-variánsban.
+
+### 3.4 Közös komponensek (`components/shared/`)
+
+`GlowCard`, `NeonButton`, `ProgressRing`, `StreakFlame`, `XpBadge`, `StarfieldBackground`,
+`NebulaLayer` — mind a token-rendszerből színeznek, egyik téma sincs beléjük hardkódolva.
+**`framer-motion`** egységesen az átmenetekhez/mikroanimációkhoz (már használatban, de
+konzisztensen kell alkalmazni, nem csak néhol).
+
+### 3.5 Backend — téma-preferencia perzisztálása
+
+- `Cadet` entitás bővítés: `themePreference VARCHAR(10) DEFAULT 'SPACE'` (`SPACE`/`DARK`/`LIGHT`).
+- `PUT /api/auth/me/theme` — egyszerű, saját-magára szűkített frissítés (nincs szükség admin
+  jogosultságra, mindenki csak a saját preferenciáját írja).
+- A Settings oldalon egy 3-állású választó (kártyás preview-val, nem sima dropdown-nal — a user
+  lássa is, mit választ).
 
 ---
 
@@ -127,9 +221,10 @@ fa nézet).
 A jelenlegi `HeroSection`/`FeaturesSection`/`AboutSection`/`FaqSection` szerkezet marad
 (tartalmilag jó bontás), de vizuálisan újratervezve:
 
-- **`StarfieldBackground`** — közös, paraméterezhető csillag-háttér komponens (canvas vagy CSS
-  particle), amit a landing ÉS a bejelentkezés utáni dashboard ÉS a Star Map is használ közös
-  vizuális szálként (ma a `SpaceStationCanvas.tsx` csak a landingen él, izoláltan).
+- A landing mindig a **Space téma "hero" intenzitású** `StarfieldBackground`/`NebulaLayer`
+  párosát kapja (ld. 3.2) — nem regisztrált látogatónak ez a téma-választó nem is jelenik meg
+  még, ez a márka bemutatkozó élménye. A mai `SpaceStationCanvas.tsx` izolált, csak-landing
+  megoldását váltja ki a közös, paraméterezett komponens.
 - A hero szekció kap egy karakter-animációt (a `new_direction_2026.md`-ben már megtervezett
   "barátságos robot" — ha még nincs asset, egyszerű SVG/Lottie placeholder-rel indulhat).
 - CTA-k, kártyák a fenti design system komponenseivel (`GlowCard`, `NeonButton`).
@@ -271,11 +366,15 @@ flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú ké
 A user döntése alapján ez **egyetlen nagy PR**-ban valósul meg (nem külön fázis-PR-ok), de a
 munka belső sorrendje logikailag így épül egymásra:
 
-1. **Design system alapok** — `theme/tokens.ts`, `theme/components.ts`, közös `components/shared/`
-   komponensek (`StarfieldBackground`, `GlowCard`, `NeonButton`, `StreakFlame`, `ProgressRing`).
-2. **Backend: streak + follow + profil endpointok** — a fenti 7.1–7.3 szerint, Flyway migrációval
-   (`cadets` tábla bővítés + `follows` tábla), párhuzamosan futtatható a frontend design system
-   munkával.
+1. **Téma-rendszer és design system alapok** — `theme/tokens.ts` mindhárom témával (Space/Dark/
+   Light), `theme/components.ts`, közös `components/shared/` komponensek (`StarfieldBackground`,
+   `NebulaLayer`, `GlowCard`, `NeonButton`, `StreakFlame`, `ProgressRing`), téma-váltó logika
+   (`data-theme` attribútum + `localStorage` + backend perzisztálás). Ez az alap, minden más erre
+   épül.
+2. **Backend: téma-preferencia + streak + follow + profil endpointok** — a fenti 3.5, 7.1–7.3
+   szerint, egy közös Flyway migrációval (`cadets` tábla bővítés: `theme_preference`,
+   `current_streak`, `longest_streak`, `last_activity_date` + `follows` tábla), párhuzamosan
+   futtatható a frontend munkával.
 3. **`MissionPlayerShell`** + a 4 meglévő lejátszó-oldal átalakítása, hogy csak a tartalmat adják.
 4. **`MarkdownStudio`, `QuizBuilder`, `CodeMissionEditor`** komponensek + **`MissionEditorPage`**
    egyesítése (ez váltja ki a `MissionForgePage`/`MissionEdit` kettősséget).
