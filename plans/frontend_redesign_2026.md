@@ -430,9 +430,9 @@ flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú ké
   `getFollowing(cadetId)`, `getFollowers(cadetId)`.
 - `GET /api/cadets/search?username=...` — username-alapú keresés (a `cadets.username` már unique
   és indexelt).
-- `POST /api/cadets/{id}/follow` / `DELETE /api/cadets/{id}/follow` — `mission:start`-tal azonos
-  szintű, bejelentkezett-user permission (nincs szükség új finomszemcsés permission-re, mert
-  minden bejelentkezett kadét követhet bárkit).
+- `POST /api/cadets/{id}/follow` / `DELETE /api/cadets/{id}/follow` — a `GET /api/auth/me`-hez
+  hasonlóan **csak bejelentkezett állapot szükséges**, nincs finomszemcsés permission hozzárendelve
+  (ld. 11. szekció a pontos indoklásért — ez nem `mission:start`-hoz kapcsolódó jogosultság).
 
 **Frontend:**
 - Felhasználó-kereső (profil oldalon vagy külön "Flotta" oldalon).
@@ -514,7 +514,141 @@ törlése — nem hagyjuk se élő kódot fordítás nélkül, se holt fordítá
 
 ---
 
-## 10. Nyitott kérdések (implementáció közben eldöntendő, nem blokkolja a tervet)
+## 10. Frontend architektúra és minták — megbízhatóbb, átláthatóbb kód
+
+Ez nem csak vizuális újratervezés — a mostani frontend kód **következetlensége nem csak dizájn-
+szinten** van jelen, hanem architektúra-szinten is, és ez ugyanolyan valós minőségi kockázat, mint
+a szétforgácsolt UI. Konkrét, kód-szinten ellenőrzött bizonyíték a mai állapotra:
+
+- **11 fájl megkerüli a központi `api/client.ts`-t**, közvetlen `axios`-t importálva
+  (`MissionList.tsx`, `UserEdit.tsx`, `PermissionList.tsx`, `StarSystemList.tsx`, `UserList.tsx`,
+  `RoleList.tsx`, `RoleEdit.tsx` és a hozzájuk tartozó tesztek) — ez azt jelenti, hogy ezek az
+  oldalak **kikerülik a 401-interceptort**, tehát lejárt tokennél nem jelentkeztetik ki a usert
+  automatikusan, ellentétben a `frontend/CLAUDE.md`-ben már dokumentált elvárással.
+- **A `@tanstack/react-query` már telepítve és bekötve van** (`QueryClientProvider` a
+  `main.tsx`-ben), és a **újabb** felületek (Mission Forge, Play oldalak, `FillInBlankEditor`,
+  `ContentEditor`, `MissionFileEditor`, Feedback oldal) már ezt használják — DE a **régebbi** admin
+  CRUD-listák (`MissionList`, `StarSystemList`, `UserList`, `RoleList`, `PermissionList`,
+  `LogList`, `FeatureFlagList`) mind kézzel írt `useEffect` + `useState(loading/error/data)`
+  boilerplate-et ismételnek, oldalanként enyhén eltérő hibakezeléssel. Ez pontosan az a fajta
+  következetlenség, ami miatt az egész kódbázis nehezen átlátható — **két különböző adatlekérési
+  minta él egymás mellett, ugyanarra a problémára**.
+- **`react-hook-form` + `zod`** (a `frontend/CLAUDE.md` szerint már a választott form-stack) csak
+  3 helyen van ténylegesen használva (`LoginPage`, `RegisterPage`, `ForgeConfigPanel`) — a többi
+  form (pl. `MissionEdit.tsx`) nyers `useState`-objektummal és kézi `onChange`-kel van megírva,
+  validáció nélkül vagy ad-hoc validációval.
+
+**Ezért a redesign explicit architektúra-minták bevezetését is jelenti, nem csak vizuális munkát:**
+
+### 10.1 Adatlekérés — kizárólag React Query, mindenhol
+
+Minden, ami eddig `useEffect` + `useState` + kézi `loading`/`error` kombinációval volt megoldva
+(a fenti admin listák is), **átkerül `useQuery`/`useMutation`-ra**. Ez nem új könyvtár bevezetése
+— a projekt már használja, csak nem konzisztensen. Konkrét haszon: automatikus cache, retry,
+race-condition-mentes state (a kézzel írt verzióknál valós kockázat, hogy egy gyors egymás utáni
+navigáció közben egy elavult response felülírja a state-et — React Query ezt garantáltan kezeli),
+és **egyetlen, közös hibakezelési minta** minden oldalon (ld. 10.3).
+
+### 10.2 API réteg fegyelme — `client.ts` kizárólagossága
+
+A közvetlen `axios` import **megszűnik minden komponensben** — ez a redesign explicit takarítási
+feladata is (nem csak az új felületeknél kell betartani, a meglévő 11 érintett fájlt is át kell
+írni, amint hozzájuk nyúlunk). Javasolt: egy ESLint szabály (`no-restricted-imports` az `axios`
+csomagra, kivéve magát a `client.ts`-t), hogy ez a hiba a jövőben build/lint-időben kiderüljön,
+ne csak egy auditban.
+
+### 10.3 Egységes betöltés-/hiba-állapot komponens
+
+Egy közös `components/shared/QueryStateHandler.tsx` (vagy hasonló) — betölti a `useQuery` state-jét
+(`isLoading`/`isError`/`data`), és egységesen jelenít meg skeleton/spinner-t, illetve hiba esetén
+egy retry-gombos `Alert`-et a Space design system nyelvén. Minden lista/detail oldal ezt használja
+a saját, kézzel írt loading/error JSX helyett — ez önmagában megszünteti azt a fajta
+következetlenséget, hogy ma minden oldal kicsit másképp néz ki betöltéskor/hibánál.
+
+### 10.4 Form-ok — `react-hook-form` + `zod` mindenhol
+
+Minden új/átalakított form (`MissionEditorPage` alapadat-form, `QuizBuilder`, `FillInBlankEditor`,
+Settings, téma-választó, felhasználó-kereső) `react-hook-form`-mal és `zod` séma-validációval
+készül — nem nyers `useState`-objektummal, ahogy a mai `MissionEdit.tsx`. A validációs sémák
+`types/` mellé, egy `schemas/` mappába kerülnek, hogy a frontend és a backend `@Valid`
+validációja (ld. 11. szekció) tudatosan tükrözze egymást (pl. ugyanaz a max hossz mindkét oldalon).
+
+### 10.5 Mappastruktúra finomítás
+
+A jelenlegi `pages/`/`components/` felosztás alapvetően jó, csak jobban be kell tartani:
+- **`pages/`** — kizárólag route-szintű összeállítás (layout + a megfelelő domain-komponensek
+  behívása), **nincs bennük üzleti logika vagy közvetlen API-hívás**.
+- **`hooks/`** — minden adat-lekérési/üzleti logika ide kerül, domain szerint elnevezve
+  (`useMissionEditor`, `useStarMap`, `useDashboard`, `useFollowList` stb.) — ezek hívják a
+  `useQuery`/`useMutation`-t és az `api/client.ts` modulokat, a `pages/` csak ezt a hook-ot hívja
+  meg és a visszakapott state-et adja a komponenseknek.
+- **`components/shared/`** — design system primitívek (3.4 szekció).
+- **`components/domain/<domain>/`** (pl. `components/domain/mission/`, `components/domain/social/`)
+  — domain-specifikus, több oldal között újrafelhasználható UI-darabok (pl. `QuizBuilder`,
+  `MarkdownStudio`, `StreakFlame` felhasználási helyei, `FriendCard`).
+
+Ez a réteg-szétválasztás (pages = vékony összeállítás, hooks = logika, components = megjelenítés)
+az, ami a "megbízhatóbb, átláthatóbb kód" konkrét, számonkérhető definíciója ebben a körben — nem
+elvont minőségi cél, hanem minden PR review-nál ellenőrizhető szabály.
+
+### 10.6 Tesztelési elvárás új/átalakított komponenseknél
+
+Követve a meglévő konvenciót (`pages/admin/__tests__/`, `components/forge/quiz/__tests__/`): minden
+új megosztott komponens (`GlowCard`, `MissionPlayerShell`, `QuizBuilder` stb.) Vitest unit tesztet
+kap, minden új user-flow (téma-váltás, streak-növekedés, follow/unfollow, Star Map interakció)
+legalább egy Cypress E2E happy-path tesztet — ugyanabba a `cypress/e2e/` struktúrába, ahogy a
+meglévő `admin_missions.cy.ts` stb.
+
+---
+
+## 11. Backend — meglévő minták követése, nem újak bevezetése
+
+A 7. és a frissített 5.2/5.3 szekcióban felsorolt új backend munka (streak, follow, profil,
+téma-preferencia, dashboard/continue, activity-feed, star-systems/with-progress) **mind a
+projektben már bevett, dokumentált mintákat követi** (`backend/CLAUDE.md`, `api_spec.md`) — nincs
+új architekturális döntés, csak a meglévő réteg-struktúra bővítése:
+
+- **Réteg-felépítés változatlan:** minden új funkció `web/<domain>` (Controller) →
+  `service/<domain>` (Service) → `repository/<domain>` (Repository) → `model/<domain>` (Entity)
+  → `dto/<domain>` (Request/Response) csomagszerkezetet kap, pontosan úgy, ahogy pl. a
+  `featureflag` vagy `fillinblank` domain már fel van építve. Konkrétan: `service/social/`
+  (`FollowService`, `ActivityFeedService`), `service/dashboard/` (`DashboardService`),
+  `web/social/` (`FollowController`, `SocialController`), `web/dashboard/`
+  (`DashboardController`).
+- **Kivétel-kezelés a meglévő egyedi osztályokkal** (`exception/` csomag) — pl. "nem követheted
+  saját magad" → `ResourceConflictException` vagy egy új, hasonlóan egyszerű `IllegalStateException`-
+  alapú business-kivétel, **nem** nyers `ex.getMessage()` a kliens felé (ld. a
+  `GlobalExceptionHandler`-re vonatkozó, már meglévő biztonsági szabály).
+- **`@Transactional` fegyelem** — write-műveletek (`follow`, `unfollow`, streak-frissítés,
+  téma-preferencia mentés) sima `@Transactional`, olvasó aggregációk (`with-progress`,
+  `dashboard/continue`, `activity-feed`) `@Transactional(readOnly = true)`, a meglévő szabály
+  szerint (write sose fusson `readOnly` outer tranzakcióból).
+- **Owner/permission-minta pontosítás:** a korábbi tervezetben tévesen a `mission:start`
+  permission-t neveztük meg a `follow`/`unfollow` végpontokhoz — ez félrevezető lenne, mert az
+  a `mission:start`-hoz sem tartalmilag, sem jogosultsági kategóriában nem kapcsolódik. A helyes
+  minta a meglévő `GET /api/auth/me`-hez hasonló: **egyszerűen bejelentkezett állapot elég, nincs
+  szükség finomszemcsés permission-re** (`@PreAuthorize` nélkül, csak a JWT-filter által biztosított
+  autentikáció). Ugyanez igaz a `dashboard/continue`, `activity-feed`, `star-systems/with-progress`,
+  `auth/me/theme` végpontokra — mind "a saját, bejelentkezett kadétra vonatkozó" adat, nem
+  admin-szintű vagy tulajdonos-ellenőrzést igénylő erőforrás.
+- **DTO + `@Valid` fegyelem** — minden új request DTO-n (`FollowRequest` ha szükséges,
+  `ThemePreferenceRequest`) Bean Validation annotációk, a controller metóduson `@Valid`, a már
+  dokumentált biztonsági minta szerint.
+- **Flyway migráció, additív, egy logikai egység egy fájlban** — a `cadets` tábla bővítése és a
+  `follows` tábla létrehozása **két külön migrációs fájl** lehet (`Vn__add_cadet_engagement_fields.sql`,
+  `Vn+1__create_follows_table.sql`), a projekt eddigi "egy logikai változás, jól követhető
+  migráció" gyakorlatát folytatva (ld. `V1`–`V6` jelenlegi migrációk).
+- **Teszt-lefedettség a meglévő minta szerint:** minden új service-hez `*ServiceTest.java`
+  (JUnit5 + Mockito, `MockDatabaseTest` minta), minden új controllerhez
+  `*ControllerSecurityTest.java` (a `@PreAuthorize`/auth-viselkedés ellenőrzésére) — pontosan
+  ahogy a `FeatureFlagServiceTest`/`FeatureFlagControllerSecurityTest` pár is fel van építve.
+- **Code review kötelezettség változatlan:** 3+ fájl módosítása esetén a `code-quality-reviewer`
+  agent, a repo gyökér `CLAUDE.md`-jében rögzített szabály szerint — ez az új backend munkára is
+  ugyanúgy vonatkozik, mint bármelyik korábbi feature-re.
+
+---
+
+## 12. Nyitott kérdések (implementáció közben eldöntendő, nem blokkolja a tervet)
 
 - `MarkdownStudio` alapja: kész könyvtár (`@mdxeditor/editor`) vs. saját toolbar + `react-markdown`
   — implementáció közben, a konkrét toolbar-igények alapján dől el.
