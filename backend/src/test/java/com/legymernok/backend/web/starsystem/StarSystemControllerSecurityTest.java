@@ -181,4 +181,19 @@ class StarSystemControllerSecurityTest {
                         .content("{\"name\": \"Test\"}"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("GET /api/star-systems/with-progress - Anonymous request is rejected")
+    void getWithProgress_Unauthenticated_Rejected() throws Exception {
+        mockMvc.perform(get("/api/star-systems/with-progress")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/star-systems/with-progress - Any authenticated cadet can access")
+    @WithMockUser // Semmilyen külön permission nem kell, csak bejelentkezés
+    void getWithProgress_Authenticated_Success() throws Exception {
+        when(starSystemService.getAllStarSystemsWithProgress()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/star-systems/with-progress")).andExpect(status().isOk());
+    }
 }

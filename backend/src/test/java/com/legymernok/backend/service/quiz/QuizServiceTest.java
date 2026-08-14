@@ -32,6 +32,7 @@ class QuizServiceTest {
     @Mock private QuizSessionRepository quizSessionRepository;
     @Mock private MissionRepository missionRepository;
     @Mock private MissionResultRepository missionResultRepository;
+    @Mock private com.legymernok.backend.service.streak.StreakService streakService;
     @Spy  private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private QuizService quizService;
 
