@@ -44,11 +44,34 @@ barátok, saját profil).
    - **Admin/content-creation felületek (Mission Editor, QuizBuilder, CodeMissionEditor, Star
      System fa-szerkesztő)** — ezek **reszponzívak és használhatók** mobilon (nem törnek el, nem
      kell vízszintesen scrollozni, a form-ok egy oszlopban rendeződnek), de **nem lesznek mobilra
-     optimalizálva elsődlegesen** — tartalom-szerkesztés (pl. kód-fájlfa kezelése, kvíz-kérdések
-     tömeges szerkesztése) inherensen több képernyő-helyet igényel, és irreális elvárás lenne,
-     hogy ez ugyanolyan élmény legyen egy 390px-es telefonon, mint egy adminisztrátornak
-     desktopon. **Ez tudatos, nem hanyagság** — a termék motivációja (doomscrolling-helyettesítés)
-     a *tanulói* oldalra vonatkozik, nem a tartalom-adminisztrációra.
+     optimalizálva elsődlegesen** a mélyebb tartalom-szerkesztésnél. **Ez tudatos, nem hanyagság**
+     — a termék motivációja (doomscrolling-helyettesítés) a *tanulói* oldalra vonatkozik, nem a
+     tartalom-adminisztrációra. Ezen belül két világosan elváló réteg van:
+
+     **Mobilról is teljes értékűen elvégezhető "alap" admin műveletek** (ez a lista NEM
+     kompromisszumos, ugyanolyan jól kell működnie, mint desktopon):
+     - Star System / Group / Mission listák böngészése, keresés, szűrés
+     - Alapadatok szerkesztése bármely misszió-típusnál (név, leírás, nehézség, sorrend) — ez
+       maga a `MissionEditorPage` felső form-ja, ami mindig sima, egy-oszlopos mobil form
+     - Sorrend-módosítás a fa-szerkesztőben (`[↑][↓][→][←]` gombok — ezek eleve gombalapúak, nem
+       drag-and-drop-ra épülnek, így mobilon ugyanolyan jól működnek, mint desktopon)
+     - Feature flag be/kikapcsolása, user lista + role-hozzárendelés, feedback-lista áttekintése
+     - CONTENT szöveg gyors módosítása a `MarkdownStudio`-ban (mobilon tab-váltós
+       szerkesztés/előnézet mód, nem split-view — de a toolbar és a szerkesztés maga teljes
+       értékű)
+     - FILL_IN_BLANK blank/opció hozzáadása-szerkesztése (form-alapú lista, nem drag-heavy — a
+       "Blank hozzáadása" és opció be/ki jelölés mobilon is kényelmes)
+     - `QuizBuilder` alap használata: kérdés/opció hozzáadása, szövegszerkesztés, helyes válasz
+       jelölése — a sorrendezés itt is fel/le gombokkal megy, nem drag handle-lel, kifejezetten
+       azért, hogy mobilon is működjön
+
+     **Desktop-ajánlott, de mobilon sem törik el, csak szűkebb élmény:**
+     - `CodeMissionEditor` (fájlfa + Monaco) admin oldali, sablon-előkészítő használata — egy
+       fájl tartalmának gyors módosítása mobilon is megy, de a fájlfa böngészése/rendezgetése
+       sok fájlnál kényelmetlenebb egy kis képernyőn
+     - Szélesebb admin táblázatok sok oszloppal (pl. role/permission mátrix) — mobilon
+       vízszintesen scrollozható vagy leegyszerűsített kártyás nézetre vált, de nem elsődleges
+       optimalizálási cél
 2. **Egy fogalom, egy szerkesztő.** Egy misszió (bármilyen típusú) létrehozása és szerkesztése
    **egyetlen oldalon** történjen, típusfüggő, beágyazott szerkesztő-panellel — sosem kell külön
    oldalra navigálni "a tényleges tartalom" szerkesztéséhez.
