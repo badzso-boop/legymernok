@@ -284,8 +284,50 @@ Jelenleg minimális. Új felépítés, Duolingo-inspirált információs hierarc
 
 1. **Streak + napi cél sáv** (ld. 7.1) — a legfelső, legszembetűnőbb elem.
 2. **"Folytasd onnan, ahol abbahagytad"** kártya — az utolsó aktív Star System/Group/Mission.
-3. **Star Map előnézet** — a felfedezett rendszerek mini-térképe, "Térkép megnyitása" CTA-val.
+3. **Star Map előnézet** — a felfedezett rendszerek mini-térképe, "Térkép megnyitása" CTA-val,
+   ugyanabból a komponensből, mint a 5.3-ban leírt teljes Star Map (kicsinyítve, nem interaktív).
 4. **Barátok aktivitása** (ld. 7.2) — kompakt lista, ki mit teljesített mostanában.
+
+### 5.3 Star Map (csillagtérkép) — teljes újragondolás
+
+A jelenlegi `StarMapCanvas.tsx` egy kézzel írt Canvas 2D rendering, ami konkrétan **nem illeszkedik
+sem a design system-hez, sem a mobile-first elvhez**:
+
+- **Vizuálisan zöld "radar/mátrix" stílus** (`VT323` monospace font, zöld szkennelő-vonal,
+  koncentrikus radar-körök) — teljesen más nyelvet beszél, mint a többi felület tervezett
+  cián/magenta neon sci-fi világa (`ux_ui_terv.md`). Ez egy izolált, sosem összehangolt dizájn-
+  sziget.
+- **A rendszerek pozíciója `hash(rendszer-id)` alapú pszeudo-random** — nincs mögötte valódi
+  struktúra vagy kapcsolat (bár a `new_direction_2026.md` eredetileg gráf-éleket és
+  előfeltétel-viszonyokat tervezett a rendszerek közé).
+- **Kizárólag egér-eseményekkel működik** (`onMouseMove`/`onClick`) — nincs touch/pinch/pan
+  kezelés. Mobilon ez azt jelenti, hogy egy tap találhat egy csillagot (a `onClick` browser-szinten
+  fut touch-on is), de a hover-alapú név/koordináta-felfedés és a nagyítás/pásztázás **egyáltalán
+  nem működik** — pont a legfontosabb, mobil-only felhasználói rétegnél törik el legjobban.
+- **A csillag színe mindig ugyanaz** (`#0f0`, statikus) — nincs vizuális állapot-visszajelzés
+  (folyamatban / teljesítve / még el sem kezdett), pedig ez az adat már létezik
+  (`CadetMission`/`MissionGroupProgress` rekordok) — az `ux_ui_terv.md` eredeti terve
+  ("Villog = Aktuális, Szürke = Zárt, Zöld = Kész") sosem lett ténylegesen bekötve.
+
+**Az új megközelítés:**
+
+1. **A kézzel írt Canvas lecserélése egy dedikált, touch-first gráf-vizualizációs könyvtárra** —
+   `react-flow` javasolt (ezt már a `new_direction_2026.md` is megcélozta korábban): natívan van
+   pan/zoom/pinch támogatása, node-click/tap kezelés, jól tesztelt mobilon is. Ez önmagában
+   megoldja a touch-interakció hiányát, kézzel írt gesztus-kezelés nélkül.
+2. **A csillag node-ok a Space-téma design nyelvét kapják** (`GlowCard`/glow-effektek, cián/magenta
+   paletta) a zöld radar-stílus helyett — vizuálisan egységes a landing/dashboard/player
+   felületekkel, nem egy elszigetelt "más app" érzés.
+3. **Valós állapot-alapú node-színezés**: szürke = még nem kezdett, pulzáló cián/glow = aktuális/
+   folytatható, zöld pipa-jelvény = teljesítve — a meglévő progress-adatokból számolva (nincs
+   szükség új backend endpointra, a `with-missions`/progress lekérdezések már megvannak).
+4. **Pozicionálás MVP-ben marad egyszerű, determinisztikus elrendezés** (radiális vagy grid-layout
+   az id alapján, hasonlóan a mostanihoz, csak `react-flow` node-koordinátaként) — a valódi
+   "előfeltétel-gráf" (melyik rendszer nyit meg melyiket, gráf-élekkel összekötve) egy külön,
+   **Stage 2 backend-munka** lenne (`StarSystem.prerequisiteId` mező bevezetése + zárolási logika)
+   — ld. 8. szekció, tudatosan NEM ebben a körben.
+5. **Dashboard preview** (5.2, 3. pont) ugyanebből a komponensből jön, csak kicsinyítve és
+   nem-interaktív módban paraméterezve — nem külön implementáció.
 
 ---
 
@@ -397,6 +439,10 @@ flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú ké
 
 ## 8. Nem ebben a körben (tudatosan kizárva)
 
+- **Star System előfeltétel-gráf** (5.3) — a rendszerek közötti valódi "melyik nyit meg melyiket"
+  kapcsolat és zárolási logika (`StarSystem.prerequisiteId` + backend jogosultsági logika) külön
+  backend-munka; ebben a körben a Star Map csak vizuálisan/interakciósan újul meg, a pozíciók
+  MVP-ben továbbra is egyszerű, determinisztikus elrendezésből jönnek.
 - **XP/pontszám-rendszer és jelvények** — a `gamification_roadmap.md`-ben tervezett `reward_xp`
   mechanika nem része ennek a körnek; a streak és a barát-rendszer önmagában is jelentős
   engagement-javulást hoz, az XP-rendszer egy jól elkülöníthető, külön feature.
@@ -431,8 +477,10 @@ munka belső sorrendje logikailag így épül egymásra:
 6. **Profil oldal + felhasználó-kereső.**
 7. **Mobil CODING UX finomítás** (bottom-sheet fájlfa, gyorsgomb-sáv).
 8. **Star System fa-szerkesztő vizuális átdolgozása.**
-9. Végigtesztelés mobil viewporton (360px, 390px, 430px) minden érintett oldalon + meglévő
-   Cypress/Vitest tesztek frissítése az átalakított komponensekre.
+9. **Star Map lecserélése `react-flow`-alapú, touch-first vizualizációra** (5.3) — a Canvas 2D
+   render megszűnik, node-színezés valós progress-adatból.
+10. Végigtesztelés mobil viewporton (360px, 390px, 430px) minden érintett oldalon + meglévő
+    Cypress/Vitest tesztek frissítése az átalakított komponensekre.
 
 **Minden fenti lépés keresztmetsző követelménye (nem külön lépés, hanem folyamatos elvárás):**
 minden új szöveg azonnal bekerül `config.ts`-be **mindkét nyelven** (`en`/`hu`), a komponens
