@@ -567,6 +567,10 @@ export const authApi = {
     const response = await apiClient.get<MeResponse>("/auth/me");
     return response.data;
   },
+  /** Elmenti a bejelentkezett kadét téma-preferenciáját (SPACE/DARK/LIGHT). */
+  updateTheme: async (theme: "SPACE" | "DARK" | "LIGHT"): Promise<void> => {
+    await apiClient.put("/auth/me/theme", { theme });
+  },
 };
 
 export const socialApi = {

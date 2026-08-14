@@ -44,6 +44,7 @@ import CodingMissionPage from "../pages/play/CodingMissionPage";
 import FeedbackPage from "../pages/feedback/FeedbackPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import ProfilePage from "../pages/profile/ProfilePage";
+import SettingsPage from "../pages/settings/SettingsPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -258,6 +259,15 @@ export const router = createHashRouter([
     element: (
       <ProtectedRoute>
         <ProfilePage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/settings",
+    element: (
+      <ProtectedRoute>
+        <SettingsPage />
       </ProtectedRoute>
     ),
   },

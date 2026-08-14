@@ -165,6 +165,12 @@ const MainLayout: React.FC = () => {
                     open={Boolean(accountMenuAnchor)}
                     onClose={() => setAccountMenuAnchor(null)}
                   >
+                    <MenuItem onClick={() => go("/profile")}>
+                      {t("nav.profile")}
+                    </MenuItem>
+                    <MenuItem onClick={() => go("/settings")}>
+                      {t("nav.settings")}
+                    </MenuItem>
                     <MenuItem onClick={() => go("/feedback")}>
                       {t("nav.feedback")}
                     </MenuItem>
@@ -210,6 +216,12 @@ const MainLayout: React.FC = () => {
                 </ListItemButton>
                 <ListItemButton onClick={() => go("/my-forge")}>
                   <ListItemText primary={t("nav.myForge")} />
+                </ListItemButton>
+                <ListItemButton onClick={() => go("/profile")}>
+                  <ListItemText primary={t("nav.profile")} />
+                </ListItemButton>
+                <ListItemButton onClick={() => go("/settings")}>
+                  <ListItemText primary={t("nav.settings")} />
                 </ListItemButton>
                 <ListItemButton onClick={() => go("/feedback")}>
                   <ListItemText primary={t("nav.feedback")} />

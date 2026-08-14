@@ -3,22 +3,15 @@ import { Box, Typography, CircularProgress, Alert } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import i18n from "../../i18n/config";
-import RetroButton from "../../components/RetroButton";
+import { NeonButton } from "../../components/shared/NeonButton";
+import { GlowCard } from "../../components/shared/GlowCard";
 import { forgeApi } from "../../api/client";
-import { RetroPanel } from "../../components/forge/RetroPanel";
 import StarSystemTable from "../../components/star-system/StarSystemTable";
 import MissionTable from "../../components/mission/MissionTable";
 
 const MyForgePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-
-  const toggleLanguage = () => {
-    i18n.changeLanguage(i18n.language === "hu" ? "en" : "hu");
-  };
-
-  // --- 1. Adatok lekérése (React Query) ---
 
   // Felhasználó saját csillagrendszerei
   const { data: systems, isLoading: loadingSystems } = useQuery({
@@ -36,8 +29,6 @@ const MyForgePage: React.FC = () => {
     queryFn: forgeApi.getMyMissions,
   });
 
-  // --- 2. Betöltési és Hiba állapotok ---
-
   if (loadingSystems || loadingMissions) {
     return (
       <Box
@@ -46,199 +37,72 @@ const MyForgePage: React.FC = () => {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          minHeight: "80vh",
+          minHeight: "60vh",
           gap: 2,
         }}
       >
-        <CircularProgress color="inherit" />
-        <Typography sx={{ color: "#fff", fontFamily: "monospace" }}>
-          {t("controlPanel.loadingAssets").toUpperCase()}
+        <CircularProgress />
+        <Typography sx={{ color: "var(--color-text-secondary)" }}>
+          {t("controlPanel.loadingAssets")}
         </Typography>
       </Box>
     );
   }
 
   return (
-    <Box
-      sx={{
-        bgcolor: "#121212",
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Retro fejléc sáv */}
+    <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 2, md: 4 } }}>
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          px: { xs: 2, md: 3 },
-          py: 1,
-          borderBottom: "1px solid #2a2a2a",
-          bgcolor: "#0d0d0d",
-          flexShrink: 0,
+          mb: 4,
+          flexWrap: "wrap",
+          gap: 2,
         }}
       >
-        <Typography
-          sx={{
-            color: "#00ff88",
-            fontFamily: "monospace",
-            fontSize: "0.75rem",
-            letterSpacing: 1,
-          }}
-        >
-          {t("forge.personalInventory")} // {t("forge.online")}
-        </Typography>
-        <Box sx={{ display: "flex", gap: 2 }}>
-          <RetroButton
-            color="yellow"
-            labelKey="nav.language"
-            size="small"
-            onClick={toggleLanguage}
-          />
-          <RetroButton
-            color="red"
-            labelKey="nav.back"
-            size="small"
-            onClick={() => navigate("/")}
-          />
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: "bold" }}>
+            {t("nav.myForge")}
+          </Typography>
+          <Typography variant="body2" sx={{ color: "var(--color-text-secondary)" }}>
+            {t("forge.personalInventory")}
+          </Typography>
         </Box>
+        <NeonButton onClick={() => navigate("/forge")} data-cy="new-mission-btn">
+          {t("forge.newMission")}
+        </NeonButton>
       </Box>
 
-      {/* Fő tartalom */}
-      <Box
-        sx={{
-          p: { xs: 1, md: 4 },
-          flex: 1,
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <RetroPanel
-          title={`CADET_FORGE // PERSONAL_INVENTORY // ${missions?.length || 0}_MISSIONS_DETECTED`}
-          sx={{ width: "95vw", maxWidth: "1400px", p: 4 }}
-        >
-          {/* FEJLÉC ÉS ÚJ MISSZIÓ GOMB */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 6,
-              borderBottom: "2px solid #333",
-              pb: 2,
-            }}
-          >
-            <Box>
-              <Typography
-                variant="h4"
-                sx={{
-                  color: "#fff",
-                  fontFamily: "monospace",
-                  fontWeight: "bold",
-                }}
-              >
-                {t("dashboard").toUpperCase()}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: "#666", fontFamily: "monospace" }}
-              >
-                ACCESS_GRANTED // AUTH_LEVEL: CADET_ENGINEER
-              </Typography>
-            </Box>
+      {missionsError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {t("errorFetchMissions")}
+        </Alert>
+      )}
 
-            <RetroButton
-              color="green"
-              labelKey="forge.newMission"
-              onClick={() => navigate("/forge")}
-              data-cy="new-mission-btn"
-            />
-          </Box>
+      <GlowCard sx={{ mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t("starSystems")}
+        </Typography>
+        <StarSystemTable
+          systems={systems || []}
+          loading={false}
+          onEdit={(id) => navigate(`/admin/star-systems/${id}`)}
+        />
+      </GlowCard>
 
-          {missionsError && (
-            <Alert
-              severity="error"
-              sx={{
-                mb: 4,
-                bgcolor: "#200",
-                color: "#f88",
-                fontFamily: "monospace",
-              }}
-            >
-              {t("errorFetchMissions").toUpperCase()}
-            </Alert>
-          )}
-
-          {/* 1. SZAKASZ: SAJÁT CSILLAGRENDSZEREK */}
-          <Box sx={{ mb: 8 }}>
-            <Typography
-              variant="h6"
-              sx={{
-                color: "#fff",
-                mb: 2,
-                fontFamily: "monospace",
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <span style={{ color: "#888" }}>{">"}</span>{" "}
-              {t("starSystems").toUpperCase()}
-            </Typography>
-            <StarSystemTable
-              systems={systems || []}
-              loading={false}
-              variant="retro"
-              onEdit={(id) => navigate(`/admin/star-systems/${id}`)} // Itt navigálhatunk a szerkesztőre
-            />
-          </Box>
-
-          {/* 2. SZAKASZ: SAJÁT MISSZIÓK */}
-          <Box>
-            <Typography
-              variant="h6"
-              sx={{
-                color: "#fff",
-                mb: 2,
-                fontFamily: "monospace",
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <span style={{ color: "#888" }}>{">"}</span>{" "}
-              {t("missions").toUpperCase()}
-            </Typography>
-            <MissionTable
-              missions={missions || []}
-              starSystems={systems || []}
-              loading={false}
-              variant="retro"
-              onEdit={(id) => navigate(`/forge/config/${id}`)} // Alapadatok szerkesztése (ha lesz ilyen route)
-              onForge={(id) => navigate(`/forge/${id}`)} // Monaco Editor megnyitása
-            />
-          </Box>
-
-          {/* LÁBJEGYZET */}
-          <Box
-            sx={{
-              mt: 6,
-              pt: 2,
-              borderTop: "1px solid #222",
-              textAlign: "center",
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ color: "#444", fontFamily: "monospace" }}
-            >
-              TERMINAL_V2.1 // LEGYMERNOK_CODE_STORAGE_SYSTEM
-            </Typography>
-          </Box>
-        </RetroPanel>
-      </Box>
+      <GlowCard>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t("missions")}
+        </Typography>
+        <MissionTable
+          missions={missions || []}
+          starSystems={systems || []}
+          loading={false}
+          onEdit={(id) => navigate(`/forge/${id}`)}
+          onForge={(id) => navigate(`/forge/${id}`)}
+        />
+      </GlowCard>
     </Box>
   );
 };

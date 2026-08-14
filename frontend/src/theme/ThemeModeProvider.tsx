@@ -10,8 +10,14 @@ import { ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { applyThemeCssVariables, type ThemeMode } from "./tokens";
 import { buildMuiTheme } from "./muiTheme";
+import { authApi } from "../api/client";
 
 const STORAGE_KEY = "theme-preference";
+const MODE_TO_BACKEND: Record<ThemeMode, "SPACE" | "DARK" | "LIGHT"> = {
+  space: "SPACE",
+  dark: "DARK",
+  light: "LIGHT",
+};
 
 function readStoredMode(): ThemeMode {
   try {
@@ -26,13 +32,17 @@ function readStoredMode(): ThemeMode {
 }
 
 /**
- * TODO(backend): amint a `PUT /api/auth/me/theme` endpoint elkészül (terv 3.5
- * szekció), ez a függvény hívja majd meg a backendet a preferencia
- * elmentéséhez, hogy más eszközön/böngészőben is megmaradjon. Addig csak
- * localStorage-be írunk.
+ * A preferenciát a backendbe is elmenti (`PUT /api/auth/me/theme`), hogy más
+ * eszközön/böngészőben is megmaradjon. Ha a user nincs bejelentkezve vagy a
+ * hívás hibázik, a localStorage-alapú alkalmazás akkor is működik — ez csak
+ * a szinkronizálás, nem a téma tényleges alkalmazásának feltétele.
  */
-function syncThemeToBackend(_mode: ThemeMode): void {
-  // no-op — a backend endpoint még nincs kész (2. lépés, párhuzamos munka).
+function syncThemeToBackend(mode: ThemeMode): void {
+  if (!localStorage.getItem("token")) return;
+  authApi.updateTheme(MODE_TO_BACKEND[mode]).catch(() => {
+    // Csendes hiba — a helyi téma-váltás enélkül is teljes értékű, a
+    // szinkronizálás legközelebbi sikeres híváskor újra megpróbálódik.
+  });
 }
 
 interface ThemeModeContextValue {

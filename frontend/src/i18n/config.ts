@@ -224,6 +224,20 @@ const resources = {
         menu: "Menu",
         account: "Account",
         feedback: "Feedback",
+        profile: "Profile",
+        settings: "Settings",
+      },
+      settings: {
+        title: "Settings",
+        themeSectionTitle: "Theme",
+        themeSectionSubtitle: "Choose how LégyMérnök.hu looks for you.",
+        themeSpaceLabel: "Space",
+        themeSpaceDescription: "The full immersive sci-fi experience — animated starfield, nebula glow.",
+        themeDarkLabel: "Dark",
+        themeDarkDescription: "Same brand colors, static background — easier on the eyes for long reading.",
+        themeLightLabel: "Light",
+        themeLightDescription: "Light background, high-contrast accents — for daytime/outdoor use.",
+        saveError: "Could not save your theme preference. It's still applied locally.",
       },
       // STAR MAP
       starMap: {
@@ -716,6 +730,20 @@ const resources = {
         menu: "Menü",
         feedback: "Visszajelzés",
         account: "Fiók",
+        profile: "Profil",
+        settings: "Beállítások",
+      },
+      settings: {
+        title: "Beállítások",
+        themeSectionTitle: "Téma",
+        themeSectionSubtitle: "Válaszd ki, hogyan nézzen ki a LégyMérnök.hu neked.",
+        themeSpaceLabel: "Space",
+        themeSpaceDescription: "A teljes immerzív sci-fi élmény — animált csillagmező, nebula-fény.",
+        themeDarkLabel: "Dark",
+        themeDarkDescription: "Ugyanaz a márka-paletta, statikus háttér — kíméletesebb hosszú olvasáshoz.",
+        themeLightLabel: "Light",
+        themeLightDescription: "Világos háttér, magas kontrasztú accent-színek — nappali/kültéri használatra.",
+        saveError: "Nem sikerült elmenteni a téma-preferenciát. Helyileg továbbra is alkalmazva marad.",
       },
       // STAR MAP
       starMap: {
