@@ -5,12 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/legymernok/astronaut-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <title>Legymernok</title>
-    <script type="module" crossorigin src="/legymernok/assets/index-C54hiyKk.js"></script>
-    <link rel="stylesheet" crossorigin href="/legymernok/assets/index-Bd2ZNnwe.css">
+    <script>
+      // Téma-preferencia beállítása React-hidratáció ELŐTT, hogy ne legyen
+      // "villanás" a rossz témával (lásd theme/ThemeModeProvider.tsx).
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme-preference");
+          var mode =
+            stored === "dark" || stored === "light" || stored === "space"
+              ? stored
+              : "space";
+          document.documentElement.setAttribute("data-theme", mode);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "space");
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/legymernok/assets/index-DDUFSYsX.js"></script>
+    <link rel="stylesheet" crossorigin href="/legymernok/assets/index-BIKQ54S4.css">
   </head>
   <body>
     <div id="root"></div>
