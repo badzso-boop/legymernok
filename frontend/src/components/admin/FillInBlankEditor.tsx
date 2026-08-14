@@ -8,11 +8,14 @@ import {
   IconButton,
   Alert,
   Divider,
+  Button,
 } from "@mui/material";
 import { X as XIcon } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { fillInBlankApi } from "../../api/client";
 import RetroButton from "../RetroButton";
+import MarkdownStudio from "../domain/mission/MarkdownStudio";
 import type { FillInBlankBlankAdmin } from "../../types/fillinblank";
 
 const MAX_BLANKS = 5;
@@ -47,6 +50,7 @@ function parseTemplate(template: string): string[] {
 }
 
 const FillInBlankEditor: React.FC<FillInBlankEditorProps> = ({ missionId }) => {
+  const { t } = useTranslation();
   const [templateText, setTemplateText] = useState("");
   const [blanks, setBlanks] = useState<BlankState[]>([]);
   const [passThreshold, setPassThreshold] = useState<number | null>(null);
@@ -164,28 +168,26 @@ const FillInBlankEditor: React.FC<FillInBlankEditorProps> = ({ missionId }) => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-          <Typography variant="caption" sx={{ color: "#888", fontFamily: "monospace" }}>
-            TEMPLATE_TEXT — szintaxis: [[blank_1]]
-          </Typography>
-          <RetroButton
-            color="blue"
-            labelKey="fillInBlank.addBlank"
-            onClick={handleAddBlank}
-            disabled={detectedKeys.length >= MAX_BLANKS}
-          />
-        </Box>
-        <TextField
-          multiline
-          rows={4}
-          fullWidth
+        <Typography variant="caption" sx={{ color: "#888", fontFamily: "monospace", mb: 1, display: "block" }}>
+          TEMPLATE_TEXT — szintaxis: [[blank_1]]
+        </Typography>
+        <MarkdownStudio
           value={templateText}
-          onChange={(e) => handleTemplateChange(e.target.value)}
+          onChange={handleTemplateChange}
+          minRows={4}
           placeholder="Pl.: A víz forráspontja [[blank_1]] Celsius-fok."
-          sx={{
-            "& .MuiInputBase-root": { bgcolor: "#0a0a0a", color: "#e0e0e0", fontFamily: "monospace" },
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: "#333" },
-          }}
+          data-cy="fib-template-text"
+          extraToolbarActions={
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleAddBlank}
+              disabled={detectedKeys.length >= MAX_BLANKS}
+              data-cy="fib-add-blank"
+            >
+              {t("fillInBlank.addBlank")}
+            </Button>
+          }
         />
       </Box>
 

@@ -27,14 +27,13 @@ import StarSystemList from "../pages/admin/star-system/StarSystemList";
 import { useAuth } from "../context/AuthContext";
 import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
-import MissionEdit from "../pages/admin/missions/MissionEdit";
 import MissionList from "../pages/admin/missions/MissionList";
 import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import FeatureFlagList from "../pages/admin/feature-flags/FeatureFlagList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
-import MissionForgePage from "../pages/mission-forge/MissionForgePage";
+import MissionEditorPage from "../pages/mission-editor/MissionEditorPage";
 import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
@@ -142,7 +141,7 @@ export const router = createHashRouter([
     path: "forge",
     element: (
       <ProtectedRoute>
-        <MissionForgePage />
+        <MissionEditorPage mode="forge" />
       </ProtectedRoute>
     ),
   },
@@ -150,7 +149,7 @@ export const router = createHashRouter([
     path: "forge/:missionId",
     element: (
       <ProtectedRoute>
-        <MissionForgePage />
+        <MissionEditorPage mode="forge" />
       </ProtectedRoute>
     ),
   },
@@ -277,11 +276,11 @@ export const router = createHashRouter([
       },
       {
         path: "missions/new",
-        element: <MissionEdit />,
+        element: <MissionEditorPage mode="admin" />,
       },
       {
         path: "missions/:id",
-        element: <MissionEdit />,
+        element: <MissionEditorPage mode="admin" />,
       },
       {
         path: "roles",
