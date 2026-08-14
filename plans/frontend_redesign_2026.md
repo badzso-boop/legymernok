@@ -84,6 +84,17 @@ barátok, saját profil).
    definiálva (nem ad-hoc, oldalanként újraírva).
 5. **Duolingo-mintázat:** napi cél, streak, azonnali vizuális visszajelzés minden teljesítésnél,
    barátok/követés a szociális nyomás miatt, saját profil a láthatóság/büszkeség miatt.
+6. **A meglévő i18n (magyar/angol) végig megmarad — nem visszalépés.** A projekt jelenleg is
+   teljesen kétnyelvű (`src/i18n/config.ts`, `en`/`hu` `resources`, `useTranslation()` hook
+   mindenhol, ld. `frontend/CLAUDE.md` konvenciói). Az újratervezés **egyetlen komponense sem
+   kaphat hardkódolt magyar (vagy angol) szöveget** — minden új UI-elem (a `MissionEditorPage`,
+   `MarkdownStudio`, `QuizBuilder`, `MissionPlayerShell`, a téma-választó, a streak/barátok/profil
+   felületek stb.) új `config.ts` kulcsokat kap **mindkét nyelven egyszerre**, ugyanabban a
+   struktúrában, ahogy eddig (ld. `mobile-friendly.md` "i18n kulcsok" szekciója — ugyanez a
+   minta folytatódik). Ez különösen fontos, mert több komponens **kiváltja** a régi megfelelőjét
+   (pl. `MissionForgePage` → `MissionEditorPage`) — a régi kulcsok csak akkor törölhetők
+   `config.ts`-ből, ha az adott komponens ténylegesen megszűnik és semmi más nem hivatkozik rájuk
+   (ellenőrizve grep-pel a kulcs nevére), különben "élő" fordítási kulcsok vesznek el észrevétlenül.
 
 ---
 
@@ -422,6 +433,13 @@ munka belső sorrendje logikailag így épül egymásra:
 8. **Star System fa-szerkesztő vizuális átdolgozása.**
 9. Végigtesztelés mobil viewporton (360px, 390px, 430px) minden érintett oldalon + meglévő
    Cypress/Vitest tesztek frissítése az átalakított komponensekre.
+
+**Minden fenti lépés keresztmetsző követelménye (nem külön lépés, hanem folyamatos elvárás):**
+minden új szöveg azonnal bekerül `config.ts`-be **mindkét nyelven** (`en`/`hu`), a komponens
+`useTranslation()`-t használ, sosem hardkódolt stringet — ahogy ma is elvárt konvenció
+(`frontend/CLAUDE.md`). Amikor egy régi komponens (pl. `MissionForgePage`) ténylegesen megszűnik
+és lecserélődik, az utolsó lépés a hozzá tartozó, máshol nem hivatkozott `config.ts` kulcsok
+törlése — nem hagyjuk se élő kódot fordítás nélkül, se holt fordítási kulcsokat a fájlban.
 
 ---
 
