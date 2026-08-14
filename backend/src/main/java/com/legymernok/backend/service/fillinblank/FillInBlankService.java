@@ -10,6 +10,7 @@ import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.fillinblank.*;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.service.streak.StreakService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,6 +32,7 @@ public class FillInBlankService {
     private final FillInBlankAttemptRepository attemptRepository;
     private final FillInBlankAnswerDetailRepository answerDetailRepository;
     private final CadetRepository cadetRepository;
+    private final StreakService streakService;
 
     @Transactional
     public FillInBlankUserResponse saveDefinition(UUID missionId, SaveFillInBlankRequest request) {
@@ -224,6 +226,10 @@ public class FillInBlankService {
         attempt.setPercentage(percentage);
         attempt.setPassed(passed);
         attempt = attemptRepository.save(attempt);
+
+        if (passed) {
+            streakService.recordActivity(cadet.getId());
+        }
 
         return FillInBlankResultResponse.builder()
                 .score(score)

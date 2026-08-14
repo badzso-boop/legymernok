@@ -13,6 +13,7 @@ import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.service.streak.StreakService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,6 +34,7 @@ public class MissionGroupProgressService {
 
     private final MissionGroupProgressRepository progressRepository;
     private final MissionGroupStepCompletionRepository stepCompletionRepository;
+    private final StreakService streakService;
     private final MissionGroupRepository groupRepository;
     private final MissionRepository missionRepository;
     private final CadetRepository cadetRepository;
@@ -96,6 +98,7 @@ public class MissionGroupProgressService {
                         .mission(currentMission)
                         .build();
                 stepCompletionRepository.saveAndFlush(step);
+                streakService.recordActivity(cadet.getId());
             } catch (DataIntegrityViolationException e) {
                 // Idempotens: ha már létezik, nem duplikálódik
                 log.debug("Step completion already exists for mission {}, ignoring.", currentMissionId);
