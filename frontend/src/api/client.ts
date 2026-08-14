@@ -8,6 +8,7 @@ import type {
   StarSystemResponse,
   StarSystemWithItemsResponse,
   StarSystemSearchResult,
+  StarSystemWithProgressResponse,
 } from "../types/starSystem";
 import type { MissionResponse, ContentPageResponse } from "../types/mission";
 import type { QuizDefinition, MissionResult } from "../types/quiz";
@@ -185,6 +186,13 @@ export const forgeApi = {
 };
 
 export const starSystemApi = {
+  getWithProgress: async () => {
+    const response = await apiClient.get<StarSystemWithProgressResponse[]>(
+      "/star-systems/with-progress",
+    );
+    return response.data;
+  },
+
   create: async (data: {
     name: string;
     description: string;
