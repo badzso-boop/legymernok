@@ -17,6 +17,8 @@ public interface MissionGroupStepCompletionRepository extends JpaRepository<Miss
 
     boolean existsByProgressIdAndMissionId(UUID progressId, UUID missionId);
 
+    List<MissionGroupStepCompletion> findTop20ByProgress_Cadet_IdInOrderByCompletedAtDesc(List<UUID> cadetIds);
+
     @Modifying
     @Query("DELETE FROM MissionGroupStepCompletion s WHERE s.mission.id = :missionId")
     void deleteAllByMissionId(@Param("missionId") UUID missionId);

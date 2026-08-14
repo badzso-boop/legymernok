@@ -29,6 +29,7 @@ import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.mission.MissionResultRepository;
 import com.legymernok.backend.repository.quiz.QuizSessionRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
+import com.legymernok.backend.service.streak.StreakService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +52,7 @@ public class MissionService {
 
     private final MissionRepository missionRepository;
     private final StarSystemRepository starSystemRepository;
+    private final StreakService streakService;
     private final CadetMissionRepository cadetMissionRepository;
     private final CadetRepository cadetRepository;
     private final GiteaService giteaService;
@@ -701,12 +703,19 @@ public class MissionService {
         return mapToResponse(missionRepository.save(mission));
     }
 
+    @Transactional
     public void updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus) {
         Mission mission = missionRepository.findById(missionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", missionId));
 
         mission.setVerificationStatus(newStatus);
         missionRepository.save(mission);
+
+        // A misszió szerzőjének (Forge-ben létrehozó kadétnak) sikeres CI-verifikáció
+        // is számít aktivitásnak — lásd plans/frontend_redesign_2026.md 7.1.
+        if (newStatus == VerificationStatus.SUCCESS && mission.getOwner() != null) {
+            streakService.recordActivity(mission.getOwner().getId());
+        }
     }
 
     @Transactional(readOnly = true)

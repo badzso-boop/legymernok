@@ -89,7 +89,11 @@ describe("Admin Mission Management (Mocked Backend)", () => {
     cy.get("button").find('svg[data-testid="SaveIcon"]').click({ force: true });
 
     cy.wait("@createMission");
-    cy.url().should("include", "/admin/star-systems/s2");
+    // A MissionEditorPage mentés után a létrehozott misszió szerkesztő oldalán marad
+    // (nem navigál vissza a star systemhez) — így a típusfüggő tartalom-szerkesztő
+    // (Quiz/FillInBlank/Coding) azonnal, ugyanazon az oldalon elérhető marad, ahogy a
+    // terv 4.1 szekciója előírja.
+    cy.url().should("include", "/admin/missions/new-1");
   });
 
   it("should delete a mission", () => {

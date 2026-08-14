@@ -51,6 +51,7 @@ class MissionServiceTest {
 
     @Mock private MissionRepository missionRepository;
     @Mock private StarSystemRepository starSystemRepository;
+    @Mock private com.legymernok.backend.service.streak.StreakService streakService;
     @Mock private CadetMissionRepository cadetMissionRepository;
     @Mock private GiteaService giteaService;
     @Mock private CadetRepository cadetRepository;

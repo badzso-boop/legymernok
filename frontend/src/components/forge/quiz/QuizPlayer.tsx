@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { QuizDefinition } from "../../../types/quiz";
 import QuestionCardView from "./QuestionCardView";
 import RetroButton from "../../RetroButton";
+import { MissionPlayerActions } from "../../shared/MissionPlayerShell";
 import { Clock } from "lucide-react";
 
 interface QuizPlayerProps {
@@ -144,17 +145,8 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
         />
       </Box>
 
-      {/* FOOTER: CONTROLS */}
-      <Box
-        sx={{
-          mt: 6,
-          display: "flex",
-          justifyContent: "center",
-          gap: 10,
-          borderTop: "1px solid #222",
-          pt: 4,
-        }}
-      >
+      {/* FOOTER: CONTROLS — a MissionPlayerShell alsó akció-sávjába portálozva, ha van körülötte Shell */}
+      <MissionPlayerActions>
         <RetroButton
           color="blue"
           labelKey="quizEditor.prev"
@@ -190,7 +182,7 @@ const QuizPlayer: React.FC<QuizPlayerProps> = ({
             onClick={onClose}
           />
         )}
-      </Box>
+      </MissionPlayerActions>
 
       {isPreview && (
         <Typography

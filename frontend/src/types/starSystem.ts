@@ -35,6 +35,18 @@ export interface StarSystemWithItemsResponse {
   items: StarSystemItemResponse[];
 }
 
+export type StarSystemProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+
+export interface StarSystemWithProgressResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  iconUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  status: StarSystemProgressStatus;
+}
+
 export interface StarSystemSearchResult {
   id: string;
   name: string;

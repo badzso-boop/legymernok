@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { ThemeModeProvider } from "../../../theme/ThemeModeProvider";
 import QuizPlayerPage from "../QuizPlayerPage";
 import type { MissionResult } from "../../../types/quiz";
 import type { QuizDefinition } from "../../../types/quiz";
@@ -80,11 +81,13 @@ const mockResult: MissionResult = {
 
 const renderPage = () =>
   render(
-    <MemoryRouter initialEntries={["/quiz/mission-1"]}>
-      <Routes>
-        <Route path="/quiz/:missionId" element={<QuizPlayerPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <ThemeModeProvider>
+      <MemoryRouter initialEntries={["/quiz/mission-1"]}>
+        <Routes>
+          <Route path="/quiz/:missionId" element={<QuizPlayerPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ThemeModeProvider>,
   );
 
 describe("QuizPlayerPage", () => {

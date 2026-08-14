@@ -15,5 +15,7 @@ public interface MissionResultRepository extends JpaRepository<MissionResult, UU
 
     Optional<MissionResult> findByMissionIdAndCadetIdAndSubmissionHash(UUID missionId, UUID cadetId, String submissionHash);
 
+    List<MissionResult> findTop20ByCadet_IdInOrderByCompletedAtDesc(List<UUID> cadetIds);
+
     void deleteAllByMissionId(UUID missionId);
 }

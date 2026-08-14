@@ -32,6 +32,11 @@ import {
   MoveToInbox,
   MoveUp,
   Psychology as PsychologyIcon,
+  Code as CodeIcon,
+  Quiz as QuizIcon,
+  Description as DescriptionIcon,
+  Extension as ExtensionIcon,
+  ElectricBolt as ElectricBoltIcon,
 } from "@mui/icons-material";
 import apiClient, { missionGroupApi, starSystemApi, searchApi } from "../../../api/client";
 import { useChatContext } from "../../../context/ChatContext";
@@ -42,6 +47,7 @@ import type {
 } from "../../../types/starSystem";
 import type { MissionResponse } from "../../../types/mission";
 import type { MissionGroupResponse } from "../../../types/group";
+import { GlowCard } from "../../../components/shared/GlowCard";
 
 // ─────────────────────────────────────────────
 // CreateGroupDialog
@@ -197,6 +203,20 @@ const MissionTypeChip: React.FC<{ type: string }> = ({ type }) => (
     sx={{ fontFamily: "monospace", fontSize: "0.7rem" }}
   />
 );
+
+// ─────────────────────────────────────────────
+// Misszió-típus ikonok — vizuális gyorstájékozódás a fa-nézetben
+// ─────────────────────────────────────────────
+const TYPE_ICONS: Record<string, React.ReactElement> = {
+  CODING: <CodeIcon fontSize="small" sx={{ color: "text.secondary" }} />,
+  QUIZ: <QuizIcon fontSize="small" sx={{ color: "text.secondary" }} />,
+  CONTENT: <DescriptionIcon fontSize="small" sx={{ color: "text.secondary" }} />,
+  FILL_IN_BLANK: <ExtensionIcon fontSize="small" sx={{ color: "text.secondary" }} />,
+  CIRCUIT_SIMULATION: <ElectricBoltIcon fontSize="small" sx={{ color: "text.secondary" }} />,
+};
+
+const MissionTypeIcon: React.FC<{ type: string }> = ({ type }) =>
+  TYPE_ICONS[type] ?? <Rocket fontSize="small" sx={{ color: "text.secondary" }} />;
 
 // ─────────────────────────────────────────────
 // StarSystemEdit
@@ -504,7 +524,7 @@ const StarSystemEdit: React.FC = () => {
               const group = item.group!;
               const groupMissions = item.groupMissions ?? [];
               return (
-                <Paper key={group.id} sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "primary.dark" }}>
+                <GlowCard key={group.id} data-testid="group-card" sx={{ mb: 2, p: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                     <FolderOpen color="primary" />
                     <Typography variant="h6" sx={{ flex: 1, fontWeight: "bold" }}>
@@ -569,7 +589,7 @@ const StarSystemEdit: React.FC = () => {
                             mb: 0.5,
                           }}
                         >
-                          <Rocket fontSize="small" sx={{ color: "text.secondary" }} />
+                          <MissionTypeIcon type={mission.missionType} />
                           <Typography sx={{ flex: 1 }}>{mission.name}</Typography>
                           <MissionTypeChip type={mission.missionType} />
                           <IconButton
@@ -607,16 +627,16 @@ const StarSystemEdit: React.FC = () => {
                       (üres csoport)
                     </Typography>
                   )}
-                </Paper>
+                </GlowCard>
               );
             }
 
             // MISSION (standalone)
             const mission = item.mission!;
             return (
-              <Paper key={mission.id} sx={{ mb: 1, p: 1.5 }}>
+              <GlowCard key={mission.id} data-testid="mission-card" sx={{ mb: 1, p: 1.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Rocket fontSize="small" sx={{ color: "text.secondary" }} />
+                  <MissionTypeIcon type={mission.missionType} />
                   <Typography sx={{ flex: 1 }}>{mission.name}</Typography>
                   <MissionTypeChip type={mission.missionType} />
                   <IconButton
@@ -655,7 +675,7 @@ const StarSystemEdit: React.FC = () => {
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Box>
-              </Paper>
+              </GlowCard>
             );
           })}
         </Box>

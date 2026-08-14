@@ -17,6 +17,9 @@ public class CadetResponse {
     private String fullName;
     private Set<String> roles;
     private Long giteaUserId;
+    private String themePreference;
+    private int currentStreak;
+    private int longestStreak;
     private Instant createdAt;
     private Instant updatedAt;
 }

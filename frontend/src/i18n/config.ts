@@ -139,33 +139,11 @@ const resources = {
         save: "SAVE",
         title: "Mission Forge",
         newMission: "Initialize New Mission",
-        initializeMission: "Create Mission",
-        initializeMissionPrompt:
-          "Please initialize the mission using the panel to start editing.",
-        selectStarSystem: "Select Star System",
-        missionName: "Mission Name",
-        missionDescription: "Description (Markdown)",
-        difficulty: "Difficulty",
-        missionType: "Mission Type",
-        orderInSystem: "Order in System",
         templateLanguage: "Programming Language",
         saveButton: "Save to Gitea",
-        loadingFiles: "Loading files from Gitea...",
-        codeEditorTitle: "Mission Editor",
         verificationStatus: "Verification Status",
-        selectFileToEdit: "Select a file to edit",
-        missionInitializedSuccess:
-          "Mission {{missionName}} successfully created in Gitea!",
         filesSavedSuccess: "Files successfully saved to Gitea!",
-        errorFetchingStarSystems: "Error fetching star systems",
-        errorInitializingMission: "Error creating mission",
-        errorFetchingFiles: "Error loading files",
         errorSavingMission: "Error during save",
-        backToInitialization: "Back to initialization",
-        starSystemRequired: "Star system is required",
-        missionNameRequired: "Mission name is required",
-        missionNameMinLength: "Minimum {{count}} characters",
-        orderMin: "Order must be at least {{count}}",
         statusWord: "Status",
         status: {
           draft: "Draft",
@@ -174,8 +152,6 @@ const resources = {
           failed: "Failed",
           success: "Successful",
         },
-        sectorRegistry: "Sector Registry",
-        missionSpec: "Mission Specifications",
         verificationCompleted: "VERIFICATION PROCESS COMPLETED",
         engineeringStation: "ENGINEERING_STATION",
         online: "ONLINE",
@@ -198,10 +174,11 @@ const resources = {
         confirmDeleteFile: "Delete {{fileName}}? This cannot be undone.",
         renameFile: "Rename",
         deleteFile: "Delete",
-        codingPlayerTitle: "Coding Station",
-        codingPlayerBackButton: "Back to system",
         codingPlayerSavedNote: "Changes are saved to your own personal repository.",
         codingPlayerNoFiles: "This mission has no files yet.",
+        codingPlayerOpenFiles: "Open files",
+        codingPlayerQuickInsertLabel: "Quick insert",
+        codingPlayerQuickInsertTab: "Tab",
         fileEditorTemplateNote:
           "This file structure is copied into every cadet's own working repository when they start this mission.",
         fileEditorSaved: "Saved.",
@@ -219,6 +196,11 @@ const resources = {
         coding: "Coding",
         quiz: "Quiz",
         circuit: "Circuit Simulation",
+        CODING: "CODING",
+        QUIZ: "QUIZ",
+        CONTENT: "CONTENT",
+        FILL_IN_BLANK: "FILL IN BLANK",
+        CIRCUIT_SIMULATION: "CIRCUIT SIMULATION",
       },
       // CONTROL PANEL
       controlPanel: {
@@ -242,6 +224,20 @@ const resources = {
         menu: "Menu",
         account: "Account",
         feedback: "Feedback",
+        profile: "Profile",
+        settings: "Settings",
+      },
+      settings: {
+        title: "Settings",
+        themeSectionTitle: "Theme",
+        themeSectionSubtitle: "Choose how LégyMérnök.hu looks for you.",
+        themeSpaceLabel: "Space",
+        themeSpaceDescription: "The full immersive sci-fi experience — animated starfield, nebula glow.",
+        themeDarkLabel: "Dark",
+        themeDarkDescription: "Same brand colors, static background — easier on the eyes for long reading.",
+        themeLightLabel: "Light",
+        themeLightDescription: "Light background, high-contrast accents — for daytime/outdoor use.",
+        saveError: "Could not save your theme preference. It's still applied locally.",
       },
       // STAR MAP
       starMap: {
@@ -254,6 +250,10 @@ const resources = {
         warp: "WARP",
         data: "DATA",
         lang: "LANGUAGE",
+        statusNotStarted: "Not started",
+        statusInProgress: "In progress",
+        statusCompleted: "Completed",
+        loadError: "Failed to load the star map.",
       },
       // SEARCH
       search: {
@@ -274,6 +274,49 @@ const resources = {
       // Fill-in-blank
       fillInBlank: {
         addBlank: "ADD BLANK",
+        saveFirst: "Save the mission first, then you can edit the fill-in-blank content.",
+      },
+      // Markdown Studio (mission content editor toolbar)
+      markdownStudio: {
+        bold: "Bold",
+        boldPlaceholder: "bold text",
+        italic: "Italic",
+        italicPlaceholder: "italic text",
+        bulletList: "Bullet list",
+        numberedList: "Numbered list",
+        quote: "Quote",
+        codeBlock: "Code block",
+        codePlaceholder: "code",
+        link: "Link",
+        linkPlaceholder: "link text",
+        image: "Image",
+        imagePlaceholder: "alt text",
+        editTab: "Edit",
+        previewTab: "Preview",
+        emptyPreview: "Nothing to preview yet.",
+      },
+      // Form validation
+      validation: {
+        nameMinLength: "Minimum 3 characters",
+        starSystemRequired: "Star system is required",
+      },
+      // Profile & social (follow system, user search)
+      profile: {
+        title: "Profile",
+        myProfileTitle: "My Profile",
+        follow: "Follow",
+        unfollow: "Unfollow",
+        searchPlaceholder: "Search cadets by username…",
+        noSearchResults: "No cadets found.",
+        loadError: "Failed to load this profile.",
+        memberSince: "Member since {{date}}",
+        ownProfileNote: "This is your own profile.",
+        stats: {
+          completedMissions: "Missions completed",
+          completedGroups: "Groups completed",
+          followers: "Followers",
+          following: "Following",
+        },
       },
       // Play (user-facing gameplay)
       play: {
@@ -289,6 +332,11 @@ const resources = {
         replay: "REPLAY",
         review: "REVIEW",
         back: "PREVIOUS",
+        loadError: "Content could not be loaded.",
+        groupLoadError: "This group is not available.",
+        noNextMission: "No next mission.",
+        notYetAvailable: "Coming soon",
+        step: "{{current}} / {{total}}",
       },
       quiz: "Quiz",
       quizEditor: {
@@ -304,6 +352,7 @@ const resources = {
         addOption: "ADD_OPTION",
         preview: "PREVIEW",
         saveSuccess: "QUIZ SUCCESSFULLY SAVED",
+        sessionResetComplete: "SESSION_RESET_COMPLETE",
         deleteQuestion: "DELETE QUESTION",
         noQuestions: "NO QUESTIONS YET. ADD ONE!",
         previewMode: "PREVIEW_MODE",
@@ -332,7 +381,6 @@ const resources = {
           subtitle:
             "A gamified learning platform for engineering students. Complete real coding missions in your browser, backed by real Git repositories, take on timed quizzes, and level up through star systems — all wrapped in a retro space-cadet story.",
           ctaContinue: "Go to the Star Map",
-          logoAlt: "LégyMérnök.hu cadet helmet logo",
         },
         about: {
           title: "MISSION BRIEFING // WHAT IS THIS?",
@@ -409,6 +457,34 @@ const resources = {
           title: "LAUNCH CONSOLE",
           subtitle:
             "The shortcuts on this console jump straight to the Star Map, your own missions in Mission Forge, and the feedback board.",
+        },
+      },
+      // AUTHENTICATED DASHBOARD ("cockpit")
+      homeDashboard: {
+        streak: {
+          label: "Streak",
+          activeSubtitle: "Keep it going — complete something today!",
+          inactiveSubtitle: "Complete a mission today to start a streak.",
+          longest: "Longest streak: {{count}} days",
+        },
+        continue: {
+          label: "Pick up where you left off",
+          cta: "Continue",
+          emptyState: "You haven't started anything yet.",
+          emptyCta: "Explore the Star Map",
+        },
+        starMap: {
+          label: "Star Map",
+          subtitle: "See all discovered star systems on the galaxy map.",
+          cta: "Open Star Map",
+        },
+        friendActivity: {
+          label: "Friend activity",
+          emptyState: "Follow cadets to see their progress here.",
+          emptyCta: "Find cadets",
+          completedStep: "completed a step in {{name}}",
+          completedFillInBlank: "completed the fill-in-blank mission {{name}}",
+          completedQuiz: "completed the quiz {{name}}",
         },
       },
       // FEEDBACK / ISSUE BOARD
@@ -569,33 +645,11 @@ const resources = {
         save: "MENTÉS",
         title: "Mission Forge",
         newMission: "Új Misszió Inicializálása",
-        initializeMission: "Misszió Létrehozása",
-        initializeMissionPrompt:
-          "Kérlek inicializáld a missziót a panel segítségével a szerkesztés megkezdéséhez.",
-        selectStarSystem: "Csillagrendszer kiválasztása",
-        missionName: "Misszió neve",
-        missionDescription: "Leírás (Markdown)",
-        difficulty: "Nehézség",
-        missionType: "Típus",
-        orderInSystem: "Sorrend a rendszerben",
         templateLanguage: "Programozási nyelv",
         saveButton: "Mentés Giteába",
-        loadingFiles: "Fájlok betöltése a Giteából...",
-        codeEditorTitle: "Misszió Szerkesztő",
         verificationStatus: "Ellenőrzési állapot",
-        selectFileToEdit: "Válassz ki egy fájlt a szerkesztéshez",
-        missionInitializedSuccess:
-          "A(z) {{missionName}} misszió sikeresen létrehozva a Giteában!",
         filesSavedSuccess: "A fájlok sikeresen elmentve a Giteába!",
-        errorFetchingStarSystems: "Hiba a csillagrendszerek lekérésekor",
-        errorInitializingMission: "Hiba a misszió létrehozásakor",
-        errorFetchingFiles: "Hiba a fájlok betöltésekor",
         errorSavingMission: "Hiba a mentés során",
-        backToInitialization: "Vissza az adatokhoz",
-        starSystemRequired: "Csillagrendszer kiválasztása kötelező",
-        missionNameRequired: "Misszió név kötelező",
-        missionNameMinLength: "Legalább {{count}} karakter",
-        orderMin: "A sorszám legalább {{count}} kell legyen",
         statusWord: "Státusz",
         status: {
           draft: "Piszkozat",
@@ -604,8 +658,6 @@ const resources = {
           failed: "Sikertelen",
           success: "Sikeres",
         },
-        sectorRegistry: "Szektor Nyilvántartás",
-        missionSpec: "Küldetés Specifikáció",
         verificationCompleted: "ELLENŐRZÉSI FOLYAMAT BEFEJEZŐDÖTT",
         engineeringStation: "MÉRNÖKI_ÁLLOMÁS",
         online: "ONLINE",
@@ -628,10 +680,11 @@ const resources = {
         confirmDeleteFile: "Biztosan törlöd: {{fileName}}? Ez nem vonható vissza.",
         renameFile: "Átnevezés",
         deleteFile: "Törlés",
-        codingPlayerTitle: "Kódoló Állomás",
-        codingPlayerBackButton: "Vissza a rendszerhez",
         codingPlayerSavedNote: "A módosítások a saját, személyes repódba mentődnek.",
         codingPlayerNoFiles: "Ehhez a küldetéshez még nincsenek fájlok.",
+        codingPlayerOpenFiles: "Fájlok megnyitása",
+        codingPlayerQuickInsertLabel: "Gyors beszúrás",
+        codingPlayerQuickInsertTab: "Tab",
         fileEditorTemplateNote:
           "Ez a fájlstruktúra kerül átmásolásra minden kadét saját munkarepójába, amikor elindítja ezt a missziót.",
         fileEditorSaved: "Elmentve.",
@@ -649,6 +702,11 @@ const resources = {
         coding: "Programozás",
         quiz: "Kvíz",
         circuit: "Áramkör szimuláció",
+        CODING: "KÓDOLÁS",
+        QUIZ: "KVÍZ",
+        CONTENT: "TARTALOM",
+        FILL_IN_BLANK: "KITÖLTŐS",
+        CIRCUIT_SIMULATION: "ÁRAMKÖR SZIMULÁCIÓ",
       },
       // CONTROL PANEL
       controlPanel: {
@@ -672,6 +730,20 @@ const resources = {
         menu: "Menü",
         feedback: "Visszajelzés",
         account: "Fiók",
+        profile: "Profil",
+        settings: "Beállítások",
+      },
+      settings: {
+        title: "Beállítások",
+        themeSectionTitle: "Téma",
+        themeSectionSubtitle: "Válaszd ki, hogyan nézzen ki a LégyMérnök.hu neked.",
+        themeSpaceLabel: "Space",
+        themeSpaceDescription: "A teljes immerzív sci-fi élmény — animált csillagmező, nebula-fény.",
+        themeDarkLabel: "Dark",
+        themeDarkDescription: "Ugyanaz a márka-paletta, statikus háttér — kíméletesebb hosszú olvasáshoz.",
+        themeLightLabel: "Light",
+        themeLightDescription: "Világos háttér, magas kontrasztú accent-színek — nappali/kültéri használatra.",
+        saveError: "Nem sikerült elmenteni a téma-preferenciát. Helyileg továbbra is alkalmazva marad.",
       },
       // STAR MAP
       starMap: {
@@ -684,6 +756,10 @@ const resources = {
         warp: "UGRÁS",
         data: "ADAT",
         lang: "NYELV",
+        statusNotStarted: "Még nem kezdett",
+        statusInProgress: "Folyamatban",
+        statusCompleted: "Teljesítve",
+        loadError: "Nem sikerült betölteni a csillagtérképet.",
       },
       // SEARCH
       search: {
@@ -705,6 +781,49 @@ const resources = {
       // Fill-in-blank
       fillInBlank: {
         addBlank: "BLANK HOZZÁADÁSA",
+        saveFirst: "Mentsd el először a missziót, majd visszatérve szerkesztheted a kitöltős tartalmat.",
+      },
+      // Markdown Studio (tartalom-szerkesztő toolbar)
+      markdownStudio: {
+        bold: "Félkövér",
+        boldPlaceholder: "félkövér szöveg",
+        italic: "Dőlt",
+        italicPlaceholder: "dőlt szöveg",
+        bulletList: "Felsorolás",
+        numberedList: "Számozott lista",
+        quote: "Idézet",
+        codeBlock: "Kódblokk",
+        codePlaceholder: "kód",
+        link: "Link",
+        linkPlaceholder: "link szövege",
+        image: "Kép",
+        imagePlaceholder: "alt szöveg",
+        editTab: "Szerkesztés",
+        previewTab: "Előnézet",
+        emptyPreview: "Még nincs mit előnézni.",
+      },
+      // Form validáció
+      validation: {
+        nameMinLength: "Legalább 3 karakter",
+        starSystemRequired: "Csillagrendszer kiválasztása kötelező",
+      },
+      // Profil és social (követés, felhasználó-kereső)
+      profile: {
+        title: "Profil",
+        myProfileTitle: "Saját profil",
+        follow: "Követés",
+        unfollow: "Követés leállítása",
+        searchPlaceholder: "Kadétok keresése felhasználónév alapján…",
+        noSearchResults: "Nincs találat.",
+        loadError: "Nem sikerült betölteni ezt a profilt.",
+        memberSince: "Tag {{date}} óta",
+        ownProfileNote: "Ez a te profilod.",
+        stats: {
+          completedMissions: "Teljesített misszió",
+          completedGroups: "Teljesített csoport",
+          followers: "Követő",
+          following: "Követett",
+        },
       },
       // Play (user-facing gameplay)
       play: {
@@ -720,6 +839,11 @@ const resources = {
         replay: "ÚJRA",
         review: "ÁTTEKINTÉS",
         back: "ELŐZŐ",
+        loadError: "A tartalom nem tölthető be.",
+        groupLoadError: "A csoport nem érhető el.",
+        noNextMission: "Nincs következő misszió.",
+        notYetAvailable: "Hamarosan elérhető",
+        step: "{{current}} / {{total}}",
       },
       quiz: "Kvíz", // Visszaállítva szövegre
       quizEditor: {
@@ -735,6 +859,7 @@ const resources = {
         addOption: "VÁLASZ HOZZÁADÁSA",
         preview: "ELŐNÉZET",
         saveSuccess: "KVÍZ SIKERESEN MENTVE",
+        sessionResetComplete: "MUNKAMENETEK_VISSZAÁLLÍTVA",
         deleteQuestion: "KÉRDÉS TÖRLÉSE",
         noQuestions: "NINCSENEK KÉRDÉSEK. ADJ HOZZÁ EGYET!",
         previewMode: "ELŐNÉZET_MÓD",
@@ -763,7 +888,6 @@ const resources = {
           subtitle:
             "Gamifikált oktatási platform mérnökhallgatóknak. Oldj meg valódi kódolási küldetéseket közvetlenül a böngésződben, valódi Git-tárhelyekre építve, tölts ki időzített kvízeket, és haladj végig a csillagrendszereken — mindezt egy retro-futurisztikus űrkadét-történetbe csomagolva.",
           ctaContinue: "Ugrás a csillagtérképre",
-          logoAlt: "LégyMérnök.hu kadét sisak logó",
         },
         about: {
           title: "KÜLDETÉS BRIEFING // MIRŐL SZÓL AZ OLDAL?",
@@ -840,6 +964,34 @@ const resources = {
           title: "INDÍTÓPULT",
           subtitle:
             "A konzol gombjai közvetlenül a csillagtérképre, a saját Mission Forge küldetéseidre és a visszajelzés-felületre visznek.",
+        },
+      },
+      // BEJELENTKEZETT PILÓTAFÜLKE
+      homeDashboard: {
+        streak: {
+          label: "Sorozat",
+          activeSubtitle: "Így tovább — teljesíts valamit ma is!",
+          inactiveSubtitle: "Teljesíts ma egy missziót, hogy elindulhasson a sorozatod.",
+          longest: "Leghosszabb sorozat: {{count}} nap",
+        },
+        continue: {
+          label: "Folytasd onnan, ahol abbahagytad",
+          cta: "Folytatás",
+          emptyState: "Még nem kezdtél el semmit.",
+          emptyCta: "Fedezd fel a csillagtérképet",
+        },
+        starMap: {
+          label: "Csillagtérkép",
+          subtitle: "Nézd meg az összes felfedezett csillagrendszert a galaxis térképén.",
+          cta: "Csillagtérkép megnyitása",
+        },
+        friendActivity: {
+          label: "Barátok aktivitása",
+          emptyState: "Kövess kadétokat, hogy itt lásd a haladásukat.",
+          emptyCta: "Kadétok keresése",
+          completedStep: "teljesített egy lépést itt: {{name}}",
+          completedFillInBlank: "teljesítette a(z) {{name}} kitöltős feladatot",
+          completedQuiz: "teljesítette a(z) {{name}} kvízt",
         },
       },
       // VISSZAJELZÉS / ISSUE TÁBLA

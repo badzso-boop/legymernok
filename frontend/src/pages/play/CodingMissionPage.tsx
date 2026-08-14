@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { missionApi } from "../../api/client";
 import CodingMissionPlayer from "../../components/play/CodingMissionPlayer";
-import "../../styles/RetroUI.css";
+import { MissionPlayerShell } from "../../components/shared/MissionPlayerShell";
 
 const CodingMissionPage: React.FC = () => {
   const { t } = useTranslation();
@@ -29,30 +29,21 @@ const CodingMissionPage: React.FC = () => {
   });
 
   return (
-    <Box
-      sx={{
-        width: "100vw",
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        p: 2,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: isLoading || isError ? "center" : undefined,
-      }}
-    >
-      {isLoading && <CircularProgress color="inherit" />}
+    <MissionPlayerShell onBack={handleBack} fullBleed>
+      {isLoading && (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress color="inherit" />
+        </Box>
+      )}
       {isError && (
-        <Typography sx={{ color: "#fff" }}>
+        <Typography sx={{ color: "var(--color-error)" }}>
           {t("forge.codingMissionStartError")}
         </Typography>
       )}
       {!isLoading && !isError && missionId && (
-        <CodingMissionPlayer
-          missionId={missionId}
-          onBack={handleBack}
-        />
+        <CodingMissionPlayer missionId={missionId} />
       )}
-    </Box>
+    </MissionPlayerShell>
   );
 };
 

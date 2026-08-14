@@ -1,35 +1,27 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import React, { useState } from "react";
+import { Box, Typography, CircularProgress, Alert } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import StarMapCanvas from "./StarMapCanvas";
+import { useQuery } from "@tanstack/react-query";
+import StarMapGraph from "../../components/domain/starmap/StarMapGraph";
 import SearchPanel from "../../components/search/SearchPanel";
-import apiClient from "../../api/client";
-import type { StarSystemResponse } from "../../types/starSystem";
+import { starSystemApi } from "../../api/client";
 import "../../styles/RetroUI.css";
 
 const StarMapPage: React.FC = () => {
   const { t, i18n } = useTranslation(); // <--- Hook
   const navigate = useNavigate();
-  const [systems, setSystems] = useState<StarSystemResponse[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeBtn, setActiveBtn] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchSystems = async () => {
-      try {
-        const response =
-          await apiClient.get<StarSystemResponse[]>("/star-systems");
-        setSystems(response.data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSystems();
-  }, []);
+  const {
+    data: systems = [],
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["starSystems", "with-progress"],
+    queryFn: starSystemApi.getWithProgress,
+  });
 
   const handleBtnClick = (id: string, action: () => void) => {
     setActiveBtn(id);
@@ -172,8 +164,12 @@ const StarMapPage: React.FC = () => {
                 >
                   <CircularProgress color="inherit" />
                 </Box>
+              ) : isError ? (
+                <Box sx={{ p: 2 }}>
+                  <Alert severity="error">{t("starMap.loadError")}</Alert>
+                </Box>
               ) : (
-                <StarMapCanvas systems={systems} />
+                <StarMapGraph systems={systems} interactive />
               )}
             </div>
           </Box>

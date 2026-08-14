@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeModeProvider } from "../../../theme/ThemeModeProvider";
 import FillInBlankEditor from "../FillInBlankEditor";
 
 // --- Mockok ---
@@ -31,7 +32,9 @@ const createWrapper = () => {
     },
   });
   return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    <ThemeModeProvider>
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    </ThemeModeProvider>
   );
 };
 
@@ -82,7 +85,7 @@ describe("FillInBlankEditor", () => {
       target: { value: "[[a]] [[b]] [[c]] [[d]] [[e]]" },
     });
 
-    const addBtn = getRetroBtn("fillInBlank.addBlank");
+    const addBtn = screen.getByText("fillInBlank.addBlank").closest("button")!;
     expect(addBtn).toBeDisabled();
   });
 

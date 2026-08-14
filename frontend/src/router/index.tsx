@@ -27,14 +27,13 @@ import StarSystemList from "../pages/admin/star-system/StarSystemList";
 import { useAuth } from "../context/AuthContext";
 import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
-import MissionEdit from "../pages/admin/missions/MissionEdit";
 import MissionList from "../pages/admin/missions/MissionList";
 import RoleList from "../pages/admin/roles/RoleList";
 import PermissionList from "../pages/admin/permissions/PermissionList";
 import FeatureFlagList from "../pages/admin/feature-flags/FeatureFlagList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
-import MissionForgePage from "../pages/mission-forge/MissionForgePage";
+import MissionEditorPage from "../pages/mission-editor/MissionEditorPage";
 import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
@@ -43,6 +42,9 @@ import GroupPlayerPage from "../pages/play/GroupPlayerPage";
 import ContentMissionPage from "../pages/play/ContentMissionPage";
 import CodingMissionPage from "../pages/play/CodingMissionPage";
 import FeedbackPage from "../pages/feedback/FeedbackPage";
+import DashboardPage from "../pages/dashboard/DashboardPage";
+import ProfilePage from "../pages/profile/ProfilePage";
+import SettingsPage from "../pages/settings/SettingsPage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -111,6 +113,26 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   return children;
 };
 
+// A "/" route korábban MINDIG a LandingPage-et renderelte, bejelentkezett
+// állapottól függetlenül — sikeres login után is ide navigált vissza a user,
+// ami a nem-authentikált marketing oldalra dobta. Innentől a "/" a
+// bejelentkezett kadétoknak a DashboardPage-et (pilótafülke) adja.
+const HomeRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <CircularProgress
+        size={80}
+        thickness={2}
+        sx={{ color: "primary.main" }}
+      />
+    );
+  }
+
+  return isAuthenticated ? <DashboardPage /> : <LandingPage />;
+};
+
 export const router = createHashRouter([
   {
     element: <RootLayout />,
@@ -122,7 +144,7 @@ export const router = createHashRouter([
     children: [
       {
         path: "/",
-        element: <LandingPage />,
+        element: <HomeRoute />,
       },
       {
         path: "/login",
@@ -142,7 +164,7 @@ export const router = createHashRouter([
     path: "forge",
     element: (
       <ProtectedRoute>
-        <MissionForgePage />
+        <MissionEditorPage mode="forge" />
       </ProtectedRoute>
     ),
   },
@@ -150,7 +172,7 @@ export const router = createHashRouter([
     path: "forge/:missionId",
     element: (
       <ProtectedRoute>
-        <MissionForgePage />
+        <MissionEditorPage mode="forge" />
       </ProtectedRoute>
     ),
   },
@@ -223,6 +245,33 @@ export const router = createHashRouter([
     ),
   },
 
+  {
+    path: "/profile",
+    element: (
+      <ProtectedRoute>
+        <ProfilePage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/profile/:id",
+    element: (
+      <ProtectedRoute>
+        <ProfilePage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/settings",
+    element: (
+      <ProtectedRoute>
+        <SettingsPage />
+      </ProtectedRoute>
+    ),
+  },
+
   // Védett Admin útvonalak
   {
     path: "/admin",
@@ -277,11 +326,11 @@ export const router = createHashRouter([
       },
       {
         path: "missions/new",
-        element: <MissionEdit />,
+        element: <MissionEditorPage mode="admin" />,
       },
       {
         path: "missions/:id",
-        element: <MissionEdit />,
+        element: <MissionEditorPage mode="admin" />,
       },
       {
         path: "roles",

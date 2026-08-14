@@ -1,47 +1,23 @@
 import React from "react";
-import { Box } from "@mui/material";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import ContentMissionView from "../../components/play/ContentMissionView";
-import "../../styles/RetroUI.css";
+import { MissionPlayerShell } from "../../components/shared/MissionPlayerShell";
 
 const ContentMissionPage: React.FC = () => {
   const { missionId } = useParams<{ missionId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const starSystemId = (location.state as { starSystemId?: string } | null)?.starSystemId;
 
-  return (
-    <Box
-      sx={{
-        width: "100vw",
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        p: 2,
-        display: "flex",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        className="control-panel-casing"
-        style={{
-          width: "100%",
-          maxWidth: 900,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div className="screw top-left" />
-        <div className="screw top-right" />
-        <div className="screw bottom-left" />
-        <div className="screw bottom-right" />
+  const handleBack = () => {
+    if (starSystemId) navigate(`/star-systems/${starSystemId}`);
+    else navigate(-1);
+  };
 
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <ContentMissionView
-            missionId={missionId!}
-            starSystemId={starSystemId}
-          />
-        </Box>
-      </div>
-    </Box>
+  return (
+    <MissionPlayerShell onBack={handleBack}>
+      <ContentMissionView missionId={missionId!} starSystemId={starSystemId} />
+    </MissionPlayerShell>
   );
 };
 

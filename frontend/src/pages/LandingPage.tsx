@@ -9,6 +9,8 @@ import FeaturesSection from "./landing/FeaturesSection";
 import FaqSection from "./landing/FaqSection";
 import FinalCtaSection from "./landing/FinalCtaSection";
 import { mainNavigationControls } from "../router/index";
+import { StarfieldBackground } from "../components/shared/StarfieldBackground";
+import { NebulaLayer } from "../components/shared/NebulaLayer";
 import "../styles/RetroUI.css";
 
 const LaunchConsole: React.FC = () => {
@@ -248,28 +250,32 @@ const LandingPage: React.FC = () => {
   const { t } = useTranslation();
 
   return (
-    <Box sx={{ width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
-      <HeroSection />
-      <AboutSection />
-      <FeaturesSection />
+    <Box sx={{ position: "relative", width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+      <StarfieldBackground intensity="hero" />
+      <NebulaLayer intensity="hero" />
+      <Box sx={{ position: "relative", zIndex: 1 }}>
+        <HeroSection />
+        <AboutSection />
+        <FeaturesSection />
 
-      <Box component="section" sx={{ py: { xs: 3, md: 5 } }}>
-        <Box sx={{ textAlign: "center", mb: 3, px: 2 }}>
-          <Typography
-            className="retro-font-header"
-            sx={{ color: "#ccc", fontSize: { xs: "1.2rem", md: "1.5rem" }, mb: 1 }}
-          >
-            {t("landingPage.launchConsole.title")}
-          </Typography>
-          <Typography sx={{ color: "#94a3b8", maxWidth: 640, mx: "auto" }}>
-            {t("landingPage.launchConsole.subtitle")}
-          </Typography>
+        <Box component="section" sx={{ py: { xs: 3, md: 5 } }}>
+          <Box sx={{ textAlign: "center", mb: 3, px: 2 }}>
+            <Typography
+              className="retro-font-header"
+              sx={{ color: "#ccc", fontSize: { xs: "1.2rem", md: "1.5rem" }, mb: 1 }}
+            >
+              {t("landingPage.launchConsole.title")}
+            </Typography>
+            <Typography sx={{ color: "#94a3b8", maxWidth: 640, mx: "auto" }}>
+              {t("landingPage.launchConsole.subtitle")}
+            </Typography>
+          </Box>
+          <LaunchConsole />
         </Box>
-        <LaunchConsole />
-      </Box>
 
-      <FaqSection />
-      <FinalCtaSection />
+        <FaqSection />
+        <FinalCtaSection />
+      </Box>
     </Box>
   );
 };

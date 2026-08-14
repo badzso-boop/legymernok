@@ -8,6 +8,7 @@ import type {
   StarSystemResponse,
   StarSystemWithItemsResponse,
   StarSystemSearchResult,
+  StarSystemWithProgressResponse,
 } from "../types/starSystem";
 import type { MissionResponse, ContentPageResponse } from "../types/mission";
 import type { QuizDefinition, MissionResult } from "../types/quiz";
@@ -34,6 +35,15 @@ import type {
   FeedbackIssueResponse,
   CreateFeedbackRequest,
 } from "../types/feedback";
+import type {
+  CadetSummaryResponse,
+  CadetProfileResponse,
+  MeResponse,
+} from "../types/social";
+import type {
+  ContinueResponse,
+  ActivityFeedItemResponse,
+} from "../types/dashboard";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -176,6 +186,13 @@ export const forgeApi = {
 };
 
 export const starSystemApi = {
+  getWithProgress: async () => {
+    const response = await apiClient.get<StarSystemWithProgressResponse[]>(
+      "/star-systems/with-progress",
+    );
+    return response.data;
+  },
+
   create: async (data: {
     name: string;
     description: string;
@@ -539,6 +556,75 @@ export const featureFlagApi = {
     const response = await apiClient.put<FeatureFlagResponse>(
       `/feature-flags/${key}`,
       data,
+    );
+    return response.data;
+  },
+};
+
+export const authApi = {
+  /** A bejelentkezett kadét saját adatai (id, streak, téma-preferencia stb.). */
+  getMe: async (): Promise<MeResponse> => {
+    const response = await apiClient.get<MeResponse>("/auth/me");
+    return response.data;
+  },
+  /** Elmenti a bejelentkezett kadét téma-preferenciáját (SPACE/DARK/LIGHT). */
+  updateTheme: async (theme: "SPACE" | "DARK" | "LIGHT"): Promise<void> => {
+    await apiClient.put("/auth/me/theme", { theme });
+  },
+};
+
+export const socialApi = {
+  getProfile: async (cadetId: string): Promise<CadetProfileResponse> => {
+    const response = await apiClient.get<CadetProfileResponse>(
+      `/cadets/${cadetId}/profile`,
+    );
+    return response.data;
+  },
+
+  follow: async (cadetId: string): Promise<void> => {
+    await apiClient.post(`/cadets/${cadetId}/follow`);
+  },
+
+  unfollow: async (cadetId: string): Promise<void> => {
+    await apiClient.delete(`/cadets/${cadetId}/follow`);
+  },
+
+  getFollowing: async (cadetId: string): Promise<CadetSummaryResponse[]> => {
+    const response = await apiClient.get<CadetSummaryResponse[]>(
+      `/cadets/${cadetId}/following`,
+    );
+    return response.data;
+  },
+
+  getFollowers: async (cadetId: string): Promise<CadetSummaryResponse[]> => {
+    const response = await apiClient.get<CadetSummaryResponse[]>(
+      `/cadets/${cadetId}/followers`,
+    );
+    return response.data;
+  },
+
+  search: async (username: string): Promise<CadetSummaryResponse[]> => {
+    const response = await apiClient.get<CadetSummaryResponse[]>(
+      "/cadets/search",
+      { params: { username } },
+    );
+    return response.data;
+  },
+
+  /** A követett kadétok legutóbbi teljesítései, időrendben csökkenő sorrendben. */
+  getActivityFeed: async (): Promise<ActivityFeedItemResponse[]> => {
+    const response = await apiClient.get<ActivityFeedItemResponse[]>(
+      "/social/activity-feed",
+    );
+    return response.data;
+  },
+};
+
+export const dashboardApi = {
+  /** A kadét legutóbb érintett missziója/csoportja — a "Folytasd onnan" kártyához. 404, ha nincs még aktivitás. */
+  getContinue: async (): Promise<ContinueResponse> => {
+    const response = await apiClient.get<ContinueResponse>(
+      "/dashboard/continue",
     );
     return response.data;
   },

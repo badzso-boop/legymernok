@@ -11,6 +11,7 @@ import com.legymernok.backend.model.mission.*;
 import com.legymernok.backend.repository.mission.MissionRepository;
 import com.legymernok.backend.repository.mission.MissionResultRepository;
 import com.legymernok.backend.repository.quiz.QuizSessionRepository;
+import com.legymernok.backend.service.streak.StreakService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class QuizService {
     private final MissionRepository missionRepository;
     private final MissionResultRepository missionResultRepository;
     private final ObjectMapper objectMapper; // JSON deszerializáláshoz
+    private final StreakService streakService;
 
     @Transactional
     public QuizDefinition startQuiz(UUID missionId, Cadet cadet) throws Exception {
@@ -161,6 +163,7 @@ public class QuizService {
 
         missionResultRepository.save(result);
         quizSessionRepository.delete(session);
+        streakService.recordActivity(cadet.getId());
 
         return result;
     }

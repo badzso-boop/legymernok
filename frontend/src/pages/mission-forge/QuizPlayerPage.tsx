@@ -2,12 +2,15 @@ import React, { useState } from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { quizApi } from "../../api/client";
 import QuizPlayer from "../../components/forge/quiz/QuizPlayer";
 import { RetroPanel } from "../../components/forge/RetroPanel";
 import RetroButton from "../../components/RetroButton";
+import { MissionPlayerShell } from "../../components/shared/MissionPlayerShell";
 
 const QuizPlayerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -97,62 +100,57 @@ const QuizPlayerPage: React.FC = () => {
   // Eredmény kijelző nézet
   if (result) {
     return (
-      <Box
-        data-cy="quiz-result"
-        sx={{
-          width: "100vw",
-          height: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          bgcolor: "#121212",
-        }}
-      >
-        <RetroPanel
-          title="MISSION_REPORT"
-          sx={{ width: "500px", textAlign: "center" }}
+      <MissionPlayerShell onBack={handleBack} title={t("quiz")}>
+        <Box
+          data-cy="quiz-result"
+          sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 6 }}
         >
-          <Typography
-            variant="h4"
-            sx={{ color: "#32cd32", mb: 2, fontFamily: "monospace" }}
-          >
-            MISSION_ACCOMPLISHED
-          </Typography>
-          <Typography sx={{ color: "#aaa", mb: 4, fontFamily: "monospace" }}>
-            FINAL_SCORE: {result.score} / {result.maxScore}
-          </Typography>
-          <Box
-            sx={{
-              p: 3,
-              border: "2px solid #333",
-              bgcolor: "rgba(0,0,0,0.5)",
-              mb: 4,
-            }}
+          <RetroPanel
+            title="MISSION_REPORT"
+            sx={{ width: "500px", maxWidth: "100%", textAlign: "center" }}
           >
             <Typography
-              variant="h2"
-              sx={{ color: "#ffb000", fontFamily: "monospace" }}
+              variant="h4"
+              sx={{ color: "#32cd32", mb: 2, fontFamily: "monospace" }}
             >
-              {Math.round(result.percentage)}%
+              MISSION_ACCOMPLISHED
             </Typography>
-          </Box>
-          <RetroButton
-            color="blue"
-            labelKey="starMap.back"
-            onClick={handleBack}
-          />
-        </RetroPanel>
-      </Box>
+            <Typography sx={{ color: "#aaa", mb: 4, fontFamily: "monospace" }}>
+              FINAL_SCORE: {result.score} / {result.maxScore}
+            </Typography>
+            <Box
+              sx={{
+                p: 3,
+                border: "2px solid #333",
+                bgcolor: "rgba(0,0,0,0.5)",
+                mb: 4,
+              }}
+            >
+              <Typography
+                variant="h2"
+                sx={{ color: "#ffb000", fontFamily: "monospace" }}
+              >
+                {Math.round(result.percentage)}%
+              </Typography>
+            </Box>
+            <RetroButton
+              color="blue"
+              labelKey="starMap.back"
+              onClick={handleBack}
+            />
+          </RetroPanel>
+        </Box>
+      </MissionPlayerShell>
     );
   }
 
   return (
-    <Box sx={{ width: "100vw", height: "100vh", bgcolor: "#000" }}>
+    <MissionPlayerShell onBack={handleBack} title={t("quiz")} fullBleed>
       <QuizPlayer
         data={quiz}
         onSubmit={(answers) => submitMutation.mutate(answers)}
       />
-    </Box>
+    </MissionPlayerShell>
   );
 };
 

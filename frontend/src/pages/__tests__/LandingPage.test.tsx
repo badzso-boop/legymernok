@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { ThemeModeProvider } from "../../theme/ThemeModeProvider";
 import LandingPage from "../LandingPage";
 
 // i18n Mockolása: a fordítási kulcsokat adjuk vissza, hogy stabilan tesztelhessünk.
@@ -32,9 +33,11 @@ vi.mock("../../context/AuthContext", () => ({
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
-      <LandingPage />
-    </MemoryRouter>,
+    <ThemeModeProvider>
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>
+    </ThemeModeProvider>,
   );
 
 describe("LandingPage", () => {

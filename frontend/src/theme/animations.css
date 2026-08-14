@@ -1,0 +1,54 @@
+/* Design system animációk — StarfieldBackground / NebulaLayer (ld. terv 3.2). */
+
+@keyframes starfield-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes starfield-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(-1.5%, 1%);
+  }
+}
+
+@keyframes starfield-shoot {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(120vw, 40vh);
+    opacity: 0;
+  }
+}
+
+@keyframes nebula-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(4%, -3%) scale(1.08);
+  }
+}
+
+/* Star Map — IN_PROGRESS node pulzáló glow (ld. terv 5.3). */
+@keyframes starmap-node-pulse {
+  0%,
+  100% {
+    box-shadow: var(--glow-sm);
+  }
+  50% {
+    box-shadow: var(--glow-lg);
+  }
+}

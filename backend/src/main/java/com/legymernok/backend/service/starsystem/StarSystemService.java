@@ -9,13 +9,18 @@ import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemItemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithProgressResponse;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionGroup;
+import com.legymernok.backend.model.mission.MissionGroupProgress;
+import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
@@ -34,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,6 +54,7 @@ public class StarSystemService {
     private final MissionRepository missionRepository;
     private final MissionGroupRepository missionGroupRepository;
     private final MissionGroupProgressRepository missionGroupProgressRepository;
+    private final CadetMissionRepository cadetMissionRepository;
     private final CadetRepository cadetRepository;
     private final AiEmbeddingService embeddingService;
     private final JdbcTemplate jdbcTemplate;
@@ -79,6 +86,72 @@ public class StarSystemService {
         return starSystemRepository.findAll().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * A Star Map (terv 5.3) node-színezéséhez: minden Star System-hez hozzáadja a jelenleg
+     * bejelentkezett kadét összesített állapotát. Szabály: ha a rendszer összes standalone
+     * missziója/csoportja teljesítve → COMPLETED; ha legalább egy elindult → IN_PROGRESS;
+     * egyébként NOT_STARTED. Egyszerű, star-systemenkénti aggregáció — nem optimalizált nagy
+     * rendszerszámra, MVP-elégséges (ld. terv 11. szekció).
+     */
+    @Transactional(readOnly = true)
+    public List<StarSystemWithProgressResponse> getAllStarSystemsWithProgress() {
+        Cadet cadet = getCurrentAuthenticatedUser();
+        return starSystemRepository.findAll().stream()
+                .map(system -> mapToResponseWithProgress(system, cadet.getId()))
+                .collect(Collectors.toList());
+    }
+
+    private StarSystemWithProgressResponse mapToResponseWithProgress(StarSystem system, UUID cadetId) {
+        List<Mission> standaloneMissions = missionRepository
+                .findAllByStarSystemIdAndGroupIsNullOrderByOrderIndexAsc(system.getId());
+        List<MissionGroup> groups = missionGroupRepository.findAllByStarSystemIdOrderByOrderIndexAsc(system.getId());
+
+        int totalItems = standaloneMissions.size() + groups.size();
+        int startedItems = 0;
+        int completedItems = 0;
+
+        for (Mission mission : standaloneMissions) {
+            Optional<CadetMission> cadetMission = cadetMissionRepository
+                    .findByCadetIdAndMissionId(cadetId, mission.getId());
+            if (cadetMission.isPresent()) {
+                startedItems++;
+                if (cadetMission.get().getStatus() == MissionStatus.COMPLETED) {
+                    completedItems++;
+                }
+            }
+        }
+
+        for (MissionGroup group : groups) {
+            Optional<MissionGroupProgress> progress = missionGroupProgressRepository
+                    .findByCadetIdAndGroupId(cadetId, group.getId());
+            if (progress.isPresent()) {
+                startedItems++;
+                if (progress.get().isCompleted()) {
+                    completedItems++;
+                }
+            }
+        }
+
+        String status;
+        if (totalItems == 0 || startedItems == 0) {
+            status = "NOT_STARTED";
+        } else if (completedItems == totalItems) {
+            status = "COMPLETED";
+        } else {
+            status = "IN_PROGRESS";
+        }
+
+        return StarSystemWithProgressResponse.builder()
+                .id(system.getId())
+                .name(system.getName())
+                .description(system.getDescription())
+                .iconUrl(system.getIconUrl())
+                .createdAt(system.getCreatedAt())
+                .updatedAt(system.getUpdatedAt())
+                .status(status)
+                .build();
     }
 
     @Transactional(readOnly = true)

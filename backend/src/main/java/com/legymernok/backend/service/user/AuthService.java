@@ -5,6 +5,7 @@ import com.legymernok.backend.dto.user.LoginRequest;
 import com.legymernok.backend.dto.user.LoginResponse;
 import com.legymernok.backend.dto.user.RegisterRequest;
 import com.legymernok.backend.dto.user.RegisterResponse;
+import com.legymernok.backend.dto.user.UpdateThemePreferenceRequest;
 import com.legymernok.backend.exception.*;
 import com.legymernok.backend.integration.GiteaService;
 import com.legymernok.backend.model.auth.Role;
@@ -119,8 +120,23 @@ public class AuthService {
                         .map(Role::getName)
                         .collect(Collectors.toSet()))
                 .giteaUserId(cadet.getGiteaUserId())
+                .themePreference(cadet.getThemePreference())
+                .currentStreak(cadet.getCurrentStreak())
+                .longestStreak(cadet.getLongestStreak())
                 .createdAt(cadet.getCreatedAt())
                 .updatedAt(cadet.getUpdatedAt())
                 .build();
+    }
+
+    @Transactional
+    public void updateThemePreference(UpdateThemePreferenceRequest request) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        Cadet cadet = cadetRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", username));
+
+        cadet.setThemePreference(request.getTheme());
+        cadetRepository.save(cadet);
+
+        log.info("Theme preference updated for '{}': {}", username, request.getTheme());
     }
 }

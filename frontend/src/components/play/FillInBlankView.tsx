@@ -4,6 +4,7 @@ import { Check as CheckIcon, Close as CloseIcon } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import { fillInBlankApi } from "../../api/client";
 import RetroButton from "../RetroButton";
+import { MissionPlayerActions } from "../shared/MissionPlayerShell";
 import type {
   FillInBlankUserResponse,
   FillInBlankOptionResponse,
@@ -168,7 +169,9 @@ const FillInBlankView: React.FC<FillInBlankViewProps> = ({ missionId, onComplete
         <Alert severity="success" sx={{ bgcolor: "#0a2a0a", color: "#0f0", border: "1px solid #0f0" }}>
           {t("play.alreadyPassed", { pct: alreadyPassed.percentage })}
         </Alert>
-        <RetroButton color="green" labelKey="play.next" onClick={onComplete} />
+        <MissionPlayerActions>
+          <RetroButton color="green" labelKey="play.next" onClick={onComplete} />
+        </MissionPlayerActions>
       </Box>
     );
   }
@@ -256,15 +259,13 @@ const FillInBlankView: React.FC<FillInBlankViewProps> = ({ missionId, onComplete
           })}
         </Box>
 
-        {result.passed ? (
-          <Box sx={{ display: "flex", gap: 2 }}>
+        <MissionPlayerActions>
+          {result.passed ? (
             <RetroButton color="green" labelKey="play.next" onClick={onComplete} />
-          </Box>
-        ) : (
-          <Box sx={{ display: "flex", gap: 2 }}>
+          ) : (
             <RetroButton color="red" labelKey="play.tryAgain" onClick={handleReset} />
-          </Box>
-        )}
+          )}
+        </MissionPlayerActions>
       </Box>
     );
   }
@@ -366,7 +367,7 @@ const FillInBlankView: React.FC<FillInBlankViewProps> = ({ missionId, onComplete
       </Box>
 
       {/* Submit */}
-      <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+      <MissionPlayerActions>
         <RetroButton
           color="green"
           labelKey="play.submit"
@@ -378,7 +379,7 @@ const FillInBlankView: React.FC<FillInBlankViewProps> = ({ missionId, onComplete
             ({Object.keys(selectedSlots).length}/{definition.blanks.length} slot kitöltve)
           </Typography>
         )}
-      </Box>
+      </MissionPlayerActions>
     </Box>
   );
 };

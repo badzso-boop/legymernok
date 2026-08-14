@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Typography, TextField, IconButton, Grid } from "@mui/material";
-import { Trash2, Plus, GripVertical } from "lucide-react";
+import { Trash2, Plus, GripVertical, ChevronUp, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { QuizQuestion, QuizOption } from "../../../types/quiz";
 import OptionRow from "./OptionRow";
@@ -10,6 +10,11 @@ interface QuestionCardProps {
   index: number;
   onChange: (updated: QuizQuestion) => void;
   onDelete: () => void;
+  /** Sorrend-mozgatás gombok (mobil-kompatibilis, nem drag-handle — ld. terv 4.3). Ha nincs megadva, a gombok nem jelennek meg. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -17,6 +22,10 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   index,
   onChange,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = true,
+  canMoveDown = true,
 }) => {
   const { t } = useTranslation();
 
@@ -93,13 +102,35 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
               : "SINGLE_SELECTION_MODE"}
           </Typography>
         </Box>
-        <IconButton
-          size="small"
-          onClick={onDelete}
-          sx={{ color: "#666", "&:hover": { color: "#ff4444" } }}
-        >
-          <Trash2 size={16} />
-        </IconButton>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <IconButton
+            size="small"
+            onClick={onDelete}
+            sx={{ color: "#666", "&:hover": { color: "#ff4444" } }}
+          >
+            <Trash2 size={16} />
+          </IconButton>
+          {(onMoveUp || onMoveDown) && (
+            <>
+              <IconButton
+                size="small"
+                onClick={onMoveUp}
+                disabled={!canMoveUp || !onMoveUp}
+                sx={{ color: "#666", "&:hover": { color: "#fff" } }}
+              >
+                <ChevronUp size={16} />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={onMoveDown}
+                disabled={!canMoveDown || !onMoveDown}
+                sx={{ color: "#666", "&:hover": { color: "#fff" } }}
+              >
+                <ChevronDown size={16} />
+              </IconButton>
+            </>
+          )}
+        </Box>
       </Box>
 
       {/* CONTENT */}

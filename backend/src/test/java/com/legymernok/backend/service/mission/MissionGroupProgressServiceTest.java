@@ -40,6 +40,7 @@ class MissionGroupProgressServiceTest {
     @Mock private MissionGroupRepository groupRepository;
     @Mock private MissionRepository missionRepository;
     @Mock private CadetRepository cadetRepository;
+    @Mock private com.legymernok.backend.service.streak.StreakService streakService;
     @InjectMocks private MissionGroupProgressService missionGroupProgressService;
 
     private Cadet testUser;
