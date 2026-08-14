@@ -288,6 +288,19 @@ Jelenleg minimális. Új felépítés, Duolingo-inspirált információs hierarc
    ugyanabból a komponensből, mint a 5.3-ban leírt teljes Star Map (kicsinyítve, nem interaktív).
 4. **Barátok aktivitása** (ld. 7.2) — kompakt lista, ki mit teljesített mostanában.
 
+**Backend — mindkét kártyához ÚJ endpoint kell, ma egyik sem létezik:**
+- **"Folytasd onnan" kártya:** `GET /api/dashboard/continue` — megkeresi a kadét legutóbb
+  módosított `CadetMission`/`MissionGroupProgress` rekordját (`lastUpdatedAt`/`startedAt` szerint
+  a legfrissebb, mindkét táblát figyelembe véve), és visszaadja a folytatáshoz szükséges
+  minimális adatot (`type`, `missionId`/`groupId`, `starSystemId`, `name`). Ma **semmilyen
+  aggregáló lekérdezés nem létezik erre** — a `MissionService.startMission()`-ben van egy
+  "resumed mission" log-sor, de az csak logol, nem query-zhető adat.
+- **Barátok aktivitása:** `GET /api/social/activity-feed` — a kadét által követett cadet-ek
+  (`follows` tábla, ld. 7.2) legutóbbi N teljesítése, időrendben csökkenő sorrendben,
+  `UNION`-szerűen összefésülve a `MissionGroupStepCompletion`, `FillInBlankAttempt`,
+  `MissionResult` táblákat (mindegyikhez `completedAt`/`submittedAt`/`completedAt` időbélyeg
+  van már). Egyszerű, de új service-metódus és DTO.
+
 ### 5.3 Star Map (csillagtérkép) — teljes újragondolás
 
 A jelenlegi `StarMapCanvas.tsx` egy kézzel írt Canvas 2D rendering, ami konkrétan **nem illeszkedik
@@ -319,8 +332,15 @@ sem a design system-hez, sem a mobile-first elvhez**:
    paletta) a zöld radar-stílus helyett — vizuálisan egységes a landing/dashboard/player
    felületekkel, nem egy elszigetelt "más app" érzés.
 3. **Valós állapot-alapú node-színezés**: szürke = még nem kezdett, pulzáló cián/glow = aktuális/
-   folytatható, zöld pipa-jelvény = teljesítve — a meglévő progress-adatokból számolva (nincs
-   szükség új backend endpointra, a `with-missions`/progress lekérdezések már megvannak).
+   folytatható, zöld pipa-jelvény = teljesítve. **Ehhez ÚJ backend endpoint kell** — jelenleg
+   NINCS olyan lekérdezés, ami egy adott kadét összes Star System-jéhez egyben visszaadná az
+   összesített állapotot (a meglévő `with-missions` egy adott rendszer BELSEJÉT adja vissza,
+   nem az összes rendszer áttekintő státuszát). Új endpoint:
+   `GET /api/star-systems/with-progress` — minden Star System-hez hozzáadva egy számított
+   `status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"` mezőt, a `cadet_missions` és
+   `mission_group_progress` táblák aggregálásával (egyszerű szabály: ha a rendszer összes
+   missziója/group-ja COMPLETED → COMPLETED; ha legalább egy elindult → IN_PROGRESS; egyébként
+   NOT_STARTED). Nincs szükség új táblához, csak egy aggregáló service-metódushoz és DTO-bővítéshez.
 4. **Pozicionálás MVP-ben marad egyszerű, determinisztikus elrendezés** (radiális vagy grid-layout
    az id alapján, hasonlóan a mostanihoz, csak `react-flow` node-koordinátaként) — a valódi
    "előfeltétel-gráf" (melyik rendszer nyit meg melyiket, gráf-élekkel összekötve) egy külön,
@@ -416,9 +436,8 @@ flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú ké
 
 **Frontend:**
 - Felhasználó-kereső (profil oldalon vagy külön "Flotta" oldalon).
-- Dashboard "Barátok aktivitása" kártya (ld. 5.2) — kiket követek, mit teljesítettek mostanában
-  (egyszerű, legutóbbi N aktivitás lekérdezés a követett cadet-ek `MissionGroupStepCompletion`/
-  `FillInBlankAttempt`/`MissionResult` rekordjaiból, időrendben).
+- Dashboard "Barátok aktivitása" kártya — a `GET /api/social/activity-feed` endpointot hívja
+  (ld. 5.2-nél a backend leírását, ne itt duplikálva).
 
 ### 7.3 Saját profil oldal
 
@@ -466,9 +485,13 @@ munka belső sorrendje logikailag így épül egymásra:
    `NebulaLayer`, `GlowCard`, `NeonButton`, `StreakFlame`, `ProgressRing`), téma-váltó logika
    (`data-theme` attribútum + `localStorage` + backend perzisztálás). Ez az alap, minden más erre
    épül.
-2. **Backend: téma-preferencia + streak + follow + profil endpointok** — a fenti 3.5, 7.1–7.3
-   szerint, egy közös Flyway migrációval (`cadets` tábla bővítés: `theme_preference`,
-   `current_streak`, `longest_streak`, `last_activity_date` + `follows` tábla), párhuzamosan
+2. **Backend: téma-preferencia + streak + follow + profil + dashboard/star-map aggregáló
+   endpointok** — a fenti 3.5, 5.2, 5.3, 7.1–7.3 szerint. Egy közös Flyway migrációval (`cadets`
+   tábla bővítés: `theme_preference`, `current_streak`, `longest_streak`, `last_activity_date` +
+   `follows` tábla) és 4 ÚJ endpoint, ami ma egyáltalán nem létezik:
+   `PUT /api/auth/me/theme`, `GET /api/dashboard/continue`, `GET /api/social/activity-feed`,
+   `GET /api/star-systems/with-progress` — mind egyszerű, meglévő táblákra épülő aggregáció,
+   nem igényel új domain-modellt (a `follows` tábla az egyetlen valódi új tábla). Párhuzamosan
    futtatható a frontend munkával.
 3. **`MissionPlayerShell`** + a 4 meglévő lejátszó-oldal átalakítása, hogy csak a tartalmat adják.
 4. **`MarkdownStudio`, `QuizBuilder`, `CodeMissionEditor`** komponensek + **`MissionEditorPage`**
