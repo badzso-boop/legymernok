@@ -3,6 +3,7 @@ import { Box, Typography, Stack, Button } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { RobotMascot } from "../../components/domain/landing/RobotMascot";
 import "../../styles/RetroUI.css";
 
 const HeroSection: React.FC = () => {
@@ -19,17 +20,9 @@ const HeroSection: React.FC = () => {
         px: { xs: 1, sm: 2 },
       }}
     >
-      <Box
-        component="img"
-        src="/astronaut-logo.svg"
-        alt={t("landingPage.hero.logoAlt")}
-        sx={{
-          width: { xs: 56, md: 72 },
-          height: { xs: 56, md: 72 },
-          mb: 2,
-          filter: "drop-shadow(0 0 12px rgba(51,255,0,0.35))",
-        }}
-      />
+      <Box sx={{ mb: 2 }}>
+        <RobotMascot size={88} />
+      </Box>
       <Typography
         className="retro-font-header"
         sx={{

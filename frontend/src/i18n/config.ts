@@ -355,7 +355,6 @@ const resources = {
           subtitle:
             "A gamified learning platform for engineering students. Complete real coding missions in your browser, backed by real Git repositories, take on timed quizzes, and level up through star systems — all wrapped in a retro space-cadet story.",
           ctaContinue: "Go to the Star Map",
-          logoAlt: "LégyMérnök.hu cadet helmet logo",
         },
         about: {
           title: "MISSION BRIEFING // WHAT IS THIS?",
@@ -837,7 +836,6 @@ const resources = {
           subtitle:
             "Gamifikált oktatási platform mérnökhallgatóknak. Oldj meg valódi kódolási küldetéseket közvetlenül a böngésződben, valódi Git-tárhelyekre építve, tölts ki időzített kvízeket, és haladj végig a csillagrendszereken — mindezt egy retro-futurisztikus űrkadét-történetbe csomagolva.",
           ctaContinue: "Ugrás a csillagtérképre",
-          logoAlt: "LégyMérnök.hu kadét sisak logó",
         },
         about: {
           title: "KÜLDETÉS BRIEFING // MIRŐL SZÓL AZ OLDAL?",
