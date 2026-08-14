@@ -176,6 +176,9 @@ const resources = {
         deleteFile: "Delete",
         codingPlayerSavedNote: "Changes are saved to your own personal repository.",
         codingPlayerNoFiles: "This mission has no files yet.",
+        codingPlayerOpenFiles: "Open files",
+        codingPlayerQuickInsertLabel: "Quick insert",
+        codingPlayerQuickInsertTab: "Tab",
         fileEditorTemplateNote:
           "This file structure is copied into every cadet's own working repository when they start this mission.",
         fileEditorSaved: "Saved.",
@@ -656,6 +659,9 @@ const resources = {
         deleteFile: "Törlés",
         codingPlayerSavedNote: "A módosítások a saját, személyes repódba mentődnek.",
         codingPlayerNoFiles: "Ehhez a küldetéshez még nincsenek fájlok.",
+        codingPlayerOpenFiles: "Fájlok megnyitása",
+        codingPlayerQuickInsertLabel: "Gyors beszúrás",
+        codingPlayerQuickInsertTab: "Tab",
         fileEditorTemplateNote:
           "Ez a fájlstruktúra kerül átmásolásra minden kadét saját munkarepójába, amikor elindítja ezt a missziót.",
         fileEditorSaved: "Elmentve.",
