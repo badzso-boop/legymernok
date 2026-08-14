@@ -274,6 +274,24 @@ const resources = {
         nameMinLength: "Minimum 3 characters",
         starSystemRequired: "Star system is required",
       },
+      // Profile & social (follow system, user search)
+      profile: {
+        title: "Profile",
+        myProfileTitle: "My Profile",
+        follow: "Follow",
+        unfollow: "Unfollow",
+        searchPlaceholder: "Search cadets by username…",
+        noSearchResults: "No cadets found.",
+        loadError: "Failed to load this profile.",
+        memberSince: "Member since {{date}}",
+        ownProfileNote: "This is your own profile.",
+        stats: {
+          completedMissions: "Missions completed",
+          completedGroups: "Groups completed",
+          followers: "Followers",
+          following: "Following",
+        },
+      },
       // Play (user-facing gameplay)
       play: {
         loadMore: "LOAD MORE",
@@ -414,6 +432,34 @@ const resources = {
           title: "LAUNCH CONSOLE",
           subtitle:
             "The shortcuts on this console jump straight to the Star Map, your own missions in Mission Forge, and the feedback board.",
+        },
+      },
+      // AUTHENTICATED DASHBOARD ("cockpit")
+      homeDashboard: {
+        streak: {
+          label: "Streak",
+          activeSubtitle: "Keep it going — complete something today!",
+          inactiveSubtitle: "Complete a mission today to start a streak.",
+          longest: "Longest streak: {{count}} days",
+        },
+        continue: {
+          label: "Pick up where you left off",
+          cta: "Continue",
+          emptyState: "You haven't started anything yet.",
+          emptyCta: "Explore the Star Map",
+        },
+        starMap: {
+          label: "Star Map",
+          subtitle: "See all discovered star systems on the galaxy map.",
+          cta: "Open Star Map",
+        },
+        friendActivity: {
+          label: "Friend activity",
+          emptyState: "Follow cadets to see their progress here.",
+          emptyCta: "Find cadets",
+          completedStep: "completed a step in {{name}}",
+          completedFillInBlank: "completed the fill-in-blank mission {{name}}",
+          completedQuiz: "completed the quiz {{name}}",
         },
       },
       // FEEDBACK / ISSUE BOARD
@@ -710,6 +756,24 @@ const resources = {
         nameMinLength: "Legalább 3 karakter",
         starSystemRequired: "Csillagrendszer kiválasztása kötelező",
       },
+      // Profil és social (követés, felhasználó-kereső)
+      profile: {
+        title: "Profil",
+        myProfileTitle: "Saját profil",
+        follow: "Követés",
+        unfollow: "Követés leállítása",
+        searchPlaceholder: "Kadétok keresése felhasználónév alapján…",
+        noSearchResults: "Nincs találat.",
+        loadError: "Nem sikerült betölteni ezt a profilt.",
+        memberSince: "Tag {{date}} óta",
+        ownProfileNote: "Ez a te profilod.",
+        stats: {
+          completedMissions: "Teljesített misszió",
+          completedGroups: "Teljesített csoport",
+          followers: "Követő",
+          following: "Követett",
+        },
+      },
       // Play (user-facing gameplay)
       play: {
         loadMore: "TÖBB BETÖLTÉSE",
@@ -850,6 +914,34 @@ const resources = {
           title: "INDÍTÓPULT",
           subtitle:
             "A konzol gombjai közvetlenül a csillagtérképre, a saját Mission Forge küldetéseidre és a visszajelzés-felületre visznek.",
+        },
+      },
+      // BEJELENTKEZETT PILÓTAFÜLKE
+      homeDashboard: {
+        streak: {
+          label: "Sorozat",
+          activeSubtitle: "Így tovább — teljesíts valamit ma is!",
+          inactiveSubtitle: "Teljesíts ma egy missziót, hogy elindulhasson a sorozatod.",
+          longest: "Leghosszabb sorozat: {{count}} nap",
+        },
+        continue: {
+          label: "Folytasd onnan, ahol abbahagytad",
+          cta: "Folytatás",
+          emptyState: "Még nem kezdtél el semmit.",
+          emptyCta: "Fedezd fel a csillagtérképet",
+        },
+        starMap: {
+          label: "Csillagtérkép",
+          subtitle: "Nézd meg az összes felfedezett csillagrendszert a galaxis térképén.",
+          cta: "Csillagtérkép megnyitása",
+        },
+        friendActivity: {
+          label: "Barátok aktivitása",
+          emptyState: "Kövess kadétokat, hogy itt lásd a haladásukat.",
+          emptyCta: "Kadétok keresése",
+          completedStep: "teljesített egy lépést itt: {{name}}",
+          completedFillInBlank: "teljesítette a(z) {{name}} kitöltős feladatot",
+          completedQuiz: "teljesítette a(z) {{name}} kvízt",
         },
       },
       // VISSZAJELZÉS / ISSUE TÁBLA

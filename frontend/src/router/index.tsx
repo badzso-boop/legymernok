@@ -42,6 +42,8 @@ import GroupPlayerPage from "../pages/play/GroupPlayerPage";
 import ContentMissionPage from "../pages/play/ContentMissionPage";
 import CodingMissionPage from "../pages/play/CodingMissionPage";
 import FeedbackPage from "../pages/feedback/FeedbackPage";
+import DashboardPage from "../pages/dashboard/DashboardPage";
+import ProfilePage from "../pages/profile/ProfilePage";
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -110,6 +112,26 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   return children;
 };
 
+// A "/" route korábban MINDIG a LandingPage-et renderelte, bejelentkezett
+// állapottól függetlenül — sikeres login után is ide navigált vissza a user,
+// ami a nem-authentikált marketing oldalra dobta. Innentől a "/" a
+// bejelentkezett kadétoknak a DashboardPage-et (pilótafülke) adja.
+const HomeRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <CircularProgress
+        size={80}
+        thickness={2}
+        sx={{ color: "primary.main" }}
+      />
+    );
+  }
+
+  return isAuthenticated ? <DashboardPage /> : <LandingPage />;
+};
+
 export const router = createHashRouter([
   {
     element: <RootLayout />,
@@ -121,7 +143,7 @@ export const router = createHashRouter([
     children: [
       {
         path: "/",
-        element: <LandingPage />,
+        element: <HomeRoute />,
       },
       {
         path: "/login",
@@ -218,6 +240,24 @@ export const router = createHashRouter([
     element: (
       <ProtectedRoute>
         <FeedbackPage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/profile",
+    element: (
+      <ProtectedRoute>
+        <ProfilePage />
+      </ProtectedRoute>
+    ),
+  },
+
+  {
+    path: "/profile/:id",
+    element: (
+      <ProtectedRoute>
+        <ProfilePage />
       </ProtectedRoute>
     ),
   },
