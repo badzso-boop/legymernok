@@ -231,6 +231,10 @@ const resources = {
         warp: "WARP",
         data: "DATA",
         lang: "LANGUAGE",
+        statusNotStarted: "Not started",
+        statusInProgress: "In progress",
+        statusCompleted: "Completed",
+        loadError: "Failed to load the star map.",
       },
       // SEARCH
       search: {
@@ -714,6 +718,10 @@ const resources = {
         warp: "UGRÁS",
         data: "ADAT",
         lang: "NYELV",
+        statusNotStarted: "Még nem kezdett",
+        statusInProgress: "Folyamatban",
+        statusCompleted: "Teljesítve",
+        loadError: "Nem sikerült betölteni a csillagtérképet.",
       },
       // SEARCH
       search: {

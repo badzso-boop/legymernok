@@ -41,3 +41,14 @@
     transform: translate(4%, -3%) scale(1.08);
   }
 }
+
+/* Star Map — IN_PROGRESS node pulzáló glow (ld. terv 5.3). */
+@keyframes starmap-node-pulse {
+  0%,
+  100% {
+    box-shadow: var(--glow-sm);
+  }
+  50% {
+    box-shadow: var(--glow-lg);
+  }
+}
