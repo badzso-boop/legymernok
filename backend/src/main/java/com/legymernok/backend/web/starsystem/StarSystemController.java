@@ -5,6 +5,7 @@ import com.legymernok.backend.dto.starsystem.CreateStarSystemRequest;
 import com.legymernok.backend.dto.starsystem.ReorderItemsRequest;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemWithItemsResponse;
+import com.legymernok.backend.dto.starsystem.StarSystemWithProgressResponse;
 import com.legymernok.backend.service.starsystem.StarSystemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -65,6 +66,12 @@ public class StarSystemController {
     @PreAuthorize("hasAuthority('starsystem:edit')")
     public ResponseEntity<ReorderResponse> reorderItems(@PathVariable UUID id, @RequestBody ReorderItemsRequest request) {
         return ResponseEntity.ok(starSystemService.reorderItems(id, request));
+    }
+
+    @GetMapping("/with-progress")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<StarSystemWithProgressResponse>> getAllStarSystemsWithProgress() {
+        return ResponseEntity.ok(starSystemService.getAllStarSystemsWithProgress());
     }
 
     @GetMapping("/my-systems")
