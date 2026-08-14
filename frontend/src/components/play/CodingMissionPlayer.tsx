@@ -4,13 +4,15 @@ import { Box, CircularProgress, Alert, Snackbar, Typography } from "@mui/materia
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { forgeApi, missionApi } from "../../api/client";
-import { RetroPanel } from "../forge/RetroPanel";
 import RetroButton from "../RetroButton";
 import FileExplorer from "../forge/FileExplorer";
+import {
+  MissionPlayerActions,
+  MissionPlayerHeaderPortal,
+} from "../shared/MissionPlayerShell";
 
 interface CodingMissionPlayerProps {
   missionId: string;
-  onBack: () => void;
 }
 
 // A kadét saját munkarepójában dolgozik (a startMission() által
@@ -23,7 +25,6 @@ interface CodingMissionPlayerProps {
 // dolgozik egyszerre, mindenki a saját másolatában).
 const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
   missionId,
-  onBack,
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -129,51 +130,29 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
   const fileNames = Object.keys(currentFileContents);
 
   return (
-    <RetroPanel
-      title={`${t("forge.codingPlayerTitle").toUpperCase()} // ${mission.name.toUpperCase()}`}
+    <Box
       sx={{
-        width: "98vw",
-        height: "92vh",
+        width: "100%",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
-        p: 0,
         overflow: "hidden",
       }}
     >
-      <Box
-        sx={{
-          p: 1.5,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderBottom: "1px solid #333",
-          bgcolor: "#1a1a1a",
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ color: "#888", fontFamily: "monospace", ml: 2 }}
-        >
-          {t("forge.codingPlayerSavedNote")}
-        </Typography>
-
-        <Box sx={{ display: "flex", gap: 3, mr: 2 }}>
-          <RetroButton
-            color="red"
-            labelKey="forge.codingPlayerBackButton"
-            size="small"
-            onClick={onBack}
-          />
-          <RetroButton
-            color="green"
-            labelKey="forge.saveButton"
-            size="small"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            active={saveMutation.isPending}
-          />
-        </Box>
-      </Box>
+      <MissionPlayerHeaderPortal
+        title={mission.name}
+        subtitle={t("forge.codingPlayerSavedNote")}
+      />
+      <MissionPlayerActions>
+        <RetroButton
+          color="green"
+          labelKey="forge.saveButton"
+          size="small"
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          active={saveMutation.isPending}
+        />
+      </MissionPlayerActions>
 
       <Box sx={{ flexGrow: 1, display: "flex", overflow: "hidden" }}>
         <Box
@@ -271,7 +250,7 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
           {snackbar.message.toUpperCase()}
         </Alert>
       </Snackbar>
-    </RetroPanel>
+    </Box>
   );
 };
 

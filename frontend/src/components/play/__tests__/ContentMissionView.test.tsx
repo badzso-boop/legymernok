@@ -1,7 +1,24 @@
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ContentMissionView from "../ContentMissionView";
+
+// QueryClientProvider wrapper — minden teszthez friss kliens, retry=0
+const createWrapper = () => {
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+};
 
 // --- Mockok ---
 
@@ -60,11 +77,7 @@ describe("ContentMissionView", () => {
       hasPreviousPage: false,
     });
 
-    render(
-      <MemoryRouter>
-        <ContentMissionView missionId="m1" />
-      </MemoryRouter>,
-    );
+    render(<ContentMissionView missionId="m1" />, { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(screen.getByTestId("markdown-content")).toBeTruthy();
@@ -87,11 +100,7 @@ describe("ContentMissionView", () => {
       hasPreviousPage: false,
     });
 
-    render(
-      <MemoryRouter>
-        <ContentMissionView missionId="m1" />
-      </MemoryRouter>,
-    );
+    render(<ContentMissionView missionId="m1" />, { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(screen.getByText("play.loadMore")).toBeTruthy();
@@ -123,11 +132,7 @@ describe("ContentMissionView", () => {
         hasPreviousPage: true,
       });
 
-    render(
-      <MemoryRouter>
-        <ContentMissionView missionId="m1" />
-      </MemoryRouter>,
-    );
+    render(<ContentMissionView missionId="m1" />, { wrapper: createWrapper() });
 
     // Várjuk meg az első betöltést
     await waitFor(() => {
@@ -160,11 +165,7 @@ describe("ContentMissionView", () => {
       hasPreviousPage: false,
     });
 
-    render(
-      <MemoryRouter>
-        <ContentMissionView missionId="m1" />
-      </MemoryRouter>,
-    );
+    render(<ContentMissionView missionId="m1" />, { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(screen.queryByText("play.loadMore")).toBeNull();
@@ -186,11 +187,7 @@ describe("ContentMissionView", () => {
 
     const onComplete = vi.fn();
 
-    render(
-      <MemoryRouter>
-        <ContentMissionView missionId="m1" onComplete={onComplete} />
-      </MemoryRouter>,
-    );
+    render(<ContentMissionView missionId="m1" onComplete={onComplete} />, { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(screen.getByText("play.next")).toBeTruthy();

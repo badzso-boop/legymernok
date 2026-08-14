@@ -1,87 +1,74 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, LinearProgress } from "@mui/material";
+import React, { useState } from "react";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { missionGroupApi, groupProgressApi } from "../../api/client";
-import type { MissionGroupWithMissionsResponse } from "../../types/group";
 import type { GroupProgressResponse } from "../../types/group";
 import type { MissionResult } from "../../types/quiz";
 import ContentMissionView from "../../components/play/ContentMissionView";
 import FillInBlankView from "../../components/play/FillInBlankView";
 import QuizPlayerComponent from "../../components/forge/quiz/QuizPlayerComponent";
 import RetroButton from "../../components/RetroButton";
-import "../../styles/RetroUI.css";
+import {
+  MissionPlayerActions,
+  MissionPlayerShell,
+} from "../../components/shared/MissionPlayerShell";
 
 const GroupPlayerPage: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
-  const [groupData, setGroupData] = useState<MissionGroupWithMissionsResponse | null>(null);
-  const [progress, setProgress] = useState<GroupProgressResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [completing, setCompleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!groupId) return;
+  const {
+    data: groupData,
+    isLoading: isGroupLoading,
+    isError: isGroupError,
+  } = useQuery({
+    queryKey: ["missionGroup", groupId],
+    queryFn: () => missionGroupApi.getById(groupId!),
+    enabled: !!groupId,
+  });
 
-    const loadGroup = async () => {
+  // Első betöltéskor, ha még nincs progress rekord (404), elindítjuk a
+  // csoportot — versenyhelyzet (409) esetén újra GET-tel olvassuk be.
+  const { data: progress, isLoading: isProgressLoading } = useQuery({
+    queryKey: ["groupProgress", groupId],
+    queryFn: async (): Promise<GroupProgressResponse> => {
       try {
-        const group = await missionGroupApi.getById(groupId);
-        setGroupData(group);
-        await loadProgress(groupId);
-      } catch {
-        setError("A csoport nem érhető el.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadGroup();
-  }, [groupId]);
-
-  const loadProgress = async (gid: string) => {
-    try {
-      const prog = await groupProgressApi.get(gid);
-      setProgress(prog);
-    } catch (e: any) {
-      if (e?.response?.status === 404) {
-        // Első belépés — indítjuk a csoportot
+        return await groupProgressApi.get(groupId!);
+      } catch (e: any) {
+        if (e?.response?.status !== 404) throw e;
         try {
-          await groupProgressApi.start(gid);
-          const prog = await groupProgressApi.get(gid);
-          setProgress(prog);
+          return await groupProgressApi.start(groupId!);
         } catch (startErr: any) {
           if (startErr?.response?.status === 409) {
-            // Versenyhelyzet — GET újra
-            const prog = await groupProgressApi.get(gid);
-            setProgress(prog);
-          } else {
-            throw startErr;
+            return await groupProgressApi.get(groupId!);
           }
+          throw startErr;
         }
-      } else {
-        throw e;
       }
-    }
-  };
+    },
+    enabled: !!groupId,
+    retry: false,
+  });
 
-  const handleCompleteStep = async () => {
-    if (!groupId) return;
-    setCompleting(true);
-    try {
-      const updated = await groupProgressApi.completeStep(groupId);
-      setProgress(updated);
-    } finally {
-      setCompleting(false);
-    }
-  };
+  const completeStepMutation = useMutation({
+    mutationFn: () => groupProgressApi.completeStep(groupId!),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["groupProgress", groupId], updated);
+    },
+  });
+
+  const handleCompleteStep = () => completeStepMutation.mutate();
 
   // QuizPlayerComponent onComplete signature is (result: MissionResult) → wrap to void
-  const handleQuizComplete = (_result: MissionResult) => {
-    handleCompleteStep();
-  };
+  const handleQuizComplete = (_result: MissionResult) => handleCompleteStep();
 
+  const loading = isGroupLoading || isProgressLoading;
   const missions = groupData?.missions ?? [];
   const nextMissionIndex = missions.findIndex((m) => m.id === progress?.nextMissionId);
   const effectiveIndex = viewIndex !== null ? viewIndex : Math.max(nextMissionIndex, 0);
@@ -95,111 +82,80 @@ const GroupPlayerPage: React.FC = () => {
     }
   };
 
-  const handleBack = () => setViewIndex(Math.max(0, effectiveIndex - 1));
+  const handleBackStep = () => setViewIndex(Math.max(0, effectiveIndex - 1));
+  const handleBackToSystem = () =>
+    groupData && navigate(`/star-systems/${groupData.starSystemId}`);
 
-  // ── Loading ──────────────────────────────────────────────────
+  // ── Loading / hiba ───────────────────────────────────────────
   if (loading) {
-    return <div className="loading-screen">LOADING...</div>;
+    return (
+      <MissionPlayerShell>
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress sx={{ color: "var(--color-accent-primary)" }} />
+        </Box>
+      </MissionPlayerShell>
+    );
   }
 
-  if (error || !groupData) {
-    return <div className="error-screen">{error ?? "GROUP NOT FOUND"}</div>;
+  if (isGroupError || !groupData) {
+    return (
+      <MissionPlayerShell onBack={() => navigate(-1)}>
+        <Typography sx={{ color: "var(--color-error)" }}>
+          {t("play.groupLoadError")}
+        </Typography>
+      </MissionPlayerShell>
+    );
   }
+
+  const completedCount = progress?.completedCount ?? 0;
+  const totalCount = progress?.totalCount ?? groupData.missions.length;
+  const progressPct = totalCount > 0 ? completedCount / totalCount : 0;
 
   // ── Befejezési képernyő ──────────────────────────────────────
   if (progress?.completed && viewIndex === null) {
     return (
-      <Box
-        sx={{
-          width: "100vw",
-          minHeight: "100vh",
-          bgcolor: "#1a1a1a",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          p: 2,
-        }}
+      <MissionPlayerShell
+        title={groupData.name}
+        onBack={handleBackToSystem}
+        progress={`${totalCount} / ${totalCount}`}
+        progressValue={1}
       >
-        <div
-          className="control-panel-casing"
-          style={{
-            width: "100%",
-            maxWidth: 600,
+        <Box
+          sx={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 24,
-            padding: 40,
+            gap: 2,
+            py: 4,
+            textAlign: "center",
           }}
         >
-          <div className="screw top-left" />
-          <div className="screw top-right" />
-          <div className="screw bottom-left" />
-          <div className="screw bottom-right" />
-
           <Typography
-            sx={{
-              fontFamily: '"VT323", monospace',
-              fontSize: "2rem",
-              color: "#0f0",
-              textShadow: "0 0 12px #0f0",
-              letterSpacing: 3,
-              textAlign: "center",
-            }}
+            sx={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-success)" }}
           >
-            ✓ CSOPORT TELJESÍTVE
+            ✓ {t("play.groupCompleted")}
           </Typography>
-
-          <Typography
-            sx={{
-              fontFamily: '"VT323", monospace',
-              fontSize: "1.3rem",
-              color: "#ffb000",
-              textAlign: "center",
-            }}
-          >
-            [{groupData.name.toUpperCase()}]
-          </Typography>
-
-          <Box
-            sx={{
-              width: "100%",
-              bgcolor: "#0a2a0a",
-              border: "1px solid #0f0",
-              borderRadius: 1,
-              p: 2,
-              textAlign: "center",
-            }}
-          >
-            <Typography sx={{ fontFamily: "monospace", color: "#0f0", fontSize: "0.9rem" }}>
-              MISSZIÓ_LÉPÉSEK: {progress.totalCount} / {progress.totalCount}
-            </Typography>
-          </Box>
-
-          <RetroButton
-            color="blue"
-            labelKey="play.review"
-            onClick={() => setViewIndex(0)}
-          />
+        </Box>
+        <MissionPlayerActions>
+          <RetroButton color="blue" labelKey="play.review" onClick={() => setViewIndex(0)} />
           <RetroButton
             color="green"
             labelKey="play.backToSystem"
-            onClick={() => navigate(`/star-systems/${groupData.starSystemId}`)}
+            onClick={handleBackToSystem}
           />
-        </div>
-      </Box>
+        </MissionPlayerActions>
+      </MissionPlayerShell>
     );
   }
 
   // ── Aktuális misszió meghatározása ───────────────────────────
   const currentMission = missions[effectiveIndex] ?? null;
 
-  // ── Misszió tartalom ─────────────────────────────────────────
   const renderMission = () => {
     if (!currentMission) {
       return (
-        <Typography sx={{ color: "#555", fontFamily: "monospace" }}>
-          Nincs következő misszió.
+        <Typography sx={{ color: "var(--color-text-secondary)" }}>
+          {t("play.noNextMission")}
         </Typography>
       );
     }
@@ -223,142 +179,33 @@ const GroupPlayerPage: React.FC = () => {
         return (
           <QuizPlayerComponent
             missionId={currentMission.id}
-            onComplete={isReviewing ? (_r) => handleNextReview() : handleQuizComplete}
+            onComplete={isReviewing ? () => handleNextReview() : handleQuizComplete}
           />
         );
       default:
         return (
-          <Box
-            sx={{
-              p: 3,
-              border: "1px dashed #333",
-              borderRadius: 1,
-              textAlign: "center",
-            }}
-          >
-            <Typography sx={{ color: "#555", fontFamily: "monospace" }}>
-              {currentMission.missionType} — Hamarosan elérhető
-            </Typography>
-          </Box>
+          <Typography sx={{ color: "var(--color-text-secondary)" }}>
+            {currentMission.missionType} — {t("play.notYetAvailable")}
+          </Typography>
         );
     }
   };
 
-  // ── Fő layout ────────────────────────────────────────────────
-  const completedCount = progress?.completedCount ?? 0;
-  const totalCount = progress?.totalCount ?? groupData.missions.length;
-  const progressPct = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-
   return (
-    <Box
-      sx={{
-        width: "100vw",
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        p: 2,
-        display: "flex",
-        justifyContent: "center",
-      }}
+    <MissionPlayerShell
+      title={groupData.name}
+      subtitle={currentMission?.name}
+      onBack={effectiveIndex > 0 ? handleBackStep : handleBackToSystem}
+      progress={t("play.step", { current: effectiveIndex + 1, total: totalCount })}
+      progressValue={progressPct}
     >
-      <div
-        className="control-panel-casing"
-        style={{ width: "100%", maxWidth: 900, display: "flex", flexDirection: "column" }}
-      >
-        <div className="screw top-left" />
-        <div className="screw top-right" />
-        <div className="screw bottom-left" />
-        <div className="screw bottom-right" />
-
-        {/* Fejléc */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-            borderBottom: "2px solid #333",
-            pb: 1,
-            gap: 2,
-            flexWrap: "wrap",
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontFamily: '"VT323", monospace',
-                fontSize: "1.3rem",
-                color: "#ffb000",
-                letterSpacing: 2,
-              }}
-            >
-              [{groupData.name.toUpperCase()}]
-            </Typography>
-            {currentMission && (
-              <Typography
-                sx={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#555" }}
-              >
-                {currentMission.name}
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            {effectiveIndex > 0 && (
-              <button
-                className="retro-btn blue"
-                onClick={handleBack}
-                title="Előző misszió"
-                style={{ width: 28, height: 28 }}
-              />
-            )}
-            <Typography
-              sx={{
-                fontFamily: '"VT323", monospace',
-                fontSize: "1.1rem",
-                color: "#0f0",
-                letterSpacing: 1,
-              }}
-            >
-              {effectiveIndex + 1} / {totalCount}
-            </Typography>
-            <button
-              className="retro-btn red"
-              onClick={() => navigate(`/star-systems/${groupData.starSystemId}`)}
-              title="Vissza"
-              style={{ width: 28, height: 28 }}
-            />
-          </Box>
+      {completeStepMutation.isPending && (
+        <Box sx={{ mb: 1 }}>
+          <CircularProgress size={16} sx={{ color: "var(--color-warning)" }} />
         </Box>
-
-        {/* Progress bar */}
-        <LinearProgress
-          variant="determinate"
-          value={progressPct}
-          sx={{
-            mb: 2,
-            height: 4,
-            bgcolor: "#111",
-            "& .MuiLinearProgress-bar": { bgcolor: "#0f0" },
-          }}
-        />
-
-        {/* Completing overlay */}
-        {completing && (
-          <Box sx={{ mb: 2 }}>
-            <LinearProgress
-              sx={{
-                height: 2,
-                bgcolor: "#111",
-                "& .MuiLinearProgress-bar": { bgcolor: "#ffb000" },
-              }}
-            />
-          </Box>
-        )}
-
-        {/* Misszió tartalom */}
-        <Box sx={{ flex: 1, overflow: "auto" }}>{renderMission()}</Box>
-      </div>
-    </Box>
+      )}
+      {renderMission()}
+    </MissionPlayerShell>
   );
 };
 

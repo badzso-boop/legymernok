@@ -198,8 +198,6 @@ const resources = {
         confirmDeleteFile: "Delete {{fileName}}? This cannot be undone.",
         renameFile: "Rename",
         deleteFile: "Delete",
-        codingPlayerTitle: "Coding Station",
-        codingPlayerBackButton: "Back to system",
         codingPlayerSavedNote: "Changes are saved to your own personal repository.",
         codingPlayerNoFiles: "This mission has no files yet.",
         fileEditorTemplateNote:
@@ -289,6 +287,11 @@ const resources = {
         replay: "REPLAY",
         review: "REVIEW",
         back: "PREVIOUS",
+        loadError: "Content could not be loaded.",
+        groupLoadError: "This group is not available.",
+        noNextMission: "No next mission.",
+        notYetAvailable: "Coming soon",
+        step: "{{current}} / {{total}}",
       },
       quiz: "Quiz",
       quizEditor: {
@@ -628,8 +631,6 @@ const resources = {
         confirmDeleteFile: "Biztosan törlöd: {{fileName}}? Ez nem vonható vissza.",
         renameFile: "Átnevezés",
         deleteFile: "Törlés",
-        codingPlayerTitle: "Kódoló Állomás",
-        codingPlayerBackButton: "Vissza a rendszerhez",
         codingPlayerSavedNote: "A módosítások a saját, személyes repódba mentődnek.",
         codingPlayerNoFiles: "Ehhez a küldetéshez még nincsenek fájlok.",
         fileEditorTemplateNote:
@@ -720,6 +721,11 @@ const resources = {
         replay: "ÚJRA",
         review: "ÁTTEKINTÉS",
         back: "ELŐZŐ",
+        loadError: "A tartalom nem tölthető be.",
+        groupLoadError: "A csoport nem érhető el.",
+        noNextMission: "Nincs következő misszió.",
+        notYetAvailable: "Hamarosan elérhető",
+        step: "{{current}} / {{total}}",
       },
       quiz: "Kvíz", // Visszaállítva szövegre
       quizEditor: {

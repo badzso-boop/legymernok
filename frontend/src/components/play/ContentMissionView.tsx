@@ -1,11 +1,17 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import React from "react";
+import { Box, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { forgeApi } from "../../api/client";
 import type { ContentPageResponse } from "../../types/mission";
 import RetroButton from "../RetroButton";
+import {
+  MissionPlayerActions,
+  MissionPlayerHeaderPortal,
+} from "../shared/MissionPlayerShell";
 
 interface ContentMissionViewProps {
   missionId: string;
@@ -13,49 +19,30 @@ interface ContentMissionViewProps {
   starSystemId?: string;
 }
 
+const PAGE_SIZE = 100;
+
 const ContentMissionView: React.FC<ContentMissionViewProps> = ({
   missionId,
   onComplete,
   starSystemId,
 }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
-  const [missionName, setMissionName] = useState("");
-  const [loadedContent, setLoadedContent] = useState("");
-  const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } =
+    useInfiniteQuery({
+      queryKey: ["missionContent", missionId],
+      queryFn: ({ pageParam }): Promise<ContentPageResponse> =>
+        forgeApi.getContentPage(missionId, pageParam, PAGE_SIZE),
+      initialPageParam: 0,
+      getNextPageParam: (lastPage) =>
+        lastPage.hasNextPage ? lastPage.page + 1 : undefined,
+    });
 
-  useEffect(() => {
-    const fetchFirst = async () => {
-      try {
-        const resp: ContentPageResponse = await forgeApi.getContentPage(missionId, 0, 100);
-        setMissionName(resp.missionName);
-        setLoadedContent(resp.content);
-        setHasMore(resp.hasNextPage);
-        setCurrentPage(0);
-      } catch {
-        setLoadedContent("_A tartalom nem érhető el._");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFirst();
-  }, [missionId]);
-
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    try {
-      const nextPage = currentPage + 1;
-      const resp: ContentPageResponse = await forgeApi.getContentPage(missionId, nextPage, 100);
-      setLoadedContent((prev) => prev + "\n" + resp.content);
-      setHasMore(resp.hasNextPage);
-      setCurrentPage(nextPage);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  const missionName = data?.pages[0]?.missionName ?? "";
+  const loadedContent = isError
+    ? t("play.loadError")
+    : (data?.pages.map((p) => p.content).join("\n") ?? "");
 
   const handleNext = () => {
     if (onComplete) {
@@ -67,126 +54,68 @@ const ContentMissionView: React.FC<ContentMissionViewProps> = ({
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 200 }}>
-        <CircularProgress sx={{ color: "#0f0" }} />
+        <CircularProgress sx={{ color: "var(--color-accent-primary)" }} />
       </Box>
     );
   }
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
-      }}
-    >
-      {/* Fejléc */}
-      <Box
-        sx={{
-          pb: 1,
-          mb: 2,
-          borderBottom: "1px dashed #333",
-          flexShrink: 0,
-        }}
-      >
-        <Typography
-          sx={{
-            fontFamily: '"VT323", monospace',
-            fontSize: "1.4rem",
-            color: "#ffb000",
-            letterSpacing: 2,
-          }}
-        >
-          {missionName.toUpperCase()}
-        </Typography>
-      </Box>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <MissionPlayerHeaderPortal title={missionName} />
 
-      {/* Tartalom terület */}
       <Box
         sx={{
-          flex: 1,
-          overflow: "auto",
-          bgcolor: "#080808",
-          border: "1px solid #222",
-          borderRadius: 1,
-          p: 2,
-          mb: 2,
-          color: "#ddd",
+          color: "var(--color-text-primary)",
           "& h1, & h2, & h3": {
-            color: "#ffb000",
-            fontFamily: '"VT323", monospace',
-            letterSpacing: 1,
+            color: "var(--color-accent-primary)",
+            fontWeight: 700,
           },
-          "& h4, & h5, & h6": { color: "#aaa" },
-          "& p": { lineHeight: 1.7, fontFamily: "monospace", fontSize: "0.9rem" },
+          "& p": { lineHeight: 1.7 },
           "& code": {
-            bgcolor: "#1a1a1a",
+            bgcolor: "var(--color-bg-elevated)",
             px: 0.5,
             borderRadius: 0.5,
             fontFamily: "monospace",
-            color: "#0f0",
-            fontSize: "0.85rem",
+            fontSize: "0.9em",
           },
           "& pre": {
-            bgcolor: "#0a1a0a",
-            border: "1px solid #1a3a1a",
+            bgcolor: "var(--color-bg-elevated)",
+            border: "1px solid var(--color-border)",
             p: 1.5,
             borderRadius: 1,
             overflow: "auto",
           },
           "& blockquote": {
-            borderLeft: "3px solid #ffb000",
+            borderLeft: "3px solid var(--color-accent-primary)",
             pl: 2,
             ml: 0,
-            color: "#aaa",
+            color: "var(--color-text-secondary)",
           },
-          "& a": { color: "#32cd32" },
+          "& a": { color: "var(--color-accent-primary)" },
           "& ul, & ol": { pl: 3 },
-          "& li": { fontFamily: "monospace", fontSize: "0.9rem", mb: 0.5 },
           "& table": { borderCollapse: "collapse", width: "100%" },
-          "& th, & td": {
-            border: "1px solid #333",
-            p: "6px 12px",
-            fontFamily: "monospace",
-            fontSize: "0.85rem",
-          },
-          "& th": { bgcolor: "#111", color: "#ffb000" },
-          "& hr": { borderColor: "#333", my: 2 },
+          "& th, & td": { border: "1px solid var(--color-border)", p: "6px 12px" },
+          "& th": { bgcolor: "var(--color-bg-elevated)" },
+          "& hr": { borderColor: "var(--color-border)", my: 2 },
         }}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{loadedContent}</ReactMarkdown>
       </Box>
 
-      {/* Gombok */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexShrink: 0,
-          gap: 2,
-        }}
-      >
-        <Box>
-          {hasMore && (
-            <RetroButton
-              color="blue"
-              labelKey="play.loadMore"
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-            />
-          )}
-        </Box>
-        <RetroButton
-          color="green"
-          labelKey="play.next"
-          onClick={handleNext}
-        />
-      </Box>
+      <MissionPlayerActions>
+        {hasNextPage && (
+          <RetroButton
+            color="blue"
+            labelKey="play.loadMore"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+          />
+        )}
+        <RetroButton color="green" labelKey="play.next" onClick={handleNext} />
+      </MissionPlayerActions>
     </Box>
   );
 };
