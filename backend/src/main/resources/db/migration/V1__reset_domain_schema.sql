@@ -44,6 +44,54 @@ DROP TABLE IF EXISTS mission_groups CASCADE;
 DROP TABLE IF EXISTS star_systems CASCADE;
 
 -- -----------------------------------------------------------------------------
+-- 2b. Alap táblák (cadets, roles, permissions, RBAC junction táblák)
+--
+-- Ezeket eredetileg Hibernate ddl-auto hozta létre, mielőtt a projekt Flywayre
+-- állt át — ezért soha nem került SQL-be. Fresh (üres) adatbázison enélkül a
+-- lenti CREATE TABLE-ök FK-referenciái (pl. star_systems.owner_id → cadets.id)
+-- meghiúsulnak, mert a cadets tábla nem létezne. Az élő éles adatbázison ez a
+-- migráció sosem fut le ténylegesen (spring.flyway.baseline-version=1 miatt a
+-- séma V1-ig baseline-olt, nem migrált) — ezért ez a blokk csak fresh
+-- telepítésen fut, az élő adatot nem érinti. IF NOT EXISTS a biztonság kedvéért.
+-- -----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS cadets (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username      VARCHAR(255) NOT NULL UNIQUE,
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name     VARCHAR(255),
+    avatar_url    VARCHAR(255),
+    gitea_user_id BIGINT,
+    created_at    TIMESTAMPTZ,
+    updated_at    TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(255) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS permissions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(255) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS cadet_roles (
+    cadet_id UUID NOT NULL REFERENCES cadets(id),
+    role_id  UUID NOT NULL REFERENCES roles(id),
+    PRIMARY KEY (cadet_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS roles_permissions (
+    role_id       UUID NOT NULL REFERENCES roles(id),
+    permission_id UUID NOT NULL REFERENCES permissions(id),
+    PRIMARY KEY (role_id, permission_id)
+);
+
+-- -----------------------------------------------------------------------------
 -- 3. Domain táblák újralétrehozása (helyes séma)
 -- -----------------------------------------------------------------------------
 
