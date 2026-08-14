@@ -16,4 +16,5 @@ public interface CadetRepository extends JpaRepository<Cadet, UUID> {
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
     Optional<Cadet> findFirstByRoles_Permissions_Name(String permissionName);
+    List<Cadet> findAllByUsernameContainingIgnoreCase(String usernameFragment);
 }
