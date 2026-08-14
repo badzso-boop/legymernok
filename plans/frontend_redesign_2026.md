@@ -280,7 +280,10 @@ A jelenlegi `HeroSection`/`FeaturesSection`/`AboutSection`/`FaqSection` szerkeze
   még, ez a márka bemutatkozó élménye. A mai `SpaceStationCanvas.tsx` izolált, csak-landing
   megoldását váltja ki a közös, paraméterezett komponens.
 - A hero szekció kap egy karakter-animációt (a `new_direction_2026.md`-ben már megtervezett
-  "barátságos robot" — ha még nincs asset, egyszerű SVG/Lottie placeholder-rel indulhat).
+  "barátságos robot"). **Döntés: egyszerű SVG placeholder-rel indulunk** (nem várunk kész
+  illusztrátori assetre) — egyszerű geometrikus/vonalas SVG karakter, `framer-motion`-nal
+  animálva (integetés, lebegés), később cserélhető egy végleges illusztrációra anélkül, hogy a
+  layout/animációs logika változna.
 - CTA-k, kártyák a fenti design system komponenseivel (`GlowCard`, `NeonButton`).
 
 ### 5.2 Dashboard (authentikált "pilótafülke")
@@ -658,13 +661,6 @@ projektben már bevett, dokumentált mintákat követi** (`backend/CLAUDE.md`, `
 
 ## 12. Nyitott kérdések
 
-Ezen a ponton **egyetlen valódi nyitott kérdés maradt** — a másik kettő (`MarkdownStudio` alapja,
-streak freeze) el lett döntve (ld. 4.2, illetve 8. szekció), itt csak addig szerepeltek, amíg meg
-nem születtek a döntések.
-
-- **Karakter/robot maszkot** (a `new_direction_2026.md` "barátságos robot" narrátora) — ez terméki
-  döntés, nem technikai, ezért nem dönthető el a tervben magától: **van/lesz kész illusztrátori
-  asset erre a körre, vagy induljunk egyszerű SVG/emoji-szintű placeholder-rel, és cseréljük ki
-  később, ha lesz vizuális asset?** Ha placeholder mellett döntünk, ez nem blokkolja a
-  megvalósítás indulását — csak jó előre tudni, hogy melyik utat választjuk, mert ez befolyásolja,
-  hogy a hero-szekció layoutja mekkora helyet foglaljon a karakternek.
+Nincs több nyitott kérdés — mindhárom korábbi pont eldőlt: `MarkdownStudio` alapja és a streak
+freeze scope-ja (ld. 4.2, illetve 8. szekció), a robot-karakter pedig SVG placeholder-rel indul
+(ld. 5.1). Ezzel a terv teljes egészében megvalósítás-kész.
