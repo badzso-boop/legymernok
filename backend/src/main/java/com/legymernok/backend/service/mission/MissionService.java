@@ -251,7 +251,7 @@ public class MissionService {
      * A törlés saját hibáját csak logolja, az eredeti kivételt engedi tovább.
      */
     private void deleteOrphanedGiteaRepository(String repoName, Exception cause) {
-        log.error("DB save failed after Gitea repo '{}' was already created — deleting orphan repo. Cause: {}",
+        log.error("Follow-up step failed after Gitea repo '{}' was already created — deleting orphan repo. Cause: {}",
                 repoName, cause.getMessage());
         try {
             giteaService.deleteAdminRepository(repoName);
@@ -590,13 +590,25 @@ public class MissionService {
         }
 
         // Létrehozzuk az üres repót a usernek az admin alatt
-        String userRepoUrl = giteaService.createEmptyRepository(userRepoName, true);
+        String userRepoUrl;
+        try {
+            userRepoUrl = giteaService.createEmptyRepository(userRepoName, true);
+        } catch (Exception e) {
+            log.error("Gitea repository creation failed for cadet mission repo '{}'. Error: {}", userRepoName, e.getMessage());
+            throw new ExternalServiceException("Gitea", "Failed to create repository: " + e.getMessage());
+        }
 
-        // Átmásoljuk az eredeti misszió repójának tartalmát az új user-specifikus repóba
-        giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
+        try {
+            // Átmásoljuk az eredeti misszió repójának tartalmát az új user-specifikus repóba
+            giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
 
-        // User hozzáadása kollaborátorként (write joggal)
-        giteaService.addCollaborator(userRepoName, cadet.getUsername(), "write");
+            // User hozzáadása kollaborátorként (write joggal)
+            giteaService.addCollaborator(userRepoName, cadet.getUsername(), "write");
+        } catch (Exception e) {
+            log.error("Gitea repository setup (copy/collaborator) failed for '{}'. Error: {}", userRepoName, e.getMessage());
+            deleteOrphanedGiteaRepository(userRepoName, e);
+            throw new ExternalServiceException("Gitea", "Failed to set up repository: " + e.getMessage());
+        }
 
         // Mentés az adatbázisba
         CadetMission cadetMission = CadetMission.builder()
