@@ -235,6 +235,21 @@ A `mobile-friendly.md`-ben már megtervezett fa-struktúra (Star System → Grou
 átdolgozást (a jelenlegi Material UI lista helyett kártyás, ikonos, drag-and-drop-ra előkészített
 fa nézet).
 
+### 4.5 Meglévő admin felületek, amik megmaradnak — csak jól látható helyen
+
+Van néhány admin funkció, ami **funkcionálisan ma is teljes értékű**, csak a jelenlegi
+kaotikus/hosszú sidebar-listában könnyen elvész, és emiatt nem is triviális megtalálni:
+
+- **Feature Flag kezelés** (`/admin/feature-flags`, `FeatureFlagList.tsx`) — táblázatos nézet,
+  soronként valódi `Switch`-csel be/ki kapcsolható flag, optimista UI-frissítéssel. Backend oldal
+  (`FeatureFlagController`/`Service`) teljes CRUD-dal már kész. **Ehhez a redesign-ban nincs
+  funkcionális teendő** — csak az egységesített admin navigációban (ld. 4.4-hez hasonlóan
+  kártyás/csoportosított menü, nem egy hosszú, differenciálatlan lista) kap egyértelmű, könnyen
+  megtalálható helyet, hogy ne kelljen "elveszni" benne, mint ma.
+- Hasonlóan megtartandó, csak navigációban jobban rendszerezendő: user/role/permission kezelés,
+  admin logok (WebSocket real-time nézet) — ezek se kapnak új funkciót ebben a körben, csak új
+  helyet az egységes admin navigációs struktúrában.
+
 ---
 
 ## 5. Landing oldal és dashboard
