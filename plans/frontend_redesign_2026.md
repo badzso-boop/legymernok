@@ -227,9 +227,14 @@ A jelenlegi `ContentEditor`/`MarkdownEditor` egy sima textarea + preview. Az új
 - **Split view desktopon** (szerkesztő | élő preview egymás mellett), **tab-váltás mobilon**
   (Szerkesztés / Előnézet tab, mert egymás mellett nem fér el).
 - **"Blank hozzáadása" gomb** (FILL_IN_BLANK-nál) ugyanebbe a toolbar-ba integrálva, nem külön UI.
-- Alapja lehet `@mdxeditor/editor` vagy egy saját, `react-markdown` + kézzel írt toolbar
-  kombináció — implementáció közben eldöntendő, de a UX-elvárás (toolbar + élő preview + mobilon
-  is használható) nem alku tárgya.
+- **Döntés: saját, kézzel írt toolbar + a már meglévő `react-markdown` (a projekt már használja,
+  nincs hozzá új dependency).** Nem `@mdxeditor/editor` vagy hasonló kész könyvtár, két okból:
+  (1) a "Blank hozzáadása" gomb (FILL_IN_BLANK) egy projekt-specifikus, nem szabványos markdown-
+  elem — ezt egy kész szerkesztő-könyvtárba is csak plugin-nal/megkerüléssel lehetne beépíteni,
+  míg egy saját toolbar-nál ez ugyanolyan gomb, mint a H1 vagy a Bold; (2) egy kész, önálló
+  stílus-rendszerrel érkező editor-könyvtár állandó küzdelmet jelentene a 3-témás (Space/Dark/
+  Light) token-rendszerrel való összehangolásban — egy saját toolbar a `theme/tokens.ts`-ből
+  színez, nincs mit felülírni.
 
 ### 4.3 `QuizBuilder` — a jelenlegi nyers JSON-szerkesztés helyett
 
@@ -472,6 +477,9 @@ flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú ké
   a CODING mobil-UX javítása (ld. 6.2) ebben a körben elég; a teljes alternatív interakciós mód
   külön terv.
 - **AI keresés (`ai_embedding.md`), Social AI (`social_ai.md`)** — függetlenek ettől a körtől.
+- **Streak "freeze" és emlékeztető push-notifikáció** (7.1) — az MVP streak-logika lustán, a
+  következő aktivitáskor számol (ld. 7.1 részletesen), ez elég ehhez a körhöz; a
+  megszakadás-védelem és a push-emlékeztető külön, jól elkülöníthető feature.
 
 ---
 
@@ -648,11 +656,15 @@ projektben már bevett, dokumentált mintákat követi** (`backend/CLAUDE.md`, `
 
 ---
 
-## 12. Nyitott kérdések (implementáció közben eldöntendő, nem blokkolja a tervet)
+## 12. Nyitott kérdések
 
-- `MarkdownStudio` alapja: kész könyvtár (`@mdxeditor/editor`) vs. saját toolbar + `react-markdown`
-  — implementáció közben, a konkrét toolbar-igények alapján dől el.
-- Karakter/robot maszkot (a `new_direction_2026.md` "barátságos robot" narrátora) — kész
-  asset/illustrátor hiányában induljon-e egyszerű SVG/emoji-szintű placeholder-rel, vagy várjunk
-  vizuális asset-re — ez terméki döntés, nem technikai.
-- Streak "freeze"/emlékeztető push-notifikáció — Stage 2, nem blokkolja az MVP streak-et.
+Ezen a ponton **egyetlen valódi nyitott kérdés maradt** — a másik kettő (`MarkdownStudio` alapja,
+streak freeze) el lett döntve (ld. 4.2, illetve 8. szekció), itt csak addig szerepeltek, amíg meg
+nem születtek a döntések.
+
+- **Karakter/robot maszkot** (a `new_direction_2026.md` "barátságos robot" narrátora) — ez terméki
+  döntés, nem technikai, ezért nem dönthető el a tervben magától: **van/lesz kész illusztrátori
+  asset erre a körre, vagy induljunk egyszerű SVG/emoji-szintű placeholder-rel, és cseréljük ki
+  később, ha lesz vizuális asset?** Ha placeholder mellett döntünk, ez nem blokkolja a
+  megvalósítás indulását — csak jó előre tudni, hogy melyik utat választjuk, mert ez befolyásolja,
+  hogy a hero-szekció layoutja mekkora helyet foglaljon a karakternek.
