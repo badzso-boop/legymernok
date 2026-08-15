@@ -218,6 +218,18 @@ public class GiteaService {
         Map<String, String> allFiles = new HashMap<>();
         collectFilesRecursive(sourceOwner, sourceRepoName, "", allFiles);
 
+        // getRepoContents/getFileContent 404-nél csendben üres listát/null-t ad
+        // vissza (lásd ott a kommentet) — enélkül az ellenőrzés nélkül egy
+        // hiányzó/elgépelt nevű forrás template repo esetén a célrepó
+        // "sikeresen", de láthatatlanul ÜRESEN jönne létre (ez okozta az
+        // eredeti #34 issue-t: orphan, üres mission repók, semmilyen hibaüzenet
+        // nélkül).
+        if (allFiles.isEmpty()) {
+            throw new ExternalServiceException("Gitea",
+                    "Template repository '" + sourceOwner + "/" + sourceRepoName
+                            + "' is empty or does not exist — cannot copy contents to '" + targetRepoName + "'.");
+        }
+
         // Egyetlen nagy commit az összes fájllal
         uploadFiles(adminUsername, targetRepoName, allFiles, "Initial template copy", null);
     }
