@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React from "react";
 import {
   Box,
   Paper,
@@ -17,154 +17,15 @@ import {
 } from "@mui/material";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
 import { useTranslation } from "react-i18next";
-import apiClient from "../../../api/client";
-
-// Log típus definíció
-interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: "INFO" | "WARN" | "ERROR" | "DEBUG" | "TRACE" | "UNKNOWN";
-  message: string;
-}
-
-// Segédfüggvény a log sorok parszolásához
-const parseLogLine = (line: string): LogEntry => {
-  // console.log("Parsing:", line); // Debugoláshoz
-
-  // 1. Dátum keresése (Mindig az első 23 karakter, ha a formátum fix)
-  // De biztonságosabb regex-el csak a dátumot kivenni.
-  // Megengedjük a ' ' és 'T' elválasztót is, és a több szóközt.
-  const dateRegex = /^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\.\d{3})/;
-  const dateMatch = line.match(dateRegex);
-
-  const uniqueId = Math.random().toString(36).substr(2, 9);
-
-  if (!dateMatch) {
-    // Ha még dátum sincs az elején, akkor ez egy stack trace sora vagy szemét
-    return {
-      id: uniqueId,
-      timestamp: "",
-      level: "UNKNOWN",
-      message: line,
-    };
-  }
-
-  const timestamp = dateMatch[1];
-
-  // 2. A maradék szöveg (a dátum után)
-  let remaining = line.substring(timestamp.length).trim();
-
-  // 3. Szint keresése (INFO, WARN, ERROR, DEBUG, TRACE)
-  // Az első szó a maradékban
-  const levelMatch = remaining.match(/^([A-Z]+)\s+/);
-  let level: any = "UNKNOWN";
-
-  if (levelMatch) {
-    level = levelMatch[1];
-    // Vágjuk le a szintet a maradékból
-    remaining = remaining.substring(level.length).trim();
-  }
-
-  // 4. Üzenet kinyerése
-  // Keressük a " : " elválasztót.
-  // Fájl: "1 --- [main] c.l... : Starting..."
-  // WS: "--- [MessageBroker-2] ... : WebSocketSession..."
-
-  const separatorIndex = remaining.indexOf(" : ");
-  let message = "";
-
-  if (separatorIndex !== -1) {
-    // Ha megvan a ": ", akkor az üzenet onnantól kezdődik
-    message = remaining.substring(separatorIndex + 3);
-  } else {
-    // Ha nincs ": " (pl. Spring startup), akkor próbáljuk meg a "---" utáni részt
-    // de úgy, hogy a thread nevet is átugorjuk ha lehet.
-    // Ha ez túl bonyolult, egyszerűen adjuk vissza a teljes maradékot,
-    // mert abban benne van az infó.
-    message = remaining;
-  }
-
-  return {
-    id: uniqueId,
-    timestamp: timestamp,
-    level: level,
-    message: message,
-  };
-};
+import { useLiveLogs } from "../../../hooks/useLiveLogs";
 
 const LogList: React.FC = () => {
   const { t } = useTranslation();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const stompClient = useRef<Client | null>(null);
-
-  // 1. Múltbeli logok betöltése (API)
-  const fetchHistory = async () => {
-    try {
-      setLoading(true);
-      // Itt hívjuk meg közvetlenül az apiClient-et
-      const response = await apiClient.get<string[]>("/admin/logs", {
-        params: { limit: 200 },
-      });
-
-      const parsedLogs = response.data.map(parseLogLine).reverse(); // Legfrissebb felül
-      setLogs(parsedLogs);
-    } catch (error) {
-      console.error("Failed to load logs:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  // 2. WebSocket csatlakozás (Élő stream)
-  useEffect(() => {
-    // API URL meghatározása a WebSockethez
-    const apiUrl = import.meta.env.VITE_API_URL || "/api";
-    // "/api" levágása és "/ws-log" hozzáadása -> /ws-log (relatív, SockJS feloldja)
-    const wsUrl = apiUrl.replace(/\/api$/, "") + "/ws-log";
-
-    const token = localStorage.getItem("token");
-
-    const client = new Client({
-      webSocketFactory: () => new SockJS(wsUrl),
-      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
-      reconnectDelay: 5000,
-      onConnect: () => {
-        setConnected(true);
-        console.log("WS Connected");
-
-        client.subscribe("/topic/logs", (message) => {
-          if (message.body) {
-            const newLog = parseLogLine(message.body);
-            // Hozzáadjuk a lista elejéhez, és megtartjuk az utolsó 500-at
-            setLogs((prev) => [newLog, ...prev].slice(0, 500));
-          }
-        });
-      },
-      onDisconnect: () => {
-        setConnected(false);
-        console.log("WS Disconnected");
-      },
-      // debug: (str) => console.log(str), // Fejlesztéshez, ha kell
-    });
-
-    client.activate();
-    stompClient.current = client;
-
-    return () => {
-      if (stompClient.current) {
-        stompClient.current.deactivate();
-      }
-    };
-  }, []);
+  const { logs, connected, loading, fetchHistory, setLogs } = useLiveLogs({
+    historyLimit: 200,
+    maxKept: 500,
+  });
 
   const getLevelColor = (level: string) => {
     switch (level) {

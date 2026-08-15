@@ -4,6 +4,7 @@ import com.legymernok.backend.model.cadet.Cadet;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,4 +18,6 @@ public interface CadetRepository extends JpaRepository<Cadet, UUID> {
     boolean existsByEmail(String email);
     Optional<Cadet> findFirstByRoles_Permissions_Name(String permissionName);
     List<Cadet> findAllByUsernameContainingIgnoreCase(String usernameFragment);
+    List<Cadet> findTop10ByOrderByCreatedAtDesc();
+    long countByCreatedAtAfter(Instant since);
 }
