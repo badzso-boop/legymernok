@@ -60,26 +60,35 @@ const StarMapPage: React.FC = () => {
         </Box>
 
         <GlowCard sx={{ height: { xs: "60vh", md: "70vh" }, position: "relative", p: 0, overflow: "hidden" }}>
-          {searchOpen ? (
-            <SearchPanel onClose={() => setSearchOpen(false)} />
-          ) : loading ? (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
-              }}
-            >
-              <CircularProgress />
-            </Box>
-          ) : isError ? (
-            <Box sx={{ p: 2 }}>
-              <Alert severity="error">{t("starMap.loadError")}</Alert>
-            </Box>
-          ) : (
-            <StarMapGraph systems={systems} interactive height="100%" />
-          )}
+          {/* A GlowCard saját (glassmorphism) háttere elnyomná a lap-szintű
+              csillagmezőt a doboz belsejében — ugyanaz a minta, mint a
+              Dashboard kicsinyített előnézet-kártyáján: egy külön
+              StarfieldBackground/NebulaLayer közvetlenül a dobozon belül. */}
+          <StarfieldBackground intensity="ambient" layers={2} />
+          <NebulaLayer intensity="ambient" />
+
+          <Box sx={{ position: "relative", zIndex: 1, height: "100%" }}>
+            {searchOpen ? (
+              <SearchPanel onClose={() => setSearchOpen(false)} />
+            ) : loading ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: "100%",
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            ) : isError ? (
+              <Box sx={{ p: 2 }}>
+                <Alert severity="error">{t("starMap.loadError")}</Alert>
+              </Box>
+            ) : (
+              <StarMapGraph systems={systems} interactive height="100%" />
+            )}
+          </Box>
         </GlowCard>
       </Box>
     </Box>
