@@ -142,7 +142,9 @@ frontend/src/
 ## API kliens (`src/api/client.ts`)
 
 ```typescript
-// BaseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api"
+// BaseURL: import.meta.env.VITE_API_URL || "/api"
+// A default relatív: prodban az nginx, devben a vite proxy irányítja a backendre.
+// Emiatt nincs szükség verziókövetett frontend/.env-re.
 // Request interceptor: Authorization: Bearer <token from localStorage>
 // Response interceptor: 401 → token törlés
 ```
