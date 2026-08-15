@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import { useNavigate } from "react-router-dom";
 import {
@@ -11,6 +11,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import "../starmap/starmap.css";
 import SectorNode, { type SectorNodeData } from "./SectorNode";
+import { WarpTransition } from "../../shared/WarpTransition";
 import type { SectorResponse } from "../../../types/sector";
 
 const nodeTypes = { sector: SectorNode };
@@ -53,6 +54,7 @@ export const SectorMapGraph: React.FC<SectorMapGraphProps> = ({
   height = "100%",
 }) => {
   const navigate = useNavigate();
+  const [warpTarget, setWarpTarget] = useState<string | null>(null);
 
   const nodes = useMemo<Node<SectorNodeData, "sector">[]>(() => {
     const sectorNodes: Node<SectorNodeData, "sector">[] = sectors.map((sector) => {
@@ -90,15 +92,17 @@ export const SectorMapGraph: React.FC<SectorMapGraphProps> = ({
 
   const handleNodeClick: NodeMouseHandler = (_event, node) => {
     if (!interactive) return;
-    if (node.id === UNASSIGNED_NODE_ID) {
-      navigate("/star-map");
-    } else {
-      navigate(`/star-map/${node.id}`);
-    }
+    setWarpTarget(node.id === UNASSIGNED_NODE_ID ? "/star-map" : `/star-map/${node.id}`);
   };
 
   return (
     <Box sx={{ width: "100%", height, position: "relative" }} data-cy="sector-map-graph">
+      <WarpTransition
+        active={warpTarget !== null}
+        onComplete={() => {
+          if (warpTarget) navigate(warpTarget);
+        }}
+      />
       <ReactFlow
         nodes={nodes}
         edges={[]}

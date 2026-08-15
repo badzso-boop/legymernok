@@ -1,5 +1,7 @@
 import React from "react";
-import { Box, Typography, CircularProgress, Alert } from "@mui/material";
+import { Box, Typography, CircularProgress, Alert, IconButton, Tooltip } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { StarfieldBackground } from "../../components/shared/StarfieldBackground";
@@ -15,6 +17,7 @@ import { sectorApi, starSystemApi } from "../../api/client";
  */
 const SectorMapPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const {
     data: sectors = [],
@@ -39,9 +42,20 @@ const SectorMapPage: React.FC = () => {
       <NebulaLayer intensity="ambient" />
 
       <Box sx={{ position: "relative", zIndex: 1 }}>
-        <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
-          {t("sectorMap.title")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <Tooltip title={t("sectorMap.backToDashboard")}>
+            <IconButton
+              onClick={() => navigate("/")}
+              sx={{ color: "var(--color-accent-primary)" }}
+              data-cy="sector-map-back"
+            >
+              <ArrowBackIcon />
+            </IconButton>
+          </Tooltip>
+          <Typography variant="h4" sx={{ fontWeight: "bold" }}>
+            {t("sectorMap.title")}
+          </Typography>
+        </Box>
 
         <GlowCard sx={{ height: { xs: "60vh", md: "70vh" }, position: "relative", p: 0, overflow: "hidden" }}>
           <StarfieldBackground intensity="ambient" layers={2} />
