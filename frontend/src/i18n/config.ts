@@ -232,6 +232,7 @@ const resources = {
       // NAV
       nav: {
         starMap: "Star Map",
+        sectorMap: "Sector Map",
         myForge: "My Forge",
         changelog: "Changelog",
         back: "Back",
@@ -792,6 +793,7 @@ const resources = {
       // NAV
       nav: {
         starMap: "Csillagtérkép",
+        sectorMap: "Szektortérkép",
         myForge: "Forge-jaim",
         changelog: "Változásnapló",
         back: "Vissza",
