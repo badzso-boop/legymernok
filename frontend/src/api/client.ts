@@ -40,6 +40,7 @@ import type {
   CadetProfileResponse,
   MeResponse,
 } from "../types/social";
+import type { AdminStatsResponse } from "../types/admin";
 import type {
   ContinueResponse,
   ActivityFeedItemResponse,
@@ -528,6 +529,14 @@ export const fillInBlankApi = {
     const response = await apiClient.get<LastAttemptResponse>(
       `/missions/${missionId}/fill-in-blank/last-attempt`,
     );
+    return response.data;
+  },
+};
+
+export const adminStatsApi = {
+  /** Admin dashboard áttekintő statisztikák (user:read jogosultság szükséges). */
+  getStats: async (): Promise<AdminStatsResponse> => {
+    const response = await apiClient.get<AdminStatsResponse>("/admin/stats");
     return response.data;
   },
 };

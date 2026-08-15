@@ -232,6 +232,30 @@ const resources = {
           "We use a small number of cookies on this site — only to remember your own preferences (like theme choice and table filter settings), never for tracking or advertising.",
         accept: "Got it",
       },
+      adminOverview: {
+        title: "Admin Dashboard",
+        loadError: "Failed to load dashboard statistics.",
+        stats: {
+          totalCadets: "Cadets",
+          totalStarSystems: "Star Systems",
+          totalMissions: "Missions",
+          newCadetsThisWeek: "New this week",
+          openFeedbackCount: "Open feedback",
+        },
+        recentCadets: {
+          label: "Newly registered cadets",
+          empty: "No cadets have registered yet.",
+        },
+        popularStarSystems: {
+          label: "Most started star systems",
+          empty: "No one has started a star system yet.",
+          startedBy: "{{count}} started",
+        },
+        logSnippet: {
+          label: "System logs",
+          openFull: "Open full logs",
+        },
+      },
       starSystemDetail: {
         notFound: "Star system not found.",
         empty: "No content available in this star system yet.",
@@ -745,6 +769,30 @@ const resources = {
         message:
           "Az oldalon néhány cookie-t használunk — kizárólag a saját beállításaid megjegyzésére (pl. téma-választás, táblázat-szűrők), sosem követésre vagy reklámra.",
         accept: "Rendben",
+      },
+      adminOverview: {
+        title: "Admin Vezérlőpult",
+        loadError: "Nem sikerült betölteni a statisztikákat.",
+        stats: {
+          totalCadets: "Kadétok",
+          totalStarSystems: "Csillagrendszerek",
+          totalMissions: "Missziók",
+          newCadetsThisWeek: "Új ezen a héten",
+          openFeedbackCount: "Nyitott visszajelzés",
+        },
+        recentCadets: {
+          label: "Frissen regisztrált kadétok",
+          empty: "Még senki nem regisztrált.",
+        },
+        popularStarSystems: {
+          label: "Legtöbbet elkezdett csillagrendszerek",
+          empty: "Még senki nem indított el egy csillagrendszert sem.",
+          startedBy: "{{count}} kadét indította el",
+        },
+        logSnippet: {
+          label: "Rendszernaplók",
+          openFull: "Teljes napló megnyitása",
+        },
       },
       starSystemDetail: {
         notFound: "A csillagrendszer nem található.",
