@@ -232,6 +232,15 @@ const resources = {
           "We use a small number of cookies on this site — only to remember your own preferences (like theme choice and table filter settings), never for tracking or advertising.",
         accept: "Got it",
       },
+      starSystemDetail: {
+        notFound: "Star system not found.",
+        empty: "No content available in this star system yet.",
+        stepsCount: "{{count}} step",
+        stepsCount_other: "{{count}} steps",
+        fillInBlankNotSupported:
+          '"{{name}}" (fill-in-blank) is not yet playable on this interface.',
+        startError: "Failed to start: {{name}}",
+      },
       settings: {
         title: "Settings",
         themeSectionTitle: "Theme",
@@ -246,15 +255,9 @@ const resources = {
       },
       // STAR MAP
       starMap: {
-        title: "GALACTIC NAVIGATOR",
-        status: "STATUS",
-        online: "ONLINE",
-        scanning: "SCANNING...",
+        title: "Star Map",
         back: "BACK",
-        scan: "SCAN",
-        warp: "WARP",
-        data: "DATA",
-        lang: "LANGUAGE",
+        scan: "Search",
         statusNotStarted: "Not started",
         statusInProgress: "In progress",
         statusCompleted: "Completed",
@@ -743,6 +746,14 @@ const resources = {
           "Az oldalon néhány cookie-t használunk — kizárólag a saját beállításaid megjegyzésére (pl. téma-választás, táblázat-szűrők), sosem követésre vagy reklámra.",
         accept: "Rendben",
       },
+      starSystemDetail: {
+        notFound: "A csillagrendszer nem található.",
+        empty: "Ebben a csillagrendszerben még nincs elérhető tartalom.",
+        stepsCount: "{{count}} lépés",
+        fillInBlankNotSupported:
+          '"{{name}}" típusa (kitöltős) még nem játszható ezen a felületen.',
+        startError: "Nem sikerült elindítani: {{name}}",
+      },
       settings: {
         title: "Beállítások",
         themeSectionTitle: "Téma",
@@ -757,15 +768,9 @@ const resources = {
       },
       // STAR MAP
       starMap: {
-        title: "GALAKTIKUS NAVIGÁTOR",
-        status: "ÁLLAPOT",
-        online: "ONLINE",
-        scanning: "SCANNING...",
+        title: "Csillagtérkép",
         back: "VISSZA",
-        scan: "KERES",
-        warp: "UGRÁS",
-        data: "ADAT",
-        lang: "NYELV",
+        scan: "Keresés",
         statusNotStarted: "Még nem kezdett",
         statusInProgress: "Folyamatban",
         statusCompleted: "Teljesítve",

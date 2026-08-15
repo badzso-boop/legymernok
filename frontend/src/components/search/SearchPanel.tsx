@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, InputBase, CircularProgress } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import type { StarSystemSearchResult } from "../../types/starSystem";
 import { searchApi } from "../../api/client";
 
@@ -9,6 +10,11 @@ interface SearchPanelProps {
   onClose: () => void;
 }
 
+/**
+ * Csillagrendszer-kereső — a design system tokenjeivel, a Star Map
+ * ambient hátterén jelenik meg (a szülő gondoskodik a StarfieldBackground/
+ * NebulaLayer rétegekről, ez csak egy áttetsző, glassmorphism panel felül).
+ */
 const SearchPanel: React.FC<SearchPanelProps> = ({ onClose }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -61,77 +67,61 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onClose }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        bgcolor: "rgba(0,8,0,0.97)",
+        bgcolor: "var(--color-bg-glass)",
+        backdropFilter: "blur(16px)",
         display: "flex",
         flexDirection: "column",
         p: 3,
         zIndex: 10,
-        borderRadius: "5px",
-        fontFamily: '"Share Tech Mono", monospace',
+        borderRadius: "var(--radius-lg)",
+        border: "1px solid var(--color-border-glow)",
       }}
+      data-cy="star-map-search-panel"
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography
-          sx={{
-            color: "#0f0",
-            fontFamily: "inherit",
-            letterSpacing: 3,
-            fontSize: "14px",
-            textShadow: "0 0 8px #0f0",
-          }}
-        >
-          &gt; {t("search.title")}
+        <Typography sx={{ color: "var(--color-text-primary)", fontWeight: 600 }}>
+          {t("search.title")}
         </Typography>
-        <Typography
+        <CloseIcon
           onClick={onClose}
           sx={{
-            color: "#555",
-            fontFamily: "inherit",
-            fontSize: "12px",
+            color: "var(--color-text-secondary)",
             cursor: "pointer",
-            "&:hover": { color: "#0f0" },
-          }}
-        >
-          [ESC]
-        </Typography>
-      </Box>
-
-      <Box sx={{ position: "relative", mb: 2 }}>
-        <Typography
-          component="span"
-          sx={{ color: "#0f0", fontFamily: "inherit", fontSize: "16px", mr: 1 }}
-        >
-          &gt;
-        </Typography>
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t("search.placeholder")}
-          style={{
-            background: "transparent",
-            border: "none",
-            borderBottom: "1px solid #0f0",
-            color: "#0f0",
-            fontFamily: '"Share Tech Mono", monospace',
-            fontSize: "16px",
-            padding: "4px 8px",
-            outline: "none",
-            width: "calc(100% - 32px)",
+            "&:hover": { color: "var(--color-accent-primary)" },
           }}
         />
       </Box>
 
+      <InputBase
+        inputRef={inputRef}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={t("search.placeholder")}
+        fullWidth
+        sx={{
+          mb: 2,
+          px: 1.5,
+          py: 1,
+          borderRadius: "var(--radius-md)",
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-primary)",
+          bgcolor: "var(--color-bg-elevated)",
+        }}
+      />
+
       <Box sx={{ flex: 1, overflowY: "auto" }}>
         {loading && (
-          <Typography sx={{ color: "#3a7a3a", fontFamily: "inherit", fontSize: "13px" }}>
-            {t("search.scanning")}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2" sx={{ color: "var(--color-text-secondary)" }}>
+              {t("search.scanning")}
+            </Typography>
+          </Box>
         )}
 
         {!loading && searched && results.length === 0 && (
-          <Typography sx={{ color: "#555", fontFamily: "inherit", fontSize: "13px" }}>
+          <Typography variant="body2" sx={{ color: "var(--color-text-secondary)" }}>
             {t("search.noResults")}
           </Typography>
         )}
@@ -141,36 +131,30 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ onClose }) => {
             key={r.id}
             onClick={() => handleSelect(r.id)}
             sx={{
-              p: "10px 12px",
+              p: 1.5,
               mb: 1,
-              border: "1px solid #1a3a1a",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--color-border)",
               cursor: "pointer",
-              transition: "all 0.15s",
+              transition: "border-color 150ms ease, box-shadow 150ms ease",
               "&:hover": {
-                borderColor: "#0f0",
-                bgcolor: "rgba(0,255,0,0.04)",
-                pl: "16px",
+                borderColor: "var(--color-border-glow)",
+                boxShadow: "var(--glow-sm)",
               },
             }}
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography
-                sx={{
-                  color: "#0f0",
-                  fontFamily: "inherit",
-                  fontSize: "14px",
-                  textShadow: "0 0 4px #0f0",
-                }}
-              >
+              <Typography sx={{ color: "var(--color-text-primary)", fontWeight: 600 }}>
                 {r.name}
               </Typography>
-              <Typography sx={{ color: "#3a7a3a", fontFamily: "inherit", fontSize: "11px" }}>
+              <Typography variant="caption" sx={{ color: "var(--color-accent-primary)" }}>
                 {(r.similarity * 100).toFixed(1)}%
               </Typography>
             </Box>
             {r.description && (
               <Typography
-                sx={{ color: "#444", fontFamily: "inherit", fontSize: "11px", mt: 0.5 }}
+                variant="body2"
+                sx={{ color: "var(--color-text-secondary)", mt: 0.5 }}
               >
                 {r.description.length > 90
                   ? r.description.slice(0, 90) + "..."

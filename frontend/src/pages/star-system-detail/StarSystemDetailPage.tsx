@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Box, Typography, Paper, Chip } from "@mui/material";
+import { Box, Typography, Chip, CircularProgress, Alert } from "@mui/material";
+import {
+  Code as CodeIcon,
+  Quiz as QuizIcon,
+  Description as DescriptionIcon,
+  Extension as ExtensionIcon,
+  ElectricBolt as ElectricBoltIcon,
+  Rocket as RocketIcon,
+} from "@mui/icons-material";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { starSystemApi, groupProgressApi, missionApi } from "../../api/client";
 import type {
   StarSystemWithItemsResponse,
@@ -11,14 +20,27 @@ import type {
   GroupDisplayProgress,
 } from "../../types/group";
 import type { MissionResponse } from "../../types/mission";
-import RetroButton from "../../components/RetroButton";
-import "../../styles/RetroUI.css";
+import { StarfieldBackground } from "../../components/shared/StarfieldBackground";
+import { NebulaLayer } from "../../components/shared/NebulaLayer";
+import { GlowCard } from "../../components/shared/GlowCard";
+import { NeonButton } from "../../components/shared/NeonButton";
 
-const getDifficultyColor = (diff: string) => {
-  if (diff === "EASY") return "#0f0";
-  if (diff === "MEDIUM") return "#ff0";
-  if (diff === "HARD") return "#f00";
-  return "#fff";
+const TYPE_ICONS: Record<string, React.ReactElement> = {
+  CODING: <CodeIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />,
+  QUIZ: <QuizIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />,
+  CONTENT: <DescriptionIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />,
+  FILL_IN_BLANK: <ExtensionIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />,
+  CIRCUIT_SIMULATION: <ElectricBoltIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />,
+};
+
+const MissionTypeIcon: React.FC<{ type: string }> = ({ type }) =>
+  TYPE_ICONS[type] ?? <RocketIcon fontSize="small" sx={{ color: "var(--color-text-secondary)" }} />;
+
+const DIFFICULTY_COLOR: Record<string, string> = {
+  EASY: "var(--color-success)",
+  MEDIUM: "var(--color-accent-secondary)",
+  HARD: "#f87171",
+  EXPERT: "#f87171",
 };
 
 // ─────────────────────────────────────────────
@@ -32,70 +54,60 @@ interface GroupCardProps {
   onReplay: () => void;
 }
 
-const GroupCard: React.FC<GroupCardProps> = ({
-  item,
-  progress,
-  onStart,
-  onContinue,
-  onReplay,
-}) => {
+const GroupCard: React.FC<GroupCardProps> = ({ item, progress, onStart, onContinue, onReplay }) => {
+  const { t } = useTranslation();
   const group = item.group!;
   const missions = item.groupMissions ?? [];
 
-  const statusLabel = (() => {
+  const statusChip = (() => {
     if (!progress || progress.status === "NOT_STARTED") return null;
     if (progress.status === "COMPLETED")
       return (
         <Chip
-          label="✓ KÉSZ"
+          label={`✓ ${t("starMap.statusCompleted")}`}
           size="small"
-          sx={{ bgcolor: "#0a3d0a", color: "#0f0", fontFamily: "monospace" }}
+          sx={{ bgcolor: "var(--color-bg-elevated)", color: "var(--color-success)" }}
         />
       );
     return (
       <Chip
         label={`${progress.completedCount} / ${progress.totalCount}`}
         size="small"
-        sx={{ bgcolor: "#3d2d0a", color: "#ffb000", fontFamily: "monospace" }}
+        sx={{ bgcolor: "var(--color-bg-elevated)", color: "var(--color-accent-primary)" }}
       />
     );
   })();
 
   return (
-    <Paper
-      sx={{
-        p: 2,
-        mb: 2,
-        bgcolor: "#111",
-        border: "1px solid #333",
-        color: "#ccc",
-        "&:hover": { borderColor: "#0f0", boxShadow: "0 0 8px rgba(0,255,0,0.1)" },
-      }}
-    >
+    <GlowCard active={progress?.status === "IN_PROGRESS"} sx={{ mb: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1 }}>
         <Box>
-          <Typography sx={{ color: "#ffb000", fontFamily: "monospace", fontWeight: "bold" }}>
-            [{group.name.toUpperCase()}]
-          </Typography>
-          <Typography variant="caption" sx={{ color: "#555" }}>
-            {missions.length} lépés
+          <Typography sx={{ fontWeight: 700 }}>{group.name}</Typography>
+          <Typography variant="caption" sx={{ color: "var(--color-text-secondary)" }}>
+            {t("starSystemDetail.stepsCount", { count: missions.length })}
           </Typography>
         </Box>
-        {statusLabel}
+        {statusChip}
       </Box>
 
-      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
         {(!progress || progress.status === "NOT_STARTED") && (
-          <RetroButton color="blue" labelKey="play.start" onClick={onStart} />
+          <NeonButton size="small" onClick={onStart}>
+            {t("play.start")}
+          </NeonButton>
         )}
         {progress?.status === "IN_PROGRESS" && (
-          <RetroButton color="yellow" labelKey="play.continue" onClick={onContinue} />
+          <NeonButton size="small" onClick={onContinue}>
+            {t("play.continue")}
+          </NeonButton>
         )}
         {progress?.status === "COMPLETED" && (
-          <RetroButton color="green" labelKey="play.replay" onClick={onReplay} />
+          <NeonButton size="small" onClick={onReplay}>
+            {t("play.replay")}
+          </NeonButton>
         )}
       </Box>
-    </Paper>
+    </GlowCard>
   );
 };
 
@@ -105,15 +117,12 @@ const GroupCard: React.FC<GroupCardProps> = ({
 const StarSystemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [data, setData] = useState<StarSystemWithItemsResponse | null>(null);
-  const [groupProgress, setGroupProgress] = useState<
-    Map<string, GroupDisplayProgress>
-  >(new Map());
+  const [groupProgress, setGroupProgress] = useState<Map<string, GroupDisplayProgress>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [startingMissionId, setStartingMissionId] = useState<string | null>(
-    null,
-  );
+  const [startingMissionId, setStartingMissionId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
 
   const handleMissionStart = async (mission: MissionResponse) => {
@@ -128,29 +137,22 @@ const StarSystemDetailPage: React.FC = () => {
       return;
     }
     if (mission.missionType === "FILL_IN_BLANK") {
-      // Nincs még kadét-oldali lejátszó felület ehhez a típushoz.
-      setStartError(
-        `"${mission.name}" típusa (FILL_IN_BLANK) még nem játszható a felületen.`,
-      );
+      setStartError(t("starSystemDetail.fillInBlankNotSupported", { name: mission.name }));
       return;
     }
-
     if (mission.missionType === "CODING") {
-      // A missionApi.start()-ot maga a CodingMissionPage hívja meg
-      // (idempotens, biztonságos ott is meghívni).
       navigate(`/play/coding/${mission.id}`, { state: { starSystemId: id } });
       return;
     }
 
-    // CIRCUIT_SIMULATION — nincs még dedikált kadét-oldali
-    // munkakörnyezet, a saját Gitea repó a jelenlegi munkaterület.
+    // CIRCUIT_SIMULATION — nincs még dedikált kadét-oldali munkakörnyezet.
     setStartingMissionId(mission.id);
     try {
       const repoUrl = await missionApi.start(mission.id);
       window.open(repoUrl, "_blank", "noopener,noreferrer");
     } catch (err) {
       console.error(err);
-      setStartError(`Nem sikerült elindítani: ${mission.name}`);
+      setStartError(t("starSystemDetail.startError", { name: mission.name }));
     } finally {
       setStartingMissionId(null);
     }
@@ -170,7 +172,7 @@ const StarSystemDetailPage: React.FC = () => {
             const groupId = item.group!.id;
             try {
               const prog: GroupProgressResponse = await groupProgressApi.get(groupId);
-              let status: GroupDisplayProgress["status"] = prog.completed
+              const status: GroupDisplayProgress["status"] = prog.completed
                 ? "COMPLETED"
                 : "IN_PROGRESS";
               progressMap.set(groupId, {
@@ -198,162 +200,106 @@ const StarSystemDetailPage: React.FC = () => {
     if (id) load();
   }, [id]);
 
-  if (loading) return <div className="loading-screen">LOADING...</div>;
-  if (!data) return <div className="error-screen">SYSTEM NOT FOUND</div>;
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Alert severity="error">{t("starSystemDetail.notFound")}</Alert>
+    );
+  }
 
   return (
-    <Box
-      sx={{
-        width: "100vw",
-        minHeight: "100vh",
-        bgcolor: "#1a1a1a",
-        p: 2,
-        display: "flex",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        className="control-panel-casing"
-        style={{ width: "100%", maxWidth: "1200px", display: "flex", flexDirection: "column" }}
-      >
-        <div className="screw top-left" />
-        <div className="screw top-right" />
-        <div className="screw bottom-left" />
-        <div className="screw bottom-right" />
+    <Box sx={{ position: "relative", minHeight: "100%" }}>
+      <StarfieldBackground intensity="ambient" />
+      <NebulaLayer intensity="ambient" />
 
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            mb: 2,
-            borderBottom: "2px solid #333",
-            pb: 1,
-          }}
-        >
-          <Typography variant="h5" className="retro-font-header">
-            SYSTEM_DATA: {data.name.toUpperCase()}
+      <Box sx={{ position: "relative", zIndex: 1 }}>
+        <Typography variant="h4" sx={{ fontWeight: "bold", mb: 0.5 }}>
+          {data.name}
+        </Typography>
+        {data.description && (
+          <Typography sx={{ color: "var(--color-text-secondary)", mb: 3, maxWidth: 640 }}>
+            {data.description}
           </Typography>
-        </Box>
+        )}
 
-        <Box sx={{ display: "flex", gap: 2, flex: 1 }}>
-          {/* Bal panel */}
-          <Box sx={{ width: 260, flexShrink: 0 }}>
-            <div className="crt-monitor">
-              <div className="screen-overlay" />
-              <div className="terminal-content" style={{ padding: "20px" }}>
-                <Typography variant="h5" sx={{ color: "#0f0", textShadow: "0 0 10px #0f0", mb: 1 }}>
-                  {data.name}
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace", lineHeight: 1.5, color: "#aaa" }}>
-                  {data.description || "No description available."}
-                </Typography>
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="caption" sx={{ color: "#555" }}>
-                    SECTOR ID: {data.id.split("-")[0]}
+        {startError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {startError}
+          </Alert>
+        )}
+
+        {data.items.map((item) => {
+          if (item.type === "GROUP") {
+            const groupId = item.group!.id;
+            const prog = groupProgress.get(groupId) ?? {
+              status: "NOT_STARTED" as const,
+              completedCount: 0,
+              totalCount: item.groupMissions?.length ?? 0,
+            };
+            return (
+              <GroupCard
+                key={groupId}
+                item={item}
+                progress={prog}
+                onStart={() => navigate(`/play/group/${groupId}`)}
+                onContinue={() => navigate(`/play/group/${groupId}`)}
+                onReplay={() => navigate(`/play/group/${groupId}`)}
+              />
+            );
+          }
+
+          const mission = item.mission!;
+          return (
+            <GlowCard
+              key={mission.id}
+              sx={{
+                mb: 2,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+                <MissionTypeIcon type={mission.missionType} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600 }} noWrap>
+                    {mission.name}
                   </Typography>
-                  <br />
-                  <Typography variant="caption" sx={{ color: "#555" }}>
-                    ITEMS: {data.items.length}
+                  <Typography variant="caption" sx={{ color: "var(--color-text-secondary)" }}>
+                    <span style={{ color: DIFFICULTY_COLOR[mission.difficulty] ?? "inherit" }}>
+                      {mission.difficulty}
+                    </span>
+                    {" · "}
+                    {mission.missionType.replace(/_/g, " ")}
                   </Typography>
                 </Box>
-              </div>
-            </div>
+              </Box>
+              <NeonButton
+                size="small"
+                disabled={startingMissionId === mission.id}
+                onClick={() => handleMissionStart(mission)}
+                sx={{ flexShrink: 0 }}
+              >
+                {t("play.start")}
+              </NeonButton>
+            </GlowCard>
+          );
+        })}
 
-            <Box sx={{ mt: 2, display: "flex", justifyContent: "space-around" }}>
-              <div className="button-group">
-                <button className="retro-btn red" onClick={() => navigate("/star-map")} />
-                <div className="label-plate">BACK</div>
-              </div>
-            </Box>
-          </Box>
-
-          {/* Jobb panel — items lista */}
-          <Box
-            sx={{
-              flex: 1,
-              bgcolor: "#000",
-              border: "2px solid #333",
-              borderRadius: "5px",
-              p: 2,
-              overflowY: "auto",
-              fontFamily: '"VT323", monospace',
-            }}
-          >
-            <Typography variant="h5" sx={{ color: "#fff", mb: 2, borderBottom: "1px dashed #555", pb: 1 }}>
-              AVAILABLE CONTENT
-            </Typography>
-
-            {startError && (
-              <Typography sx={{ color: "#f00", mb: 2 }}>{startError}</Typography>
-            )}
-
-            {data.items.map((item) => {
-              if (item.type === "GROUP") {
-                const groupId = item.group!.id;
-                const prog = groupProgress.get(groupId) ?? {
-                  status: "NOT_STARTED" as const,
-                  completedCount: 0,
-                  totalCount: item.groupMissions?.length ?? 0,
-                };
-                return (
-                  <GroupCard
-                    key={groupId}
-                    item={item}
-                    progress={prog}
-                    onStart={() => navigate(`/play/group/${groupId}`)}
-                    onContinue={() => navigate(`/play/group/${groupId}`)}
-                    onReplay={() => navigate(`/play/group/${groupId}`)}
-                  />
-                );
-              }
-
-              const mission = item.mission!;
-              return (
-                <Paper
-                  key={mission.id}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    bgcolor: "#111",
-                    border: "1px solid #333",
-                    color: "#0f0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    "&:hover": { borderColor: "#0f0", boxShadow: "0 0 10px rgba(0,255,0,0.2)" },
-                  }}
-                >
-                  <Box>
-                    <Typography variant="h6" sx={{ fontFamily: "monospace" }}>
-                      {mission.name}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#888" }}>
-                      DIFFICULTY:{" "}
-                      <span style={{ color: getDifficultyColor(mission.difficulty) }}>
-                        {mission.difficulty}
-                      </span>
-                      {" · "}
-                      <span style={{ color: "#888" }}>{mission.missionType.replace(/_/g, " ")}</span>
-                    </Typography>
-                  </Box>
-                  <RetroButton
-                    color="green"
-                    labelKey="play.start"
-                    disabled={startingMissionId === mission.id}
-                    onClick={() => handleMissionStart(mission)}
-                  />
-                </Paper>
-              );
-            })}
-
-            {data.items.length === 0 && (
-              <Typography sx={{ color: "#666", textAlign: "center", mt: 4 }}>
-                NO CONTENT AVAILABLE IN THIS SYSTEM.
-              </Typography>
-            )}
-          </Box>
-        </Box>
-      </div>
+        {data.items.length === 0 && (
+          <Typography sx={{ color: "var(--color-text-secondary)", textAlign: "center", mt: 4 }}>
+            {t("starSystemDetail.empty")}
+          </Typography>
+        )}
+      </Box>
     </Box>
   );
 };

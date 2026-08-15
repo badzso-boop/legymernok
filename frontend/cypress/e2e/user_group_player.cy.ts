@@ -214,7 +214,7 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       times: 1,
     }).as("completeStep1");
 
-    cy.contains("KEZDD EL").closest(".button-group").find("button").click();
+    cy.contains("KEZDD EL").click();
 
     cy.url().should("include", `/play/group/${groupId}`);
     cy.wait("@getGroup");
@@ -301,7 +301,7 @@ describe("User Group Player Flow (Mocked Backend)", () => {
     cy.wait("@getStarSystemAgain");
     cy.wait("@getProgressCompleted");
 
-    cy.contains("✓ KÉSZ").should("be.visible");
+    cy.contains("✓ Teljesítve").should("be.visible");
   });
 
   // ─────────────────────────────────────────────
@@ -354,7 +354,7 @@ describe("User Group Player Flow (Mocked Backend)", () => {
       body: {},
     }).as("getLastAttempt");
 
-    cy.contains("FOLYTATÁS").closest(".button-group").find("button").click({ force: true });
+    cy.contains("FOLYTATÁS").click({ force: true });
 
     cy.url().should("include", `/play/group/${groupId}`);
     cy.wait("@getGroup");

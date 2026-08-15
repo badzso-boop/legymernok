@@ -139,7 +139,12 @@ export const router = createHashRouter([
   {
     element: <RootLayout />,
     children: [
-  // Publikus útvonalak (MainLayout alatt)
+  // Minden publikus ÉS védett "sima" (nem admin) útvonal a MainLayout alatt
+  // van — korábban csak a "/", "/login", "/register", "/changelog" volt
+  // ide ágyazva, minden más (My Forge, Star Map, Star System részletek,
+  // Profil, Beállítások, Feedback, misszió-lejátszók) a MainLayout
+  // TESTVÉRE volt, nem gyereke — emiatt ezeken az oldalakon soha nem volt
+  // navbar (se vissza, se nyelvváltó gomb). Most egységesen mindenhol van.
   {
     path: "/",
     element: <MainLayout />,
@@ -160,118 +165,111 @@ export const router = createHashRouter([
         path: "/changelog",
         element: <ChangelogPage />,
       },
+      {
+        path: "forge",
+        element: (
+          <ProtectedRoute>
+            <MissionEditorPage mode="forge" />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "forge/:missionId",
+        element: (
+          <ProtectedRoute>
+            <MissionEditorPage mode="forge" />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "my-forge",
+        element: (
+          <ProtectedRoute>
+            <MyForgePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "play/quiz/:missionId",
+        element: (
+          <ProtectedRoute>
+            <QuizPlayerPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "play/group/:groupId",
+        element: (
+          <ProtectedRoute>
+            <GroupPlayerPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "play/content/:missionId",
+        element: (
+          <ProtectedRoute>
+            <ContentMissionPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "play/coding/:missionId",
+        element: (
+          <ProtectedRoute>
+            <CodingMissionPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "star-map",
+        element: (
+          <ProtectedRoute>
+            <StarMapPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "star-systems/:id",
+        element: (
+          <ProtectedRoute>
+            <StarSystemDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "feedback",
+        element: (
+          <ProtectedRoute>
+            <FeedbackPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "profile",
+        element: (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "profile/:id",
+        element: (
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "settings",
+        element: (
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        ),
+      },
     ],
-  },
-  {
-    path: "forge",
-    element: (
-      <ProtectedRoute>
-        <MissionEditorPage mode="forge" />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "forge/:missionId",
-    element: (
-      <ProtectedRoute>
-        <MissionEditorPage mode="forge" />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/my-forge",
-    element: (
-      <ProtectedRoute>
-        <MyForgePage />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/play/quiz/:missionId",
-    element: (
-      <ProtectedRoute>
-        <QuizPlayerPage />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/play/group/:groupId",
-    element: (
-      <ProtectedRoute>
-        <GroupPlayerPage />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/play/content/:missionId",
-    element: (
-      <ProtectedRoute>
-        <ContentMissionPage />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/play/coding/:missionId",
-    element: (
-      <ProtectedRoute>
-        <CodingMissionPage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/star-map",
-    element: (
-      // Itt kellene egy olyan védett route, ami bármilyen bejelentkezett usernek engedélyezi
-      <ProtectedRoute>
-        <StarMapPage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/star-systems/:id", // Dinamikus ID
-    element: (
-      <ProtectedRoute>
-        <StarSystemDetailPage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/feedback",
-    element: (
-      <ProtectedRoute>
-        <FeedbackPage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/profile",
-    element: (
-      <ProtectedRoute>
-        <ProfilePage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/profile/:id",
-    element: (
-      <ProtectedRoute>
-        <ProfilePage />
-      </ProtectedRoute>
-    ),
-  },
-
-  {
-    path: "/settings",
-    element: (
-      <ProtectedRoute>
-        <SettingsPage />
-      </ProtectedRoute>
-    ),
   },
 
   // Védett Admin útvonalak

@@ -3,6 +3,15 @@
    ami a Space/Dark témán idegen, "kilógó" fehér dobozként jelenik meg,
    túl nagy ikonokkal. */
 
+/* A react-flow gyökér-eleme alapból egy tömör (fehér/light) hátteret fest —
+   ez elfedné a mögé rakott StarfieldBackground/NebulaLayer réteget és a
+   GlowCard glassmorphism hátterét is. Átlátszóvá téve a csillag-mező
+   mindenhol átlátszik, ahol a StarMapGraph megjelenik (teljes Star Map
+   oldal ÉS a Dashboard kicsinyített előnézet-kártyája is). */
+.react-flow {
+  background: transparent !important;
+}
+
 .react-flow__controls {
   display: flex;
   flex-direction: column;

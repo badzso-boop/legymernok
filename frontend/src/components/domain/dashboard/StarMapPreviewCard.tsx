@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { GlowCard } from "../../shared/GlowCard";
 import { NeonButton } from "../../shared/NeonButton";
+import { StarfieldBackground } from "../../shared/StarfieldBackground";
 import StarMapGraph from "../starmap/StarMapGraph";
 import { starSystemApi } from "../../../api/client";
 
@@ -38,16 +39,39 @@ export const StarMapPreviewCard: React.FC = () => {
           borderRadius: "var(--radius-md)",
           overflow: "hidden",
           border: "1px solid var(--color-border)",
+          position: "relative",
         }}
       >
+        <StarfieldBackground intensity="ambient" layers={1} />
+
         {isLoading ? (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+          <Box
+            sx={{
+              position: "relative",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+            }}
+          >
             <CircularProgress size={24} />
           </Box>
         ) : systems && systems.length > 0 ? (
-          <StarMapGraph systems={systems} interactive={false} compact height="100%" />
+          <Box sx={{ position: "relative", zIndex: 1, height: "100%" }}>
+            <StarMapGraph systems={systems} interactive={false} compact height="100%" />
+          </Box>
         ) : (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+          <Box
+            sx={{
+              position: "relative",
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+            }}
+          >
             <Typography variant="body2" sx={{ color: "var(--color-text-secondary)" }}>
               {t("homeDashboard.starMap.subtitle")}
             </Typography>
