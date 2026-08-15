@@ -146,8 +146,8 @@ const MainLayout: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Button color="inherit" onClick={() => navigate("/star-map")}>
-                    {t("nav.starMap")}
+                  <Button color="inherit" onClick={() => navigate("/sector-map")}>
+                    {t("nav.sectorMap")}
                   </Button>
                   <Button color="inherit" onClick={() => navigate("/my-forge")}>
                     {t("nav.myForge")}
@@ -211,8 +211,8 @@ const MainLayout: React.FC = () => {
               </>
             ) : (
               <>
-                <ListItemButton onClick={() => go("/star-map")}>
-                  <ListItemText primary={t("nav.starMap")} />
+                <ListItemButton onClick={() => go("/sector-map")}>
+                  <ListItemText primary={t("nav.sectorMap")} />
                 </ListItemButton>
                 <ListItemButton onClick={() => go("/my-forge")}>
                   <ListItemText primary={t("nav.myForge")} />

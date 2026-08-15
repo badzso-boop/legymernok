@@ -5,6 +5,9 @@ export interface StarSystemResponse {
   id: string;
   name: string;
   description: string;
+  iconUrl?: string | null;
+  sectorId: string | null;
+  sectorName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +33,8 @@ export interface StarSystemWithItemsResponse {
   name: string;
   description: string | null;
   iconUrl: string | null;
+  sectorId: string | null;
+  sectorName: string | null;
   createdAt: string;
   updatedAt: string;
   items: StarSystemItemResponse[];
@@ -42,6 +47,8 @@ export interface StarSystemWithProgressResponse {
   name: string;
   description: string | null;
   iconUrl: string | null;
+  sectorId: string | null;
+  sectorName: string | null;
   createdAt: string;
   updatedAt: string;
   status: StarSystemProgressStatus;

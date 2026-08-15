@@ -26,6 +26,7 @@ import {
   Language as LanguageIcon,
   Terminal as TerminalIcon,
   ToggleOn as ToggleOnIcon,
+  Hub as HubIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
@@ -34,6 +35,7 @@ const drawerWidth = 240;
 
 const menuItems = [
   { text: "users", icon: <PeopleIcon />, path: "/admin/users" },
+  { text: "sectors", icon: <HubIcon />, path: "/admin/sectors" },
   { text: "starSystems", icon: <SchoolIcon />, path: "/admin/star-systems" },
   { text: "missions", icon: <AssignmentIcon />, path: "/admin/missions" },
   { text: "roles", icon: <SecurityIcon />, path: "/admin/roles" },

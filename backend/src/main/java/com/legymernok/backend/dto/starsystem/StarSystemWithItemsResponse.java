@@ -15,6 +15,8 @@ public class StarSystemWithItemsResponse {
     private String name;
     private String description;
     private String iconUrl;
+    private UUID sectorId;
+    private String sectorName;
     private Instant createdAt;
     private Instant updatedAt;
     private List<StarSystemItemResponse> items;

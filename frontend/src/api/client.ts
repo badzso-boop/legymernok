@@ -45,6 +45,7 @@ import type {
   ContinueResponse,
   ActivityFeedItemResponse,
 } from "../types/dashboard";
+import type { SectorResponse, CreateSectorRequest } from "../types/sector";
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "/api",
@@ -385,6 +386,55 @@ export const missionGroupApi = {
   ): Promise<ReorderResponse> => {
     const response = await apiClient.post<ReorderResponse>(
       `/mission-groups/${groupId}/missions/${missionId}/reorder/${targetMissionId}`,
+    );
+    return response.data;
+  },
+};
+
+export const sectorApi = {
+  getAll: async (): Promise<SectorResponse[]> => {
+    const response = await apiClient.get<SectorResponse[]>("/sectors");
+    return response.data;
+  },
+
+  getById: async (id: string): Promise<SectorResponse> => {
+    const response = await apiClient.get<SectorResponse>(`/sectors/${id}`);
+    return response.data;
+  },
+
+  getStarSystems: async (id: string): Promise<StarSystemResponse[]> => {
+    const response = await apiClient.get<StarSystemResponse[]>(
+      `/sectors/${id}/star-systems`,
+    );
+    return response.data;
+  },
+
+  create: async (data: CreateSectorRequest): Promise<SectorResponse> => {
+    const response = await apiClient.post<SectorResponse>("/sectors", data);
+    return response.data;
+  },
+
+  update: async (
+    id: string,
+    data: CreateSectorRequest,
+  ): Promise<SectorResponse> => {
+    const response = await apiClient.put<SectorResponse>(
+      `/sectors/${id}`,
+      data,
+    );
+    return response.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/sectors/${id}`);
+  },
+
+  reorder: async (
+    sectorId: string,
+    targetSectorId: string,
+  ): Promise<ReorderResponse> => {
+    const response = await apiClient.post<ReorderResponse>(
+      `/sectors/${sectorId}/reorder/${targetSectorId}`,
     );
     return response.data;
   },

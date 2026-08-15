@@ -26,6 +26,7 @@ import UserList from "../pages/admin/cadets/UserList";
 import UserEdit from "../pages/admin/cadets/UserEdit";
 import StarSystemEdit from "../pages/admin/star-system/StarSystemEdit";
 import StarSystemList from "../pages/admin/star-system/StarSystemList";
+import SectorList from "../pages/admin/sector/SectorList";
 import { useAuth } from "../context/AuthContext";
 import type { JSX } from "react";
 import ChangelogPage from "../pages/changelog/ChangelogPage";
@@ -39,6 +40,7 @@ import MissionEditorPage from "../pages/mission-editor/MissionEditorPage";
 import AdminDashboardPage from "../pages/admin/dashboard/AdminDashboardPage";
 import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
+import SectorMapPage from "../pages/sector-map/SectorMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
 import MyForgePage from "../pages/mission-forge/MyForgePage";
 import GroupPlayerPage from "../pages/play/GroupPlayerPage";
@@ -71,7 +73,7 @@ export const mainNavigationControls: NavControl[] = [
     id: "STAR_SYSTEMS",
     labelKey: "controlPanel.starSystems",
     color: "red",
-    path: "/star-map",
+    path: "/sector-map",
   },
   {
     id: "MY_FORGE",
@@ -223,7 +225,23 @@ export const router = createHashRouter([
         ),
       },
       {
+        path: "sector-map",
+        element: (
+          <ProtectedRoute>
+            <SectorMapPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: "star-map",
+        element: (
+          <ProtectedRoute>
+            <StarMapPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "star-map/:sectorId",
         element: (
           <ProtectedRoute>
             <StarMapPage />
@@ -302,6 +320,11 @@ export const router = createHashRouter([
       {
         path: "users/:id",
         element: <UserEdit />,
+      },
+      // Szektorok kezelése (Sector Map, #38)
+      {
+        path: "sectors",
+        element: <SectorList />,
       },
       // Csillagrendszerek kezelése
       {

@@ -13,6 +13,8 @@ public class StarSystemResponse {
     private String name;
     private String description;
     private String iconUrl;
+    private UUID sectorId;
+    private String sectorName;
     private Instant createdAt;
     private Instant updatedAt;
 }

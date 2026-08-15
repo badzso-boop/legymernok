@@ -1,7 +1,5 @@
-package com.legymernok.backend.model.starsystem;
+package com.legymernok.backend.model.sector;
 
-import com.legymernok.backend.model.cadet.Cadet;
-import com.legymernok.backend.model.sector.Sector;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,8 +16,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "star_systems")
-public class StarSystem {
+@Table(name = "sectors")
+public class Sector {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -33,13 +31,9 @@ public class StarSystem {
 
     private String iconUrl;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id")
-    private Cadet owner;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sector_id")
-    private Sector sector;
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer orderIndex = 0;
 
     @CreationTimestamp
     @Column(updatable = false)

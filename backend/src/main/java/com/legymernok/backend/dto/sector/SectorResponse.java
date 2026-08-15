@@ -1,4 +1,4 @@
-package com.legymernok.backend.dto.starsystem;
+package com.legymernok.backend.dto.sector;
 
 import lombok.Builder;
 import lombok.Data;
@@ -8,14 +8,13 @@ import java.util.UUID;
 
 @Data
 @Builder
-public class StarSystemWithProgressResponse {
+public class SectorResponse {
     private UUID id;
     private String name;
     private String description;
     private String iconUrl;
-    private UUID sectorId;
-    private String sectorName;
+    private Integer orderIndex;
+    private long starSystemCount;
     private Instant createdAt;
     private Instant updatedAt;
-    private String status; // "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"
 }

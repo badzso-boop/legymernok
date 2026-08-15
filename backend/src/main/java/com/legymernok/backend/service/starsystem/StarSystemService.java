@@ -20,11 +20,13 @@ import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.mission.MissionGroupProgress;
 import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.starsystem.StarSystem;
+import com.legymernok.backend.model.sector.Sector;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.sector.SectorRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import com.legymernok.backend.service.ai.AiEmbeddingService;
 import com.legymernok.backend.service.mission.MissionService;
@@ -56,6 +58,7 @@ public class StarSystemService {
     private final MissionGroupProgressRepository missionGroupProgressRepository;
     private final CadetMissionRepository cadetMissionRepository;
     private final CadetRepository cadetRepository;
+    private final SectorRepository sectorRepository;
     private final AiEmbeddingService embeddingService;
     private final JdbcTemplate jdbcTemplate;
 
@@ -73,6 +76,7 @@ public class StarSystemService {
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .owner(currentUser)
+                .sector(resolveSector(request.getSectorId()))
                 .build();
 
         StarSystem savedStarSystem = starSystemRepository.save(starSystem);
@@ -143,11 +147,14 @@ public class StarSystemService {
             status = "IN_PROGRESS";
         }
 
+        Sector sector = system.getSector();
         return StarSystemWithProgressResponse.builder()
                 .id(system.getId())
                 .name(system.getName())
                 .description(system.getDescription())
                 .iconUrl(system.getIconUrl())
+                .sectorId(sector != null ? sector.getId() : null)
+                .sectorName(sector != null ? sector.getName() : null)
                 .createdAt(system.getCreatedAt())
                 .updatedAt(system.getUpdatedAt())
                 .status(status)
@@ -207,6 +214,7 @@ public class StarSystemService {
         starSystemToUpdate.setName(request.getName());
         starSystemToUpdate.setDescription(request.getDescription());
         starSystemToUpdate.setIconUrl(request.getIconUrl());
+        starSystemToUpdate.setSector(resolveSector(request.getSectorId()));
         starSystemToUpdate.setUpdatedAt(Instant.now());
 
         StarSystem updatedStarSystem = starSystemRepository.save(starSystemToUpdate);
@@ -259,11 +267,14 @@ public class StarSystemService {
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
 
+        Sector sector = starSystem.getSector();
         return StarSystemWithItemsResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
+                .sectorId(sector != null ? sector.getId() : null)
+                .sectorName(sector != null ? sector.getName() : null)
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
                 .items(items)
@@ -328,14 +339,25 @@ public class StarSystemService {
 
     // Segédmetódus a StarSystem entitás Response DTO-vá alakításához
     private StarSystemResponse mapToResponse(StarSystem starSystem) {
+        Sector sector = starSystem.getSector();
         return StarSystemResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
+                .sectorId(sector != null ? sector.getId() : null)
+                .sectorName(sector != null ? sector.getName() : null)
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
                 .build();
+    }
+
+    private Sector resolveSector(UUID sectorId) {
+        if (sectorId == null) {
+            return null;
+        }
+        return sectorRepository.findById(sectorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sector", "id", sectorId));
     }
 
     private Cadet getCurrentAuthenticatedUser() {

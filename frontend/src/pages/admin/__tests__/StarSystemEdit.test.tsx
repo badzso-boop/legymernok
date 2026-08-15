@@ -2,6 +2,17 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import StarSystemEdit from "../star-system/StarSystemEdit";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+
+const renderWithProviders = (ui: ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+};
 
 // --- Mockok ---
 
@@ -21,6 +32,26 @@ vi.mock("../../../api/client", () => ({
     removeMission: vi.fn(),
     reorderGroup: vi.fn(),
     reorderMissionInGroup: vi.fn(),
+  },
+  starSystemApi: {
+    getWithProgress: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    getWithItems: vi.fn(),
+    reorderItems: vi.fn(),
+  },
+  searchApi: {
+    getEmbeddingStatus: vi.fn().mockResolvedValue({ hasEmbedding: false }),
+    embedStarSystem: vi.fn(),
+    deleteEmbedding: vi.fn(),
+  },
+  sectorApi: {
+    getAll: vi.fn().mockResolvedValue([]),
+    getById: vi.fn(),
+    getStarSystems: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    reorder: vi.fn(),
   },
 }));
 
@@ -67,7 +98,7 @@ describe("StarSystemEdit Component", () => {
 
     mockedApiClient.get.mockResolvedValue({ data: mockSystemResponse });
 
-    render(
+    renderWithProviders(
       <MemoryRouter initialEntries={["/admin/star-systems/1"]}>
         <Routes>
           <Route path="/admin/star-systems/:id" element={<StarSystemEdit />} />
@@ -84,7 +115,7 @@ describe("StarSystemEdit Component", () => {
   it("creates new star system and navigates back", async () => {
     mockedApiClient.post.mockResolvedValue({ data: {} });
 
-    render(
+    renderWithProviders(
       <MemoryRouter initialEntries={["/admin/star-systems/new"]}>
         <Routes>
           <Route path="/admin/star-systems/new" element={<StarSystemEdit />} />
@@ -105,7 +136,7 @@ describe("StarSystemEdit Component", () => {
     await waitFor(() => {
       expect(mockedApiClient.post).toHaveBeenCalledWith(
         "/star-systems",
-        { name: "Naboo", description: "Beautiful planet", iconUrl: "" },
+        { name: "Naboo", description: "Beautiful planet", iconUrl: "", sectorId: null },
       );
     });
 
