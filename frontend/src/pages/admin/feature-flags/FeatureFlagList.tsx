@@ -21,9 +21,11 @@ import { Edit as EditIcon } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import { featureFlagApi } from "../../../api/client";
 import type { FeatureFlagResponse } from "../../../types/featureFlag";
+import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
 const FeatureFlagList: React.FC = () => {
   const { t } = useTranslation();
+  const gridPrefs = useDataGridPreferences("admin-feature-flags", 25);
 
   const [flags, setFlags] = useState<FeatureFlagResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +170,12 @@ const FeatureFlagList: React.FC = () => {
         slots={{ loadingOverlay: LoadingOverlay, toolbar: GridToolbar }}
         slotProps={{ toolbar: { showQuickFilter: true } }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         disableRowSelectionOnClick
         sx={{
           bgcolor: "background.paper",

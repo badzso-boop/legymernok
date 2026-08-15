@@ -89,6 +89,7 @@ const MissionList: React.FC = () => {
         starSystems={starSystems} // Átadjuk a rendszereket a nevek miatt
         loading={loading}
         isAdminView={true} // Admin nézet: látjuk a tulajdonost is
+        storageKey="admin-missions"
         onEdit={(id) => navigate(`/admin/missions/${id}`)}
         onDelete={handleDelete}
         onForge={(id) => navigate(`/forge/${id}`)} // Itt navigálunk a Monaco-hoz

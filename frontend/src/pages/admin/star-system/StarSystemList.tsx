@@ -70,6 +70,7 @@ const StarSystemList: React.FC = () => {
         systems={starSystems}
         loading={loading}
         variant="modern" // Itt a kék admin dizájn marad
+        storageKey="admin-star-systems"
         onEdit={(id) => navigate(`/admin/star-systems/${id}`)}
         onDelete={handleDelete}
       />
