@@ -67,6 +67,10 @@ public class DataInitializer implements CommandLineRunner {
         Permission groupDelete = createPermissionIfNotFound("group:delete", "Mission csoport törlése");
         Permission groupRead   = createPermissionIfNotFound("group:read",   "Mission csoport megtekintése");
 
+        // Sector jogok (Sector Map, issue #38)
+        Permission sectorRead  = createPermissionIfNotFound("sector:read",  "Szektorok megtekintése");
+        Permission sectorWrite = createPermissionIfNotFound("sector:write", "Szektorok kezelése (létrehozás, szerkesztés, törlés, sorrend)");
+
         // --- 2. SZEREPKÖRÖK (ROLES) LÉTREHOZÁSA ---
 
         // ROLE_CADET: Alap jogok (Olvasás, Indítás)
@@ -78,6 +82,7 @@ public class DataInitializer implements CommandLineRunner {
         cadetPermissions.add(starSystemCreate);
         cadetPermissions.add(missionCreate);
         cadetPermissions.add(groupRead);
+        cadetPermissions.add(sectorRead);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
 
         // ROLE_ADMIN: Minden jog (Full Access)
@@ -119,6 +124,9 @@ public class DataInitializer implements CommandLineRunner {
         adminPermissions.add(groupEdit);
         adminPermissions.add(groupDelete);
         adminPermissions.add(groupRead);
+        // Sector
+        adminPermissions.add(sectorRead);
+        adminPermissions.add(sectorWrite);
 
         createRoleIfNotFound("ROLE_ADMIN", adminPermissions);
 
@@ -134,6 +142,7 @@ public class DataInitializer implements CommandLineRunner {
         contentCreatorPermissions.add(groupEdit);
         contentCreatorPermissions.add(groupDelete);
         contentCreatorPermissions.add(groupRead);
+        contentCreatorPermissions.add(sectorRead);
         createRoleIfNotFound("ROLE_CONTENT_CREATOR", contentCreatorPermissions);
 
         System.out.println("--- Jogosultsági rendszer inicializálva (Permissions & Roles) ---");

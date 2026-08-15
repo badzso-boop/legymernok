@@ -11,6 +11,7 @@ import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.sector.SectorRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import com.legymernok.backend.service.ai.AiEmbeddingService;
 import com.legymernok.backend.service.mission.MissionService;
@@ -40,6 +41,7 @@ public class StarSystemServiceTest {
     @Mock private MissionGroupRepository missionGroupRepository;
     @Mock private MissionGroupProgressRepository missionGroupProgressRepository;
     @Mock private MissionService missionService;
+    @Mock private SectorRepository sectorRepository;
     @Mock private AiEmbeddingService embeddingService;
     @Mock private JdbcTemplate jdbcTemplate;
     @InjectMocks private StarSystemService starSystemService;

@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface StarSystemRepository extends JpaRepository<StarSystem, UUID> {
     Optional<StarSystem> findByName(String name);
     List<StarSystem> findAllByOwnerId(UUID ownerId);
+    List<StarSystem> findAllBySectorId(UUID sectorId);
+    long countBySectorId(UUID sectorId);
 }
