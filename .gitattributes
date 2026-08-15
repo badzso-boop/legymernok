@@ -1,0 +1,29 @@
+# =============================================================================
+# Sorvég-normalizálás
+#
+# A repo Windows-meghajtón (/mnt/g) él, WSL-ből és Windows-eszközökkel is
+# szerkesztjük. Enélkül egy Windows-oldali editor CRLF-re írja át a fájlokat,
+# és a git 190+ fájlt jelez módosítottnak nulla tartalmi változással.
+#
+# Szabály: a repóban MINDEN szöveges fájl LF, a checkout is LF.
+# =============================================================================
+
+* text=auto eol=lf
+
+# Bináris fájlok — a git ne próbálja se normalizálni, se diffelni
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.jar binary
+
+# Windows batch fájlok CRLF-et igényelnek
+*.cmd text eol=crlf
+*.bat text eol=crlf
