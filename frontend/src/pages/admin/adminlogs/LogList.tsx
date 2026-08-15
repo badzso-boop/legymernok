@@ -127,8 +127,8 @@ const LogList: React.FC = () => {
   // 2. WebSocket csatlakozás (Élő stream)
   useEffect(() => {
     // API URL meghatározása a WebSockethez
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
-    // "/api" levágása és "/ws-log" hozzáadása -> http://localhost:8080/ws-log
+    const apiUrl = import.meta.env.VITE_API_URL || "/api";
+    // "/api" levágása és "/ws-log" hozzáadása -> /ws-log (relatív, SockJS feloldja)
     const wsUrl = apiUrl.replace(/\/api$/, "") + "/ws-log";
 
     const token = localStorage.getItem("token");

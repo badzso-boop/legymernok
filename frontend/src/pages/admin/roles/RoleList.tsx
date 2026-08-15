@@ -23,7 +23,7 @@ import { useTranslation } from "react-i18next";
 import type { RoleResponse } from "../../../types/role";
 import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const RoleList: React.FC = () => {
   const { t } = useTranslation();

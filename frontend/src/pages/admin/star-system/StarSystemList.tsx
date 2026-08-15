@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import type { StarSystemResponse } from "../../../types/starSystem";
 import StarSystemTable from "../../../components/star-system/StarSystemTable";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const StarSystemList: React.FC = () => {
   const { t } = useTranslation();
