@@ -1,0 +1,16 @@
+name: "LégyMérnök Mission Verifier"
+description: "Runs mission tests and streams results to the backend"
+inputs:
+  backend_url:
+    description: "Internal URL of the backend"
+    required: true
+    default: "http://backend:8080"
+  verification_secret:
+    description: "Secret for backend authentication"
+    required: true
+  mission_id:
+    description: "The UUID of the mission"
+    required: true
+runs:
+  using: "node16"
+  main: "dist/index.js"

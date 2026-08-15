@@ -55,6 +55,14 @@ services:
       - postgres
     networks:
       - legymernok-net
+      # A kadét-vezérelt CI job-konténerek (legymernok-runner-net) itt futtatják
+      # az `actions/checkout@...`-ot, ami a SAJÁT job-konténerén belülről,
+      # közvetlen git-fetch-csel klónozza a mission repót a Gitea-ból — ehhez
+      # elengedhetetlen, hogy a job-konténer fel tudja oldani/elérje a "gitea"
+      # hostnevet. (A postgres NINCS ezen a hálózaton, úgyhogy a job-konténerek
+      # onnan továbbra sem érik el — lásd runner-config.yaml és a
+      # legymernok-runner-net hálózat leírását.)
+      - legymernok-runner-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
       interval: 5s
@@ -99,8 +107,11 @@ services:
     networks:
       - legymernok-net
       # A kadét-vezérelt CI job-konténerek (lásd runner-config.yaml network:)
-      # csak ezen a hálózaton érik el a backendet — a mission-verification
-      # callback-hoz kell, de innen SEM a postgres-t, SEM a gitea-t nem érik el.
+      # ezen a hálózaton érik el a backendet — a mission-verification
+      # callback-hoz kell. A gitea szolgáltatás is csatlakozik ehhez a
+      # hálózathoz (az `actions/checkout` lépéshez szükséges), de a postgres
+      # SOSEM — az csak a legymernok-net-en van, a job-konténerek onnan nem
+      # érik el.
       - legymernok-runner-net
 
   # ---------------------------------------------------------------------------
@@ -199,8 +210,16 @@ networks:
     external: true
     driver: bridge
   # Elkülönített hálózat a Gitea Actions job-konténereknek (kadét write-joggal
-  # módosítható .gitea/workflows/ci.yml futtatja bennük a kódot) — csak a
-  # backendet érik el innen (mission-verification callback), a postgres-t,
-  # gitea-t és a többi belső service-t nem. Lásd runner-config.yaml `network:`.
+  # módosítható .gitea/workflows/ci.yml futtatja bennük a kódot) — a backendet
+  # (mission-verification callback) és a gitea-t (actions/checkout) érik el
+  # innen, de a postgres-t és a többi belső service-t nem. Lásd
+  # runner-config.yaml `network:`.
+  # external: true — enélkül a Compose a projekt-prefixet ("legymernok_")
+  # is a hálózat nevéhez fűzi, de a runner-config.yaml `container.network`
+  # mezője a puszta "legymernok-runner-net" nevet várja el (act_runner ezt
+  # magának a job-konténereknek adja át a Docker API-n keresztül, nem a
+  # Compose-on át) — a névütközés miatt minden CI job "network ... not
+  # found" hibával elszállt. Így, ahogy a legymernok-net is, előre létre
+  # kell hozni: `docker network create legymernok-runner-net`.
   legymernok-runner-net:
-    driver: bridge
+    external: true
