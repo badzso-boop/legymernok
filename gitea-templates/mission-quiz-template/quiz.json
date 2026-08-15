@@ -1,0 +1,36 @@
+{
+  "config": {
+    "timeLimitSeconds": 600,
+    "allowNavigation": true,
+    "showSolutions": true
+  },
+  "questions": [
+    {
+      "id": "o_d7a5d61a-8760-41c9-b571-af2b5333b6as",
+      "text": "Melyik egy érvényes programozási nyelv az alábbiak közül?",
+      "points": 10,
+      "options": [
+        {
+          "id": "o_d7a5d61a-8760-41c9-b571-af2b5333b6eb",
+          "text": "HTML",
+          "isCorrect": false
+        },
+        {
+          "id": "o_96370c75-2880-437e-9d19-4f760d3828dc",
+          "text": "Python",
+          "isCorrect": true
+        },
+        {
+          "id": "o_a1b2c3d4-5678-90ef-ghij-klmnopqrstas",
+          "text": "CSS",
+          "isCorrect": false
+        },
+        {
+          "id": "o_uvwxyz12-3456-7890-abcd-efghijklmnop",
+          "text": "Java",
+          "isCorrect": true
+        }
+      ]
+    }
+  ]
+}

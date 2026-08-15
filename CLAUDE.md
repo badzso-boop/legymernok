@@ -41,6 +41,9 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 - **AI Service modell config:** `CHAT_MODEL` és `EMBED_MODEL` a `.env`-ből jön; default értékek: `nomic-embed-text` (embed) és `gemma4-coding` (chat)
 - **Build-time bebakeolt érték (pl. `VITE_API_URL`) módosítása "nem fog":** `docker compose build <service>` cache nélkül gyakran egy régi rétegből hasznosítja újra az `npm run build`/`mvn package` eredményét. Ha egy `.env`-ben módosított, build-időben beégetett érték élesben nem változik, próbáld újra `--no-cache`-lel, mielőtt más okot keresnél
 - **Backend konténer újraindítása/újraépítése után mindig indítsd újra a `frontend` konténert is** (`docker restart legymernok-frontend`) — a frontend saját nginx-e (`proxy_pass http://backend:8080/...`) a régi, már halott backend-konténer IP-jére marad gyorsítótárazva, amíg rá nem kényszeríted az újrafeloldásra, addig 502-t ad
+- **`legymernok-net` ÉS `legymernok-runner-net` is `external: true` a docker-compose.yml-ben** — enélkül a Compose a projekt-prefixet ("legymernok_") is hozzáfűzné a hálózat nevéhez, de a `runner-config.yaml` `container.network` mezője (amit az act_runner közvetlenül a Docker API-n ad át a job-konténereknek, NEM a Compose-on keresztül) a puszta nevet várja — névütközés esetén minden Gitea Actions CI job `network ... not found` hibával elszáll. Ha valaha törölni kell/elvész: `docker network create legymernok-runner-net` mielőtt `docker compose up` fut
+- **A `gitea` service is csatlakozik a `legymernok-runner-net`-hez** (a `legymernok-net` mellett) — enélkül a CI job-konténerek nem tudják checkout-olni a saját repójukat (`actions/checkout` a "gitea" hostnevet próbálja feloldani a job-konténeren belülről). A `postgres` viszont SOSE kerüljön erre a hálózatra — az elkülönítés lényege pont az, hogy a kadét-vezérelt job-kód ne érje el
+- **`mission-verifier` Gitea repó NYILVÁNOS kell legyen** — a `.gitea/workflows/ci.yml`-ek `uses: http://gitea:3000/legymernok_admin/mission-verifier/actions@main` formában, névtelen git clone-nal töltik le; privát repónál "authorization failed: User permission denied" hibával elszáll minden coding mission CI-ja
 
 ### Frontend — React Router
 - **Router hook-ok** (`useLocation`, `useParams`, `useNavigate`, `useNavigate`) **kizárólag a Router kontextuson belül** működnek. Ez azt jelenti: minden komponens, ami ezeket használja, a `createHashRouter`-en belül kell legyen — azaz az `App.tsx`-ben `<RouterProvider>` alá, NEM mellé
@@ -117,8 +120,18 @@ Mindent `.env`-ből olvas — `application.properties`-ben nincsenek hardkódolt
 
 **Template repók** (admin fiókban):
 - `mission-js-template` — JavaScript missions
-- `mission-python-template` — Python missions
+- `mission-python-template` — Python missions — **NINCS forrás-tartalma feltöltve** (a
+  `templateLanguage: "python"` a frontend Forge UI-n választható, de a repo hiánya miatt
+  a mission-létrehozás hibázni fog, amíg valaki nem ad hozzá tartalmat)
 - `mission-quiz-template` — Quiz missions (quiz.json)
+- `mission-verifier` — a `.gitea/workflows/ci.yml`-ek `uses:`-e ezt a repót hivatkozza
+  CI-action forrásként; NYILVÁNOSNAK kell lennie (a checkout névtelen git clone-nal
+  történik) — ha valaha véletlenül privátra állítanák, minden coding mission CI-ja
+  `authorization failed: User permission denied` hibával elszáll
+
+Ha a Gitea adatvolument valaha törölni/újraépíteni kell, a fenti 4 (js/quiz/verifier;
+python még hiányzik) repó tartalma és egy idempotens bootstrap script a repóban van:
+`gitea-templates/` + `scripts/bootstrap-gitea-templates.sh` (`GITEA_ADMIN_TOKEN=... ./scripts/bootstrap-gitea-templates.sh`).
 
 **Ismert architectural korlát:** Ha a DB tranzakció megbukik a Gitea repo létrehozása után, a repo árvává válik (nincs rollback Gitea-ra). Ez nyitott issue.
 
