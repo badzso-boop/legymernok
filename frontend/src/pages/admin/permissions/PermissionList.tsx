@@ -5,11 +5,13 @@ import { huHU } from "@mui/x-data-grid/locales";
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { PermissionResponse } from "../../../types/role";
+import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const PermissionList: React.FC = () => {
   const { t } = useTranslation();
+  const gridPrefs = useDataGridPreferences("admin-permissions", 25);
   const [permissions, setPermissions] = useState<PermissionResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,12 @@ const PermissionList: React.FC = () => {
         slots={{ loadingOverlay: LoadingOverlay, toolbar: GridToolbar }}
         slotProps={{ toolbar: { showQuickFilter: true } }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         sx={{
           bgcolor: "background.paper",
           boxShadow: 3,

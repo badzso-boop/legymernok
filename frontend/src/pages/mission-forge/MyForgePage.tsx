@@ -91,6 +91,7 @@ const MyForgePage: React.FC = () => {
         <StarSystemTable
           systems={systems || []}
           loading={false}
+          storageKey="my-forge-star-systems"
           onEdit={(id) => navigate(`/admin/star-systems/${id}`)}
         />
       </GlowCard>
@@ -103,6 +104,7 @@ const MyForgePage: React.FC = () => {
           missions={missions || []}
           starSystems={systems || []}
           loading={false}
+          storageKey="my-forge-missions"
           onEdit={(id) => navigate(`/forge/${id}`)}
           onForge={(id) => navigate(`/forge/${id}`)}
         />

@@ -21,12 +21,14 @@ import {
 import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { RoleResponse } from "../../../types/role";
+import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 const RoleList: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const gridPrefs = useDataGridPreferences("admin-roles", 10);
 
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,7 +185,12 @@ const RoleList: React.FC = () => {
         slots={{ loadingOverlay: LoadingOverlay, toolbar: GridToolbar }}
         slotProps={{ toolbar: { showQuickFilter: true } }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         pageSizeOptions={[5, 10, 25]}
         disableRowSelectionOnClick
         sx={{

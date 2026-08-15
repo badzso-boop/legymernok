@@ -6,11 +6,16 @@ import { huHU } from "@mui/x-data-grid/locales";
 import { Edit as EditIcon, Delete as DeleteIcon } from "@mui/icons-material";
 import { useTranslation } from "react-i18next";
 import type { StarSystemResponse } from "../../types/starSystem";
+import { useDataGridPreferences } from "../../hooks/useDataGridPreferences";
 
 interface StarSystemTableProps {
   systems: StarSystemResponse[];
   loading: boolean;
   variant?: "modern" | "retro";
+  /** Egyedi kulcs a szűrő/oldalméret cookie-beli perzisztálásához — a
+   * komponens több helyen (admin lista, My Forge) is megjelenik, ezek
+   * egymástól függetlenül emlékeznek a saját beállításukra. */
+  storageKey?: string;
   onEdit: (id: string) => void;
   onDelete?: (id: string, name: string) => void;
 }
@@ -19,11 +24,13 @@ const StarSystemTable: React.FC<StarSystemTableProps> = ({
   systems,
   loading,
   variant = "modern",
+  storageKey = "star-system-table",
   onEdit,
   onDelete,
 }) => {
   const { t } = useTranslation();
   const isRetro = variant === "retro";
+  const gridPrefs = useDataGridPreferences(storageKey, 5);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
@@ -145,7 +152,12 @@ const StarSystemTable: React.FC<StarSystemTableProps> = ({
         slots={{ toolbar: GridToolbar }}
         slotProps={{ toolbar: { showQuickFilter: true } }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{ pagination: { paginationModel: { pageSize: 5 } } }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         pageSizeOptions={[5, 10, 25]}
         disableRowSelectionOnClick
       />

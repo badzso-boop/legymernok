@@ -23,6 +23,7 @@ import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { UserResponse } from "../../../types/user";
 import { useAuth } from "../../../context/AuthContext";
+import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
@@ -30,6 +31,7 @@ const UserList: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { hasRole, isLoading: isAuthLoading } = useAuth();
+  const gridPrefs = useDataGridPreferences("admin-users", 10);
 
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,9 +239,12 @@ const UserList: React.FC = () => {
           },
         }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10 } },
-        }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         pageSizeOptions={[5, 10, 25, 100]}
         disableRowSelectionOnClick
         sx={{

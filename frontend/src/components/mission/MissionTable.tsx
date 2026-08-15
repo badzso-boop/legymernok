@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import type { MissionResponse } from "../../types/mission";
 import type { StarSystemResponse } from "../../types/starSystem";
 import "../../styles/RetroUI.css";
+import { useDataGridPreferences } from "../../hooks/useDataGridPreferences";
 
 interface MissionTableProps {
   missions: MissionResponse[];
@@ -19,6 +20,10 @@ interface MissionTableProps {
   loading: boolean;
   isAdminView?: boolean;
   variant?: "modern" | "retro"; // Új paraméter a stílusváltáshoz
+  /** Egyedi kulcs a szűrő/oldalméret cookie-beli perzisztálásához — a
+   * komponens több helyen (admin lista, My Forge) is megjelenik, ezek
+   * egymástól függetlenül emlékeznek a saját beállításukra. */
+  storageKey?: string;
   onEdit: (id: string) => void;
   onDelete?: (id: string) => void;
   onForge?: (id: string) => void;
@@ -30,10 +35,14 @@ const MissionTable: React.FC<MissionTableProps> = ({
   loading,
   isAdminView = false,
   variant = "modern",
+  storageKey = "mission-table",
   onEdit,
   onDelete,
   onForge,
 }) => {
+  const gridPrefs = useDataGridPreferences(storageKey, 10, [
+    { field: "orderInSystem", sort: "asc" },
+  ]);
   const { t } = useTranslation();
   const isRetro = variant === "retro";
 
@@ -240,12 +249,12 @@ const MissionTable: React.FC<MissionTableProps> = ({
         slots={{ toolbar: GridToolbar }}
         slotProps={{ toolbar: { showQuickFilter: true } }}
         localeText={huHU.components.MuiDataGrid.defaultProps.localeText}
-        initialState={{
-          pagination: { paginationModel: { pageSize: 10 } },
-          sorting: {
-            sortModel: [{ field: "orderInSystem", sort: "asc" }],
-          },
-        }}
+        paginationModel={gridPrefs.paginationModel}
+        onPaginationModelChange={gridPrefs.onPaginationModelChange}
+        filterModel={gridPrefs.filterModel}
+        onFilterModelChange={gridPrefs.onFilterModelChange}
+        sortModel={gridPrefs.sortModel}
+        onSortModelChange={gridPrefs.onSortModelChange}
         pageSizeOptions={[5, 10, 25, 100]}
         disableRowSelectionOnClick
         sx={isRetro ? retroSx : modernSx}
