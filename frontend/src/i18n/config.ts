@@ -309,6 +309,7 @@ const resources = {
         empty: "No sectors yet — all star systems are unassigned.",
         unassigned: "Unassigned",
         backToSectorMap: "Back to Sector Map",
+        backToDashboard: "Back to Dashboard",
       },
       // SEARCH
       search: {
@@ -869,6 +870,7 @@ const resources = {
         empty: "Még nincs egy szektor sem — minden csillagrendszer besorolatlan.",
         unassigned: "Besorolatlan",
         backToSectorMap: "Vissza a Szektortérképre",
+        backToDashboard: "Vissza a főoldalra",
       },
       // SEARCH
       search: {

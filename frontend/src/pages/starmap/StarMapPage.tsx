@@ -63,18 +63,16 @@ const StarMapPage: React.FC = () => {
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {sectorId && (
-              <Tooltip title={t("sectorMap.backToSectorMap")}>
-                <IconButton
-                  component={RouterLink}
-                  to="/sector-map"
-                  sx={{ color: "var(--color-accent-primary)" }}
-                  data-cy="star-map-back-to-sectors"
-                >
-                  <ArrowBackIcon />
-                </IconButton>
-              </Tooltip>
-            )}
+            <Tooltip title={t("sectorMap.backToSectorMap")}>
+              <IconButton
+                component={RouterLink}
+                to="/sector-map"
+                sx={{ color: "var(--color-accent-primary)" }}
+                data-cy="star-map-back-to-sectors"
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            </Tooltip>
             <Typography variant="h4" sx={{ fontWeight: "bold" }}>
               {sectorName ?? t("starMap.title")}
             </Typography>

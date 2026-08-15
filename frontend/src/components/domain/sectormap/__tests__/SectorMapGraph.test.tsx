@@ -1,7 +1,7 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { ThemeModeProvider } from "../../../../theme/ThemeModeProvider";
 import SectorMapGraph from "../SectorMapGraph";
 import type { SectorResponse } from "../../../../types/sector";
@@ -57,6 +57,31 @@ describe("SectorMapGraph", () => {
   it("nem jeleníti meg a Besorolatlan node-ot, ha nincs besorolatlan rendszer", () => {
     renderGraph({ unassignedCount: 0 });
     expect(screen.queryByText("sectorMap.unassigned")).not.toBeInTheDocument();
+  });
+
+  it("node kattintás után (warp-animáció letelte) navigál a /star-map/:sectorId-ra", () => {
+    vi.useFakeTimers();
+    render(
+      <MemoryRouter initialEntries={["/sector-map"]}>
+        <ThemeModeProvider>
+          <Routes>
+            <Route
+              path="/sector-map"
+              element={<SectorMapGraph sectors={sectors} unassignedCount={0} />}
+            />
+            <Route path="/star-map/:sectorId" element={<div>star-map-page</div>} />
+          </Routes>
+        </ThemeModeProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByText("Fizika"));
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(screen.getByText("star-map-page")).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("üres lista esetén sem dob hibát", () => {
