@@ -196,9 +196,11 @@ tokennél ezek a nézetek nem jelentkeznek ki automatikusan.
     oldali eszköz nincs visszavonásra.
 21. **`LogFilter.java:41`**: naiv `contains("\"password\"")` jelszó-szűrés a naplózásban —
     case-sensitive, könnyen megkerülhető más elnevezésű/case-elt mezővel.
-22. **`frontend/.env` be van commitolva** (`VITE_API_URL=/api`, nem titkos tartalom), miközben a
+22. ~~**`frontend/.env` be van commitolva** (`VITE_API_URL=/api`, nem titkos tartalom), miközben a
     gyökér `.env` `.gitignore`-olt — inkonzisztens minta, kockázat, ha valaha titkos érték
-    kerülne bele tévedésből.
+    kerülne bele tévedésből.~~ — **JAVÍTVA (2026-08-15).** A `VITE_API_URL` default a kódba
+    került (`|| "/api"`), így a fájlra nincs többé szükség; törölve a verziókövetésből, és a
+    `frontend/.dockerignore` is kizárja, hogy lokális példány beszivárogjon az image-be.
 23. **`.idea/`** mappa (5 fájl) be van commitolva a repo gyökerében.
 24. **`npm audit` javasolt** a build-lánchoz/CI-hoz — a nagy, gyakran frissülő függőségek
     (Monaco Editor, sockjs-client stb.) miatt megbízható CVE-információt csak ez ad, találgatás

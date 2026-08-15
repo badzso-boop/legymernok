@@ -73,7 +73,7 @@ export function useLiveLogs({ historyLimit = 200, maxKept = 500 }: UseLiveLogsOp
   }, [fetchHistory]);
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+    const apiUrl = import.meta.env.VITE_API_URL || "/api";
     const wsUrl = apiUrl.replace(/\/api$/, "") + "/ws-log";
     const token = localStorage.getItem("token");
 
