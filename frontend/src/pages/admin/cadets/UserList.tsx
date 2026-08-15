@@ -25,7 +25,7 @@ import type { UserResponse } from "../../../types/user";
 import { useAuth } from "../../../context/AuthContext";
 import { useDataGridPreferences } from "../../../hooks/useDataGridPreferences";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const UserList: React.FC = () => {
   const { t } = useTranslation();

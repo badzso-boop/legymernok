@@ -9,7 +9,7 @@ import type { StarSystemResponse } from "../../../types/starSystem";
 import MissionTable from "../../../components/mission/MissionTable";
 
 // API URL (env-ből vagy fallback)
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const MissionList: React.FC = () => {
   const { t } = useTranslation();
