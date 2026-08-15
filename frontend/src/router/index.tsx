@@ -1,5 +1,6 @@
 import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import ChatWidget from "../components/chat/ChatWidget";
+import { CookieConsentBanner } from "../components/shared/CookieConsentBanner";
 import { useFeatureFlag } from "../hooks/useFeatureFlag";
 
 const RootLayout = () => {
@@ -9,6 +10,7 @@ const RootLayout = () => {
 
   return (
     <>
+      <CookieConsentBanner />
       <Outlet />
       {chatbotEnabled && <ChatWidget />}
     </>

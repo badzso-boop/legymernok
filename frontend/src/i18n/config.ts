@@ -227,6 +227,11 @@ const resources = {
         profile: "Profile",
         settings: "Settings",
       },
+      cookieConsent: {
+        message:
+          "We use a small number of cookies on this site — only to remember your own preferences (like theme choice and table filter settings), never for tracking or advertising.",
+        accept: "Got it",
+      },
       settings: {
         title: "Settings",
         themeSectionTitle: "Theme",
@@ -732,6 +737,11 @@ const resources = {
         account: "Fiók",
         profile: "Profil",
         settings: "Beállítások",
+      },
+      cookieConsent: {
+        message:
+          "Az oldalon néhány cookie-t használunk — kizárólag a saját beállításaid megjegyzésére (pl. téma-választás, táblázat-szűrők), sosem követésre vagy reklámra.",
+        accept: "Rendben",
       },
       settings: {
         title: "Beállítások",
