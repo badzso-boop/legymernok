@@ -35,6 +35,7 @@ const resources = {
       adminPanel: "ADMIN PANEL",
       administrator: "Administrator",
       users: "Users",
+      sectors: "Sectors",
       starSystems: "Star systems",
       missions: "Missions",
       roles: "Roles",
@@ -133,6 +134,20 @@ const resources = {
       editFeatureFlag: "Edit Feature Flag",
       errorFetchFeatureFlags: "Failed to load feature flags",
       errorUpdateFeatureFlag: "Error updating feature flag",
+
+      // Sectors (Sector Map, issue #38)
+      manageSectors: "Sectors",
+      sectorName: "Sector name",
+      sectorStarSystemCount: "Star systems",
+      createSector: "New sector",
+      editSector: "Edit sector",
+      errorFetchSectors: "Failed to load sectors",
+      errorSaveSector: "Failed to save the sector",
+      errorDeleteSector: "Failed to delete the sector",
+      deleteSectorConfirmTitle: "Delete sector?",
+      deleteSectorConfirmBody: "Delete \"{{name}}\"? Its star systems will not be deleted, they become unassigned.",
+      sectorField: "Sector",
+      noSector: "No sector",
 
       // Mission Forge
       forge: {
@@ -286,6 +301,13 @@ const resources = {
         statusInProgress: "In progress",
         statusCompleted: "Completed",
         loadError: "Failed to load the star map.",
+      },
+      sectorMap: {
+        title: "Sector Map",
+        loadError: "Failed to load the sector map.",
+        empty: "No sectors yet — all star systems are unassigned.",
+        unassigned: "Unassigned",
+        backToSectorMap: "Back to Sector Map",
       },
       // SEARCH
       search: {
@@ -571,6 +593,7 @@ const resources = {
       adminPanel: "ADMIN PANEL",
       administrator: "Adminisztrátor",
       users: "Felhasználók",
+      sectors: "Szektorok",
       starSystems: "Csillagrendszerek",
       missions: "Feladatok",
       permissions: "Engedélyek",
@@ -671,6 +694,20 @@ const resources = {
       editFeatureFlag: "Feature flag szerkesztése",
       errorFetchFeatureFlags: "Nem sikerült betölteni a feature flag-eket",
       errorUpdateFeatureFlag: "Hiba a feature flag frissítésekor",
+
+      // Szektorok (Sector Map, #38 issue)
+      manageSectors: "Szektorok",
+      sectorName: "Szektor neve",
+      sectorStarSystemCount: "Csillagrendszerek",
+      createSector: "Új szektor",
+      editSector: "Szektor szerkesztése",
+      errorFetchSectors: "Nem sikerült betölteni a szektorokat",
+      errorSaveSector: "Nem sikerült elmenteni a szektort",
+      errorDeleteSector: "Nem sikerült törölni a szektort",
+      deleteSectorConfirmTitle: "Törlöd a szektort?",
+      deleteSectorConfirmBody: "Törlöd a(z) \"{{name}}\" szektort? A hozzá tartozó csillagrendszerek nem törlődnek, csak besorolatlanná válnak.",
+      sectorField: "Szektor",
+      noSector: "Nincs szektor",
 
       // Mission Forge
       forge: {
@@ -823,6 +860,13 @@ const resources = {
         statusInProgress: "Folyamatban",
         statusCompleted: "Teljesítve",
         loadError: "Nem sikerült betölteni a csillagtérképet.",
+      },
+      sectorMap: {
+        title: "Szektortérkép",
+        loadError: "Nem sikerült betölteni a szektortérképet.",
+        empty: "Még nincs egy szektor sem — minden csillagrendszer besorolatlan.",
+        unassigned: "Besorolatlan",
+        backToSectorMap: "Vissza a Szektortérképre",
       },
       // SEARCH
       search: {

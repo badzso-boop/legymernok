@@ -38,7 +38,9 @@ import {
   Extension as ExtensionIcon,
   ElectricBolt as ElectricBoltIcon,
 } from "@mui/icons-material";
-import apiClient, { missionGroupApi, starSystemApi, searchApi } from "../../../api/client";
+import apiClient, { missionGroupApi, starSystemApi, searchApi, sectorApi } from "../../../api/client";
+import { useQuery } from "@tanstack/react-query";
+import type { SectorResponse } from "../../../types/sector";
 import { useChatContext } from "../../../context/ChatContext";
 import { useTranslation } from "react-i18next";
 import type {
@@ -231,7 +233,13 @@ const StarSystemEdit: React.FC = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [iconUrl, setIconUrl] = useState("");
+  const [sectorId, setSectorId] = useState<string>("");
   const [items, setItems] = useState<StarSystemItemResponse[]>([]);
+
+  const { data: sectors = [] } = useQuery<SectorResponse[]>({
+    queryKey: ["sectors"],
+    queryFn: sectorApi.getAll,
+  });
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -255,6 +263,7 @@ const StarSystemEdit: React.FC = () => {
           setName(data.name);
           setDescription(data.description ?? "");
           setIconUrl(data.iconUrl ?? "");
+          setSectorId(data.sectorId ?? "");
           setItems(data.items);
           const statusData = await searchApi.getEmbeddingStatus(id!);
           setHasEmbedding(statusData.hasEmbedding);
@@ -320,7 +329,7 @@ const StarSystemEdit: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = { name, description, iconUrl };
+      const payload = { name, description, iconUrl, sectorId: sectorId || null };
       if (isNew) {
         await apiClient.post("/star-systems", payload);
       } else {
@@ -432,6 +441,25 @@ const StarSystemEdit: React.FC = () => {
               value={iconUrl}
               onChange={(e) => setIconUrl(e.target.value)}
             />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <FormControl fullWidth>
+              <InputLabel id="star-system-sector-label">{t("sectorField")}</InputLabel>
+              <Select
+                labelId="star-system-sector-label"
+                label={t("sectorField")}
+                value={sectorId}
+                onChange={(e) => setSectorId(e.target.value)}
+                data-cy="star-system-sector-select"
+              >
+                <MenuItem value="">{t("noSector")}</MenuItem>
+                {sectors.map((sector) => (
+                  <MenuItem key={sector.id} value={sector.id}>
+                    {sector.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2 }}>

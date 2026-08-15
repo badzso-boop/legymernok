@@ -267,11 +267,14 @@ public class StarSystemService {
                         Comparator.nullsLast(Comparator.naturalOrder())))
                 .collect(Collectors.toList());
 
+        Sector sector = starSystem.getSector();
         return StarSystemWithItemsResponse.builder()
                 .id(starSystem.getId())
                 .name(starSystem.getName())
                 .description(starSystem.getDescription())
                 .iconUrl(starSystem.getIconUrl())
+                .sectorId(sector != null ? sector.getId() : null)
+                .sectorName(sector != null ? sector.getName() : null)
                 .createdAt(starSystem.getCreatedAt())
                 .updatedAt(starSystem.getUpdatedAt())
                 .items(items)

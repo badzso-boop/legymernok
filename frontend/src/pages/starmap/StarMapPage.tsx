@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Box, Typography, CircularProgress, Alert, IconButton, Tooltip } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useParams, Link as RouterLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { StarfieldBackground } from "../../components/shared/StarfieldBackground";
@@ -17,19 +19,33 @@ import { starSystemApi } from "../../api/client";
  * ezt az oldalt), nincs szükség saját "VISSZA" gombra — a korábbi retro
  * "control-panel-casing"/CRT-monitor/WARP-DATA gombok (utóbbi kettő nem is
  * volt funkcionális) megszűntek.
+ *
+ * Kétszintű Sector Map (issue #38) óta opcionálisan `:sectorId` route-
+ * paraméterrel is meghívható — ha van, csak az adott szektorhoz tartozó
+ * rendszereket mutatja, "vissza a Sector Map-re" linkkel. Paraméter nélkül
+ * (a régi, backward-kompatibilis `/star-map`) az ÖSSZES rendszert mutatja —
+ * ez egyben a "Besorolatlan" (sector nélküli) nézet is.
  */
 const StarMapPage: React.FC = () => {
   const { t } = useTranslation();
+  const { sectorId } = useParams<{ sectorId?: string }>();
   const [searchOpen, setSearchOpen] = useState(false);
 
   const {
-    data: systems = [],
+    data: allSystems = [],
     isLoading: loading,
     isError,
   } = useQuery({
     queryKey: ["starSystems", "with-progress"],
     queryFn: starSystemApi.getWithProgress,
   });
+
+  const systems = useMemo(() => {
+    if (!sectorId) return allSystems;
+    return allSystems.filter((s) => s.sectorId === sectorId);
+  }, [allSystems, sectorId]);
+
+  const sectorName = sectorId ? systems[0]?.sectorName ?? null : null;
 
   return (
     <Box sx={{ position: "relative", minHeight: "100%" }}>
@@ -43,11 +59,26 @@ const StarMapPage: React.FC = () => {
             justifyContent: "space-between",
             alignItems: "center",
             mb: 2,
+            gap: 1,
           }}
         >
-          <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-            {t("starMap.title")}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {sectorId && (
+              <Tooltip title={t("sectorMap.backToSectorMap")}>
+                <IconButton
+                  component={RouterLink}
+                  to="/sector-map"
+                  sx={{ color: "var(--color-accent-primary)" }}
+                  data-cy="star-map-back-to-sectors"
+                >
+                  <ArrowBackIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Typography variant="h4" sx={{ fontWeight: "bold" }}>
+              {sectorName ?? t("starMap.title")}
+            </Typography>
+          </Box>
           <Tooltip title={t("starMap.scan")}>
             <IconButton
               onClick={() => setSearchOpen(true)}
