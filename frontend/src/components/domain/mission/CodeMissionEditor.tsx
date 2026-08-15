@@ -82,7 +82,7 @@ export const CodeMissionEditor: React.FC<CodeMissionEditorProps> = ({ missionId,
 
   useEffect(() => {
     if (!isWorkspace) return;
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+    const apiUrl = import.meta.env.VITE_API_URL || "/api";
     const socketUrl = `${apiUrl.replace(/\/api$/, "")}/ws-mission-logs`;
     const token = localStorage.getItem("token");
 

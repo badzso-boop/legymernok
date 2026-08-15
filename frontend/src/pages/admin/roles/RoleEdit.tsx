@@ -23,7 +23,7 @@ import axios from "axios";
 import { useTranslation } from "react-i18next";
 import type { PermissionResponse, RoleResponse } from "../../../types/role";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const RoleEdit: React.FC = () => {
   const { t } = useTranslation();

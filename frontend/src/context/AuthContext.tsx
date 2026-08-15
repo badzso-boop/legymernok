@@ -5,7 +5,7 @@ import { jwtDecode } from "jwt-decode";
 import axios from "axios";
 
 // API URL (env-ből vagy fallback)
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface AuthContextType extends AuthState {
   login: (data: LoginResponse) => void;
