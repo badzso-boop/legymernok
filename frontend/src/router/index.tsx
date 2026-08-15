@@ -36,6 +36,7 @@ import FeatureFlagList from "../pages/admin/feature-flags/FeatureFlagList";
 import RoleEdit from "../pages/admin/roles/RoleEdit";
 import LogList from "../pages/admin/adminlogs/LogList";
 import MissionEditorPage from "../pages/mission-editor/MissionEditorPage";
+import AdminDashboardPage from "../pages/admin/dashboard/AdminDashboardPage";
 import QuizPlayerPage from "../pages/mission-forge/QuizPlayerPage";
 import StarMapPage from "../pages/starmap/StarMapPage";
 import StarSystemDetailPage from "../pages/star-system-detail/StarSystemDetailPage";
@@ -287,7 +288,7 @@ export const router = createHashRouter([
       },
       {
         path: "dashboard",
-        element: <div>Admin Dashboard (Work in Progress)</div>,
+        element: <AdminDashboardPage />,
       },
       // Felhasználók kezelése
       {
