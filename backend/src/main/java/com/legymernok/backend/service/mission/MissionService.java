@@ -354,6 +354,22 @@ public class MissionService {
         return filesContent;
     }
 
+    // A tesztfájlok (Jest/pytest felismerési konvenció, ugyanaz, mint a
+    // gitea-templates/mission-*-template-ekben) írásvédettek a kadét saját
+    // munkarepójában — a küldetés készítője adta meg őket, a kadét nem
+    // trükközhet velük a CI megkerülésére. UI-oldali readOnly a Monaco-ban
+    // (CodingMissionPlayer) csak kényelmi jelzés, az igazi határ ez itt.
+    private static boolean isProtectedCadetFile(String path) {
+        String fileName = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        return fileName.matches(".*\\.test\\.(js|ts)$") || fileName.matches("^test_.*\\.py$");
+    }
+
+    private void requireMutablePlayFile(String path) {
+        if (isProtectedCadetFile(path)) {
+            throw new UnauthorizedAccessException("This file is read-only and cannot be modified.");
+        }
+    }
+
     /** Elmenti (batch) a kadét saját munkarepójának fájltartalmait. */
     @Transactional
     public void savePlayFiles(UUID missionId, Map<String, String> files) {
@@ -363,13 +379,23 @@ public class MissionService {
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
 
         if (files == null || files.isEmpty()) return;
-        giteaService.uploadFiles(repoOwner, repoName, files, "Save from mission player", currentUser);
+        // Az írásvédett fájlokat (tesztek) kiszűrjük a batch-ből — a frontend
+        // mindig a teljes, aktuálisan nyitott fájlkészletet küldi (a
+        // változatlan tesztfájl tartalmát is), ezért ez nem hibaeset, csendben
+        // figyelmen kívül hagyjuk azokat a bejegyzéseket.
+        Map<String, String> mutableFiles = new HashMap<>();
+        files.forEach((path, content) -> {
+            if (!isProtectedCadetFile(path)) mutableFiles.put(path, content);
+        });
+        if (mutableFiles.isEmpty()) return;
+        giteaService.uploadFiles(repoOwner, repoName, mutableFiles, "Save from mission player", currentUser);
     }
 
     /** Új (üres) fájlt hoz létre a kadét saját munkarepójában. */
     @Transactional
     public void createPlayFile(UUID missionId, String path) {
         Cadet currentUser = getCurrentAuthenticatedUser();
+        requireMutablePlayFile(path);
         CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
@@ -380,6 +406,7 @@ public class MissionService {
     @Transactional
     public void deletePlayFile(UUID missionId, String path) {
         Cadet currentUser = getCurrentAuthenticatedUser();
+        requireMutablePlayFile(path);
         CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
@@ -390,6 +417,8 @@ public class MissionService {
     @Transactional
     public void renamePlayFile(UUID missionId, String oldPath, String newPath) {
         Cadet currentUser = getCurrentAuthenticatedUser();
+        requireMutablePlayFile(oldPath);
+        requireMutablePlayFile(newPath);
         CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
@@ -601,8 +630,15 @@ public class MissionService {
         }
 
         try {
-            // Átmásoljuk az eredeti misszió repójának tartalmát az új user-specifikus repóba
-            giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
+            // Átmásoljuk az eredeti misszió repójának tartalmát az új user-specifikus repóba.
+            // CODING missziónál szűrt másolás kell (a referenciamegoldás sose kerüljön át,
+            // a starter.<ext> a kadét solution.<ext>-jeként) — más típusoknál (pl. QUIZ)
+            // marad a régi, teljes másolás.
+            if (mission.getMissionType() == MissionType.CODING) {
+                giteaService.copyMissionRepositoryForCadet(sourceRepoOwner, sourceRepoName, userRepoName);
+            } else {
+                giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
+            }
 
             // User hozzáadása kollaborátorként (write joggal)
             giteaService.addCollaborator(userRepoName, cadet.getUsername(), "write");

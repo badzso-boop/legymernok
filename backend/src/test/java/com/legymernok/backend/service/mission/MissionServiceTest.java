@@ -8,6 +8,8 @@ import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
+import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.auth.Permission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
@@ -861,5 +863,138 @@ class MissionServiceTest {
         when(missionRepository.findById(missionId)).thenReturn(Optional.empty());
 
         assertFalse(missionService.canViewMissionLogs(missionId, testUser));
+    }
+
+    // =========================================================================
+    // startMission — CODING missziónál szűrt (solution/starter) másolás kell,
+    // ne a teljes copyRepositoryContents (lásd #47 — a régi viselkedés a
+    // referenciamegoldást is 1:1 átmásolta a kadét saját repójába)
+    // =========================================================================
+
+    @Test
+    void startMission_whenCoding_shouldUseFilteredCadetCopyNotFullCopy() {
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .missionType(MissionType.CODING)
+                .templateRepositoryUrl("http://gitea/mission-repo.git")
+                .name("Add two numbers")
+                .build();
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+        when(cadetRepository.findByUsername("test_user")).thenReturn(Optional.of(testUser));
+        when(cadetMissionRepository.findByCadetIdAndMissionId(testUser.getId(), mission.getId()))
+                .thenReturn(Optional.empty());
+        when(giteaService.createEmptyRepository(anyString(), eq(true))).thenReturn("http://gitea/cadet-repo.git");
+
+        missionService.startMission(mission.getId(), "test_user");
+
+        verify(giteaService).copyMissionRepositoryForCadet(eq("legymernok_admin"), eq("mission-repo"), anyString());
+        verify(giteaService, never()).copyRepositoryContents(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void startMission_whenQuiz_shouldUseFullCopy() {
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .missionType(MissionType.QUIZ)
+                .templateRepositoryUrl("http://gitea/quiz-repo.git")
+                .name("Quiz mission")
+                .build();
+        when(missionRepository.findById(mission.getId())).thenReturn(Optional.of(mission));
+        when(cadetRepository.findByUsername("test_user")).thenReturn(Optional.of(testUser));
+        when(cadetMissionRepository.findByCadetIdAndMissionId(testUser.getId(), mission.getId()))
+                .thenReturn(Optional.empty());
+        when(giteaService.createEmptyRepository(anyString(), eq(true))).thenReturn("http://gitea/cadet-repo.git");
+
+        missionService.startMission(mission.getId(), "test_user");
+
+        verify(giteaService).copyRepositoryContents(eq("legymernok_admin"), eq("quiz-repo"), anyString());
+        verify(giteaService, never()).copyMissionRepositoryForCadet(anyString(), anyString(), anyString());
+    }
+
+    // =========================================================================
+    // Play fájlkezelés — a küldetés készítője által adott tesztfájlok
+    // írásvédettek a kadét munkarepójában, nem trükközhet velük a CI ellen.
+    // =========================================================================
+
+    private CadetMission mockPlayRepository(String repositoryUrl) {
+        Mission mission = Mission.builder()
+                .id(UUID.randomUUID())
+                .missionType(MissionType.CODING)
+                .build();
+        CadetMission cadetMission = CadetMission.builder()
+                .id(UUID.randomUUID())
+                .cadet(testUser)
+                .mission(mission)
+                .status(MissionStatus.IN_PROGRESS)
+                .repositoryUrl(repositoryUrl)
+                .build();
+        setupAuthentication(testUser);
+        lenient().when(cadetMissionRepository.findByCadetIdAndMissionId(testUser.getId(), mission.getId()))
+                .thenReturn(Optional.of(cadetMission));
+        return cadetMission;
+    }
+
+    @Test
+    void savePlayFiles_shouldFilterOutProtectedTestFiles() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        Map<String, String> files = new HashMap<>();
+        files.put("solution.js", "export function add(a, b) { return a + b; }");
+        files.put("solution.test.js", "// tampered test content");
+
+        missionService.savePlayFiles(cadetMission.getMission().getId(), files);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(giteaService).uploadFiles(eq("legymernok_admin"), eq("cadet-repo"), captor.capture(), anyString(), eq(testUser));
+        assertTrue(captor.getValue().containsKey("solution.js"));
+        assertFalse(captor.getValue().containsKey("solution.test.js"));
+    }
+
+    @Test
+    void savePlayFiles_whenOnlyProtectedFilesInBatch_shouldNotCallUpload() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        Map<String, String> files = new HashMap<>();
+        files.put("test_solution.py", "# tampered");
+
+        missionService.savePlayFiles(cadetMission.getMission().getId(), files);
+
+        verify(giteaService, never()).uploadFiles(anyString(), anyString(), anyMap(), anyString(), any());
+    }
+
+    @Test
+    void createPlayFile_whenProtectedFileName_shouldThrow() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        assertThrows(UnauthorizedAccessException.class,
+                () -> missionService.createPlayFile(cadetMission.getMission().getId(), "solution.test.js"));
+        verify(giteaService, never()).uploadFile(anyString(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void deletePlayFile_whenProtectedFileName_shouldThrow() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        assertThrows(UnauthorizedAccessException.class,
+                () -> missionService.deletePlayFile(cadetMission.getMission().getId(), "test_solution.py"));
+        verify(giteaService, never()).deleteFile(anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void renamePlayFile_whenTargetIsProtectedFileName_shouldThrow() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        assertThrows(UnauthorizedAccessException.class,
+                () -> missionService.renamePlayFile(cadetMission.getMission().getId(), "utils.js", "solution.test.js"));
+        verify(giteaService, never()).renameFile(anyString(), anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void renamePlayFile_whenNeitherNameProtected_shouldSucceed() {
+        CadetMission cadetMission = mockPlayRepository("http://gitea/cadet-repo.git");
+
+        missionService.renamePlayFile(cadetMission.getMission().getId(), "utils.js", "helpers.js");
+
+        verify(giteaService).renameFile("legymernok_admin", "cadet-repo", "utils.js", "helpers.js", testUser);
     }
 }
