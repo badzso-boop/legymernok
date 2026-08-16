@@ -120,18 +120,24 @@ Mindent `.env`-ből olvas — `application.properties`-ben nincsenek hardkódolt
 
 **Template repók** (admin fiókban):
 - `mission-js-template` — JavaScript missions
-- `mission-python-template` — Python missions — **NINCS forrás-tartalma feltöltve** (a
-  `templateLanguage: "python"` a frontend Forge UI-n választható, de a repo hiánya miatt
-  a mission-létrehozás hibázni fog, amíg valaki nem ad hozzá tartalmat)
+- `mission-python-template` — Python missions (`solution.py` + `test_solution.py` + pytest,
+  ld. #44) — a `.gitea/workflows/ci.yml`-je a `mission-verifier` action-t `test_command:
+  "pytest -v"` paraméterrel hívja
 - `mission-quiz-template` — Quiz missions (quiz.json)
 - `mission-verifier` — a `.gitea/workflows/ci.yml`-ek `uses:`-e ezt a repót hivatkozza
   CI-action forrásként; NYILVÁNOSNAK kell lennie (a checkout névtelen git clone-nal
   történik) — ha valaha véletlenül privátra állítanák, minden coding mission CI-ja
-  `authorization failed: User permission denied` hibával elszáll
+  `authorization failed: User permission denied` hibával elszáll. Az action egy
+  `test_command` inputot fogad (default: `"npm test"`), ezzel nyelvfüggő a futtatott
+  teszt-parancs (js template explicit `npm test`-et ad át, python template `pytest -v`-t)
 
-Ha a Gitea adatvolument valaha törölni/újraépíteni kell, a fenti 4 (js/quiz/verifier;
-python még hiányzik) repó tartalma és egy idempotens bootstrap script a repóban van:
+Ha a Gitea adatvolument valaha törölni/újraépíteni kell, a fenti 4 repó (js/python/quiz/verifier)
+tartalma és egy idempotens bootstrap script a repóban van:
 `gitea-templates/` + `scripts/bootstrap-gitea-templates.sh` (`GITEA_ADMIN_TOKEN=... ./scripts/bootstrap-gitea-templates.sh`).
+**Fontos:** ha a python template repo még nem létezik az élő Gitea instance-on, a fenti
+script futtatása szükséges, mielőtt a "python" nyelvű mission-létrehozás működni fog éles
+környezetben — ez a PR csak a repo-beli forrástartalmat és a script frissítését adja, magát
+a live Gitea repót nem hozza létre automatikusan.
 
 **Ismert architectural korlát:** Ha a DB tranzakció megbukik a Gitea repo létrehozása után, a repo árvává válik (nincs rollback Gitea-ra). Ez nyitott issue.
 
