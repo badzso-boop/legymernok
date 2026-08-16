@@ -242,8 +242,8 @@ public class GiteaService {
     // készítő által megadott kezdő kódváz (lehet üres is), ez kerül át a
     // kadéthoz solution.<ext> néven, hogy a tesztek importja (pl. "from
     // solution import add") érvényben maradjon.
-    private static final Pattern SOLUTION_FILE_PATTERN = Pattern.compile("^solution\\.(js|ts|py)$");
-    private static final Pattern STARTER_FILE_PATTERN = Pattern.compile("^starter\\.(js|ts|py)$");
+    private static final Pattern SOLUTION_FILE_PATTERN = Pattern.compile("^solution\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern STARTER_FILE_PATTERN = Pattern.compile("^starter\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
 
     /**
      * Egy CODING misszió saját (Forge) repójának tartalmát másolja át egy
@@ -279,28 +279,67 @@ public class GiteaService {
         uploadFiles(adminUsername, targetRepoName, cadetFiles, "Initial cadet copy", null);
     }
 
+    private static String basename(String path) {
+        int idx = path.lastIndexOf('/');
+        return idx >= 0 ? path.substring(idx + 1) : path;
+    }
+
+    private static String dirOf(String path) {
+        int idx = path.lastIndexOf('/');
+        return idx >= 0 ? path.substring(0, idx + 1) : "";
+    }
+
     // Kiemelve a Gitea-hívásoktól, hogy HTTP-mock nélkül, tisztán
     // unit-tesztelhető legyen (GiteaServiceTest).
     static Map<String, String> transformForCadetCopy(Map<String, String> sourceFiles) {
         Map<String, String> cadetFiles = new HashMap<>();
+        Set<String> starterProvidedPaths = new HashSet<>();
+
         for (Map.Entry<String, String> entry : sourceFiles.entrySet()) {
             String path = entry.getKey();
-            String fileName = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+            String fileName = basename(path);
 
-            if (SOLUTION_FILE_PATTERN.matcher(fileName).matches() || "README.md".equals(fileName)) {
+            // A valódi solution.<ext>-et itt még nem döntjük el végleg — a 2.
+            // körben pótoljuk üresen, HA nincs hozzá starter.<ext> (lásd lent).
+            if (SOLUTION_FILE_PATTERN.matcher(fileName).matches() || fileName.equalsIgnoreCase("README.md")) {
                 continue;
             }
 
             Matcher starterMatcher = STARTER_FILE_PATTERN.matcher(fileName);
             if (starterMatcher.matches()) {
-                String extension = starterMatcher.group(1);
-                String dir = path.length() > fileName.length() ? path.substring(0, path.length() - fileName.length()) : "";
-                cadetFiles.put(dir + "solution." + extension, entry.getValue());
+                String extension = starterMatcher.group(1).toLowerCase(Locale.ROOT);
+                String targetPath = dirOf(path) + "solution." + extension;
+                cadetFiles.put(targetPath, entry.getValue());
+                starterProvidedPaths.add(targetPath);
                 continue;
             }
 
             cadetFiles.put(path, entry.getValue());
         }
+
+        // Régebbi (a starter.<ext> konvenció bevezetése előtt létrehozott)
+        // misszióknak nincs starter.<ext> fájljuk — enélkül a kadét repójában
+        // egyáltalán nem lenne solution.<ext>, amit a tesztek importálhatnának
+        // (CI hibára futna). Ilyenkor egy ÜRES solution.<ext>-et hozunk létre —
+        // a valódi megoldás tartalma így sosem szivárog ki, de a misszió
+        // továbbra is játszható marad.
+        for (Map.Entry<String, String> entry : sourceFiles.entrySet()) {
+            String path = entry.getKey();
+            String fileName = basename(path);
+            Matcher solutionMatcher = SOLUTION_FILE_PATTERN.matcher(fileName);
+            if (solutionMatcher.matches()) {
+                // Normalizált (kisbetűs) célútvonalra vetítve hasonlítjuk össze
+                // a starterProvidedPaths-szal — enélkül egy eltérő
+                // kis/nagybetűs "Solution.JS" a már lerakott "solution.js"
+                // mellé egy MÁSODIK, duplikált (üres) fájlt hozna létre.
+                String extension = solutionMatcher.group(1).toLowerCase(Locale.ROOT);
+                String canonicalPath = dirOf(path) + "solution." + extension;
+                if (!starterProvidedPaths.contains(canonicalPath)) {
+                    cadetFiles.putIfAbsent(canonicalPath, "");
+                }
+            }
+        }
+
         return cadetFiles;
     }
 

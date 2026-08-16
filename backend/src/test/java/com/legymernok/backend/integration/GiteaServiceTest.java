@@ -102,4 +102,45 @@ class GiteaServiceTest {
 
         assertTrue(result.containsKey("nested/solution.py"));
     }
+
+    @Test
+    void transformForCadetCopy_whenNoStarterFile_shouldStillCreateEmptySolutionForLegacyMissions() {
+        // Missziók, amiket a starter.<ext> konvenció bevezetése ELŐTT hoztak
+        // létre — nincs starter.js-ük, csak solution.js + solution.test.js.
+        // A kadét repójában így is kell legyen egy (üres) solution.js, amit
+        // a teszt importálhat — enélkül CI hibára futna minden meglévő
+        // misszión (regresszió, amit a review talált).
+        Map<String, String> source = new HashMap<>();
+        source.put("solution.js", "export function add(a, b) { return a + b; }");
+        source.put("solution.test.js", "test('adds', () => {});");
+
+        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+
+        assertTrue(result.containsKey("solution.js"));
+        assertEquals("", result.get("solution.js"), "the real reference solution must never leak, even as a fallback");
+        assertTrue(result.containsKey("solution.test.js"));
+    }
+
+    @Test
+    void transformForCadetCopy_shouldMatchSolutionAndStarterFilesCaseInsensitively() {
+        Map<String, String> source = new HashMap<>();
+        source.put("Solution.JS", "export function add(a, b) { return a + b; }");
+        source.put("Starter.JS", "export function add(a, b) {}");
+
+        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+
+        assertEquals(1, result.size());
+        assertEquals("export function add(a, b) {}", result.get("solution.js"));
+    }
+
+    @Test
+    void transformForCadetCopy_shouldDropReadmeCaseInsensitively() {
+        Map<String, String> source = new HashMap<>();
+        source.put("starter.js", "export function add(a, b) {}");
+        source.put("readme.md", "internal creator notes");
+
+        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+
+        assertFalse(result.containsKey("readme.md"));
+    }
 }
