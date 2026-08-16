@@ -15,6 +15,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -232,6 +234,74 @@ public class GiteaService {
 
         // Egyetlen nagy commit az összes fájllal
         uploadFiles(adminUsername, targetRepoName, allFiles, "Initial template copy", null);
+    }
+
+    // solution.<ext> = a küldetés készítőjének referenciamegoldása — kizárólag
+    // a Forge (owner) repóban létezik, a kadét saját repójába SOSE másolódik
+    // át (lásd #47/coding-mission-content-separation). starter.<ext> = a
+    // készítő által megadott kezdő kódváz (lehet üres is), ez kerül át a
+    // kadéthoz solution.<ext> néven, hogy a tesztek importja (pl. "from
+    // solution import add") érvényben maradjon.
+    private static final Pattern SOLUTION_FILE_PATTERN = Pattern.compile("^solution\\.(js|ts|py)$");
+    private static final Pattern STARTER_FILE_PATTERN = Pattern.compile("^starter\\.(js|ts|py)$");
+
+    /**
+     * Egy CODING misszió saját (Forge) repójának tartalmát másolja át egy
+     * kadét saját munkarepójába — a teljes {@link #copyRepositoryContents}-től
+     * eltérően itt tudatosan SZŰRVE: a valódi solution.<ext> (referenciamegoldás)
+     * és a README.md (a feladatleírás a Mission.descriptionMarkdown mezőből jön
+     * a UI-ban, nem a repóból) sosem kerül át; a starter.<ext> a kadét
+     * solution.<ext> fájljaként kerül fel. Minden más fájl (tesztek,
+     * package.json/requirements.txt, .gitea/workflows/ci.yml) változatlanul
+     * másolódik.
+     *
+     * @throws ExternalServiceException Ha a forrás repó üres/nem létezik, vagy
+     *                                   a szűrés után nem marad kadét-látható fájl.
+     */
+    public void copyMissionRepositoryForCadet(String sourceOwner, String sourceRepoName, String targetRepoName) {
+        log.info("Collecting CODING mission contents from {}/{} for cadet copy to {}", sourceOwner, sourceRepoName, targetRepoName);
+        Map<String, String> sourceFiles = new HashMap<>();
+        collectFilesRecursive(sourceOwner, sourceRepoName, "", sourceFiles);
+
+        if (sourceFiles.isEmpty()) {
+            throw new ExternalServiceException("Gitea",
+                    "Mission repository '" + sourceOwner + "/" + sourceRepoName
+                            + "' is empty or does not exist — cannot copy contents to '" + targetRepoName + "'.");
+        }
+
+        Map<String, String> cadetFiles = transformForCadetCopy(sourceFiles);
+
+        if (cadetFiles.isEmpty()) {
+            throw new ExternalServiceException("Gitea",
+                    "Mission repository '" + sourceOwner + "/" + sourceRepoName + "' has no cadet-visible files to copy.");
+        }
+
+        uploadFiles(adminUsername, targetRepoName, cadetFiles, "Initial cadet copy", null);
+    }
+
+    // Kiemelve a Gitea-hívásoktól, hogy HTTP-mock nélkül, tisztán
+    // unit-tesztelhető legyen (GiteaServiceTest).
+    static Map<String, String> transformForCadetCopy(Map<String, String> sourceFiles) {
+        Map<String, String> cadetFiles = new HashMap<>();
+        for (Map.Entry<String, String> entry : sourceFiles.entrySet()) {
+            String path = entry.getKey();
+            String fileName = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+
+            if (SOLUTION_FILE_PATTERN.matcher(fileName).matches() || "README.md".equals(fileName)) {
+                continue;
+            }
+
+            Matcher starterMatcher = STARTER_FILE_PATTERN.matcher(fileName);
+            if (starterMatcher.matches()) {
+                String extension = starterMatcher.group(1);
+                String dir = path.length() > fileName.length() ? path.substring(0, path.length() - fileName.length()) : "";
+                cadetFiles.put(dir + "solution." + extension, entry.getValue());
+                continue;
+            }
+
+            cadetFiles.put(path, entry.getValue());
+        }
+        return cadetFiles;
     }
 
     private void collectFilesRecursive(String owner, String repoName, String path, Map<String, String> collection) {
