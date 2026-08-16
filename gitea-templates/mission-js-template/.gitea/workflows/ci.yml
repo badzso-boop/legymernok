@@ -29,3 +29,4 @@ jobs:
           verification_secret: ${{ secrets.MISSION_VERIFICATION_SECRET }}
           mission_id: ${{ github.event.repository.name }}
           backend_url: "http://backend:8080"
+          test_command: "npm test"
