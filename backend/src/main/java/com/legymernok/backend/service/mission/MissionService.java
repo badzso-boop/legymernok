@@ -395,8 +395,8 @@ public class MissionService {
     @Transactional
     public void createPlayFile(UUID missionId, String path) {
         Cadet currentUser = getCurrentAuthenticatedUser();
-        requireMutablePlayFile(path);
         CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        requireMutablePlayFile(path);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
         giteaService.uploadFile(repoOwner, repoName, path, "", currentUser);
@@ -406,8 +406,8 @@ public class MissionService {
     @Transactional
     public void deletePlayFile(UUID missionId, String path) {
         Cadet currentUser = getCurrentAuthenticatedUser();
-        requireMutablePlayFile(path);
         CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
+        requireMutablePlayFile(path);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
         giteaService.deleteFile(repoOwner, repoName, path, currentUser);
@@ -417,9 +417,9 @@ public class MissionService {
     @Transactional
     public void renamePlayFile(UUID missionId, String oldPath, String newPath) {
         Cadet currentUser = getCurrentAuthenticatedUser();
+        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
         requireMutablePlayFile(oldPath);
         requireMutablePlayFile(newPath);
-        CadetMission cadetMission = requirePlayRepository(missionId, currentUser);
         String repoOwner = giteaService.getAdminUsername();
         String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
         giteaService.renameFile(repoOwner, repoName, oldPath, newPath, currentUser);
