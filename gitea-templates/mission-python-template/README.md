@@ -1,22 +1,28 @@
-# Mission: Add Two Numbers
+# Mission Template: Add Two Numbers (Python)
 
-## Task Description
+Ez a repó a Mission Forge-ban a küldetés **készítőjének** saját munkarepója —
+a kadét sosem látja közvetlenül ezt a README-t; a feladatleírás a Forge
+"Description" mezőjéből (`Mission.descriptionMarkdown`) jelenik meg neki.
 
-Your mission, should you choose to accept it, is to implement a Python function `add(a, b)` that takes two numbers as input and returns their sum.
+## Fájlok
 
-## Requirements
+- **`solution.py`** — a referenciamegoldás. Ezt a készítő tölti ki a valódi,
+  működő kóddal. **Ez sose kerül át a kadét saját repójába** — csak a CI
+  ellenőrzéshez kell itt, a küldetés jóváhagyásakor.
+- **`starter.py`** — a kadét kiindulási kódváza. Amikor egy kadét elindítja a
+  küldetést, ennek a tartalma kerül át hozzá `solution.py` néven (hogy a
+  teszt importja érvényben maradjon). Lehet teljesen üres, vagy tartalmazhat
+  függvényszignatúrát/TODO-t — a készítő döntése.
+- **`test_solution.py`** — a pytest unit tesztek. Ezek változatlanul
+  átkerülnek a kadéthoz, és a lejátszóban **írásvédettek** — a kadét látja,
+  mit várunk tőle, de nem módosíthatja.
+- **`.gitea/workflows/ci.yml`** — a CI workflow, ami a `mission-verifier`
+  action-t hívja `pytest -v` test_command-mal.
 
-- The function should be named `add`.
-- It should accept two numerical arguments, `a` and `b`.
-- It should return the sum of `a` and `b`.
+## Hogyan teszteld a saját megoldásodat készítőként
 
-## How to Test Your Solution
-
-1.  Open the `solution.py` file and implement the `add` function.
-2.  The `test_solution.py` file contains basic tests for your function.
-3.  Run the tests from your terminal:
-    pip install -r requirements.txt
-    pytest
-4.  If all tests pass, your solution is correct!
-
-Good luck, Cadet!
+1. Töltsd ki a `solution.py`-t a working kóddal.
+2. `pip install -r requirements.txt && pytest` — ellenőrizd, hogy a tesztek
+   zöldek.
+3. Töltsd ki a `starter.py`-t úgy, ahogy a kadétnak látnia kell (üresen vagy
+   stub-bal).
