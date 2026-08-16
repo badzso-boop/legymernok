@@ -118,7 +118,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       });
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -129,7 +133,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName(path);
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -144,7 +152,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName((prev) => (prev === path ? null : prev));
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -161,7 +173,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName((prev) => (prev === oldPath ? newPath : prev));
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["playFiles", missionId] });

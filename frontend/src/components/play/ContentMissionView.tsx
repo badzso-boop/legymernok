@@ -3,11 +3,10 @@ import { Box, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { forgeApi } from "../../api/client";
 import type { ContentPageResponse } from "../../types/mission";
 import RetroButton from "../RetroButton";
+import MarkdownContent from "../shared/MarkdownContent";
 import {
   MissionPlayerActions,
   MissionPlayerHeaderPortal,
@@ -66,44 +65,7 @@ const ContentMissionView: React.FC<ContentMissionViewProps> = ({
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <MissionPlayerHeaderPortal title={missionName} />
 
-      <Box
-        sx={{
-          color: "var(--color-text-primary)",
-          "& h1, & h2, & h3": {
-            color: "var(--color-accent-primary)",
-            fontWeight: 700,
-          },
-          "& p": { lineHeight: 1.7 },
-          "& code": {
-            bgcolor: "var(--color-bg-elevated)",
-            px: 0.5,
-            borderRadius: 0.5,
-            fontFamily: "monospace",
-            fontSize: "0.9em",
-          },
-          "& pre": {
-            bgcolor: "var(--color-bg-elevated)",
-            border: "1px solid var(--color-border)",
-            p: 1.5,
-            borderRadius: 1,
-            overflow: "auto",
-          },
-          "& blockquote": {
-            borderLeft: "3px solid var(--color-accent-primary)",
-            pl: 2,
-            ml: 0,
-            color: "var(--color-text-secondary)",
-          },
-          "& a": { color: "var(--color-accent-primary)" },
-          "& ul, & ol": { pl: 3 },
-          "& table": { borderCollapse: "collapse", width: "100%" },
-          "& th, & td": { border: "1px solid var(--color-border)", p: "6px 12px" },
-          "& th": { bgcolor: "var(--color-bg-elevated)" },
-          "& hr": { borderColor: "var(--color-border)", my: 2 },
-        }}
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{loadedContent}</ReactMarkdown>
-      </Box>
+      <MarkdownContent>{loadedContent}</MarkdownContent>
 
       <MissionPlayerActions>
         {hasNextPage && (
