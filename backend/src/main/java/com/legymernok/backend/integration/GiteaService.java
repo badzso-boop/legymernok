@@ -15,6 +15,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -232,6 +234,113 @@ public class GiteaService {
 
         // Egyetlen nagy commit az összes fájllal
         uploadFiles(adminUsername, targetRepoName, allFiles, "Initial template copy", null);
+    }
+
+    // solution.<ext> = a küldetés készítőjének referenciamegoldása — kizárólag
+    // a Forge (owner) repóban létezik, a kadét saját repójába SOSE másolódik
+    // át (lásd #47/coding-mission-content-separation). starter.<ext> = a
+    // készítő által megadott kezdő kódváz (lehet üres is), ez kerül át a
+    // kadéthoz solution.<ext> néven, hogy a tesztek importja (pl. "from
+    // solution import add") érvényben maradjon.
+    private static final Pattern SOLUTION_FILE_PATTERN = Pattern.compile("^solution\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern STARTER_FILE_PATTERN = Pattern.compile("^starter\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Egy CODING misszió saját (Forge) repójának tartalmát másolja át egy
+     * kadét saját munkarepójába — a teljes {@link #copyRepositoryContents}-től
+     * eltérően itt tudatosan SZŰRVE: a valódi solution.<ext> (referenciamegoldás)
+     * és a README.md (a feladatleírás a Mission.descriptionMarkdown mezőből jön
+     * a UI-ban, nem a repóból) sosem kerül át; a starter.<ext> a kadét
+     * solution.<ext> fájljaként kerül fel. Minden más fájl (tesztek,
+     * package.json/requirements.txt, .gitea/workflows/ci.yml) változatlanul
+     * másolódik.
+     *
+     * @throws ExternalServiceException Ha a forrás repó üres/nem létezik, vagy
+     *                                   a szűrés után nem marad kadét-látható fájl.
+     */
+    public void copyMissionRepositoryForCadet(String sourceOwner, String sourceRepoName, String targetRepoName) {
+        log.info("Collecting CODING mission contents from {}/{} for cadet copy to {}", sourceOwner, sourceRepoName, targetRepoName);
+        Map<String, String> sourceFiles = new HashMap<>();
+        collectFilesRecursive(sourceOwner, sourceRepoName, "", sourceFiles);
+
+        if (sourceFiles.isEmpty()) {
+            throw new ExternalServiceException("Gitea",
+                    "Mission repository '" + sourceOwner + "/" + sourceRepoName
+                            + "' is empty or does not exist — cannot copy contents to '" + targetRepoName + "'.");
+        }
+
+        Map<String, String> cadetFiles = transformForCadetCopy(sourceFiles);
+
+        if (cadetFiles.isEmpty()) {
+            throw new ExternalServiceException("Gitea",
+                    "Mission repository '" + sourceOwner + "/" + sourceRepoName + "' has no cadet-visible files to copy.");
+        }
+
+        uploadFiles(adminUsername, targetRepoName, cadetFiles, "Initial cadet copy", null);
+    }
+
+    private static String basename(String path) {
+        int idx = path.lastIndexOf('/');
+        return idx >= 0 ? path.substring(idx + 1) : path;
+    }
+
+    private static String dirOf(String path) {
+        int idx = path.lastIndexOf('/');
+        return idx >= 0 ? path.substring(0, idx + 1) : "";
+    }
+
+    // Kiemelve a Gitea-hívásoktól, hogy HTTP-mock nélkül, tisztán
+    // unit-tesztelhető legyen (GiteaServiceTest).
+    static Map<String, String> transformForCadetCopy(Map<String, String> sourceFiles) {
+        Map<String, String> cadetFiles = new HashMap<>();
+        Set<String> starterProvidedPaths = new HashSet<>();
+
+        for (Map.Entry<String, String> entry : sourceFiles.entrySet()) {
+            String path = entry.getKey();
+            String fileName = basename(path);
+
+            // A valódi solution.<ext>-et itt még nem döntjük el végleg — a 2.
+            // körben pótoljuk üresen, HA nincs hozzá starter.<ext> (lásd lent).
+            if (SOLUTION_FILE_PATTERN.matcher(fileName).matches() || fileName.equalsIgnoreCase("README.md")) {
+                continue;
+            }
+
+            Matcher starterMatcher = STARTER_FILE_PATTERN.matcher(fileName);
+            if (starterMatcher.matches()) {
+                String extension = starterMatcher.group(1).toLowerCase(Locale.ROOT);
+                String targetPath = dirOf(path) + "solution." + extension;
+                cadetFiles.put(targetPath, entry.getValue());
+                starterProvidedPaths.add(targetPath);
+                continue;
+            }
+
+            cadetFiles.put(path, entry.getValue());
+        }
+
+        // Régebbi (a starter.<ext> konvenció bevezetése előtt létrehozott)
+        // misszióknak nincs starter.<ext> fájljuk — enélkül a kadét repójában
+        // egyáltalán nem lenne solution.<ext>, amit a tesztek importálhatnának
+        // (CI hibára futna). Ilyenkor egy ÜRES solution.<ext>-et hozunk létre —
+        // a valódi megoldás tartalma így sosem szivárog ki, de a misszió
+        // továbbra is játszható marad.
+        for (Map.Entry<String, String> entry : sourceFiles.entrySet()) {
+            String path = entry.getKey();
+            String fileName = basename(path);
+            Matcher solutionMatcher = SOLUTION_FILE_PATTERN.matcher(fileName);
+            if (solutionMatcher.matches()) {
+                // Normalizált (kisbetűs) célútvonalra vetítve hasonlítjuk össze
+                // a starterProvidedPaths-szal — enélkül egy eltérő
+                // kis/nagybetűs "Solution.JS" a már lerakott "solution.js"
+                // mellé egy MÁSODIK, duplikált (üres) fájlt hozna létre.
+                String extension = solutionMatcher.group(1).toLowerCase(Locale.ROOT);
+                String canonicalPath = dirOf(path) + "solution." + extension;
+                if (!starterProvidedPaths.contains(canonicalPath)) {
+                    cadetFiles.putIfAbsent(canonicalPath, "");
+                }
+            }
+        }
+
+        return cadetFiles;
     }
 
     private void collectFilesRecursive(String owner, String repoName, String path, Map<String, String> collection) {

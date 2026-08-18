@@ -11,6 +11,10 @@ inputs:
   mission_id:
     description: "The UUID of the mission"
     required: true
+  test_command:
+    description: "Shell command that runs the mission's tests"
+    required: false
+    default: "npm test"
 runs:
   using: "node16"
   main: "dist/index.js"

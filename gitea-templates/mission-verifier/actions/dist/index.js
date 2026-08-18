@@ -13,6 +13,7 @@ async function run() {
   const backendUrl = process.env.INPUT_BACKEND_URL || "http://backend:8080";
   const secret = process.env.INPUT_VERIFICATION_SECRET;
   const missionId = process.env.INPUT_MISSION_ID;
+  const testCommand = process.env.INPUT_TEST_COMMAND || "npm test";
 
   if (!missionId || !secret) {
     console.error("[SYSTEM] Missing mission_id or verification_secret");
@@ -41,8 +42,9 @@ async function run() {
     console.error("[SYSTEM] Log stream error:", err.message),
   );
 
-  // 2. npm test folyamat indítása (színek nélkül kényszerítve)
-  const testProcess = spawn("npm", ["test"], {
+  // 2. Teszt-parancs indítása (színek nélkül kényszerítve)
+  console.log(`--- [SYSTEM] Running: ${testCommand} ---`);
+  const testProcess = spawn(testCommand, {
     shell: true,
     env: { ...process.env, CI: "true", NO_COLOR: "true" },
   });

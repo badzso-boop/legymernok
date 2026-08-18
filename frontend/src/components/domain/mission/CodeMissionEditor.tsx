@@ -20,6 +20,7 @@ import SockJS from "sockjs-client";
 import { forgeApi } from "../../../api/client";
 import type { MissionForgeContentRequest, VerificationStatus } from "../../../types/mission-forge";
 import FileExplorer from "../../forge/FileExplorer";
+import { getMonacoLanguage } from "../../../utils/missionFiles";
 
 interface CodeMissionEditorProps {
   missionId: string;
@@ -60,10 +61,11 @@ export const CodeMissionEditor: React.FC<CodeMissionEditorProps> = ({ missionId,
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" as "success" | "error" });
 
+  // Template módban is kell a mission.missionType, hogy a CODING-specifikus
+  // solution/starter fájlkonvenció-tippet meg tudjuk jeleníteni.
   const { data: mission } = useQuery({
     queryKey: ["mission", missionId],
     queryFn: () => forgeApi.getMissionById(missionId),
-    enabled: isWorkspace,
   });
 
   const { data: fetchedFiles, isLoading } = useQuery({
@@ -168,6 +170,9 @@ export const CodeMissionEditor: React.FC<CodeMissionEditorProps> = ({ missionId,
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {mode === "template" && <Alert severity="info">{t("forge.fileEditorTemplateNote")}</Alert>}
+      {mode === "template" && mission?.missionType === "CODING" && (
+        <Alert severity="info">{t("forge.codingFileConventionNote")}</Alert>
+      )}
 
       {isWorkspace && mission && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -200,7 +205,7 @@ export const CodeMissionEditor: React.FC<CodeMissionEditorProps> = ({ missionId,
               <Editor
                 height="100%"
                 theme="vs-dark"
-                language={activeFileName.endsWith(".md") ? "markdown" : "javascript"}
+                language={getMonacoLanguage(activeFileName)}
                 value={files[activeFileName] || ""}
                 onChange={(val) =>
                   activeFileName &&

@@ -67,6 +67,9 @@ push_repo "$TEMPLATES_DIR/mission-js-template" "mission-js-template"
 create_or_skip_repo "mission-quiz-template" true
 push_repo "$TEMPLATES_DIR/mission-quiz-template" "mission-quiz-template"
 
+create_or_skip_repo "mission-python-template" true
+push_repo "$TEMPLATES_DIR/mission-python-template" "mission-python-template"
+
 # A mission-verifier NYILVÁNOS repo kell legyen: a ci.yml workflow-k
 # `uses: http://gitea:3000/legymernok_admin/mission-verifier/actions@main`
 # formában, névtelen git clone-nal töltik le — privát repónál ez
@@ -78,5 +81,4 @@ curl -s -o /dev/null -X PATCH \
   -d '{"private":false}' \
   "${GITEA_URL}/api/v1/repos/${GITEA_ADMIN_USERNAME}/mission-verifier"
 
-echo "Kész. Hiányzik még: mission-python-template (nincs forrás-tartalom hozzá,"
-echo "amíg ez nincs feltöltve, a 'python' nyelvű coding mission létrehozása hibázni fog)."
+echo "Kész."

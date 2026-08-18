@@ -200,6 +200,13 @@ const resources = {
         fileEditorNoFiles: "No files yet — create one.",
         fileEditorSelectFile: "Select a file to edit.",
         codingMissionStartError: "Failed to start the mission.",
+        codingFileConventionNote:
+          "solution.<ext> is your reference answer and is never shown to cadets. starter.<ext> is what cadets receive as their starting point — leave it empty or add a stub, your choice. Files matching a test naming pattern (e.g. solution.test.js, test_solution.py) are copied to the cadet automatically and shown read-only.",
+        taskTab: "Task",
+        filesTab: "Files",
+        noDescription: "No task description has been provided yet.",
+        readOnlyFileTooltip: "Read-only — provided by the mission creator.",
+        readOnlyFileBanner: "This file is read-only — it was provided by the mission creator and can't be edited.",
       },
       difficultyType: {
         easy: "Easy",
@@ -762,6 +769,13 @@ const resources = {
         fileEditorNoFiles: "Nincs még fájl — hozz létre egyet.",
         fileEditorSelectFile: "Válassz egy fájlt a szerkesztéshez.",
         codingMissionStartError: "Nem sikerült elindítani a missziót.",
+        codingFileConventionNote:
+          "A solution.<ext> a referenciamegoldásod — ezt a kadét sosem látja. A starter.<ext> az, amit a kadét kiindulásként kap — hagyhatod üresen, vagy adhatsz hozzá egy vázat, ez rajtad áll. A teszt-elnevezési mintának megfelelő fájlok (pl. solution.test.js, test_solution.py) automatikusan átkerülnek a kadéthoz, írásvédetten.",
+        taskTab: "Feladat",
+        filesTab: "Fájlok",
+        noDescription: "Ehhez a küldetéshez még nincs feladatleírás megadva.",
+        readOnlyFileTooltip: "Írásvédett — a küldetés készítője adta meg.",
+        readOnlyFileBanner: "Ez a fájl írásvédett — a küldetés készítője adta meg, nem szerkeszthető.",
       },
       difficultyType: {
         easy: "Könnyű",

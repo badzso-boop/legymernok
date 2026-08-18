@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Box, Typography, IconButton, Tooltip } from "@mui/material";
-import { FileCode, FileText, Plus, Trash2, Pencil } from "lucide-react";
+import { FileCode, FileText, Plus, Trash2, Pencil, Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 function getFileIcon(fileName: string) {
@@ -18,6 +18,9 @@ interface FileExplorerProps {
   onCreate: (fileName: string) => void;
   onDelete: (fileName: string) => void;
   onRename: (oldName: string, newName: string) => void;
+  /** Ezekhez a fájlnevekhez nincs átnevezés/törlés — a lejátszóban (kadét)
+   * a küldetés készítője által megadott, írásvédett fájlokhoz (tesztek) használt. */
+  readOnlyFileNames?: string[];
 }
 
 // Fájlböngésző oldalsáv fájl létrehozás/törlés/átnevezés lehetőséggel —
@@ -30,6 +33,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onCreate,
   onDelete,
   onRename,
+  readOnlyFileNames = [],
 }) => {
   const { t } = useTranslation();
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
@@ -95,7 +99,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         </Tooltip>
       </Box>
       <Box sx={{ py: 1, overflowY: "auto", flexGrow: 1 }}>
-        {fileNames.map((name) => (
+        {fileNames.map((name) => {
+          const isReadOnly = readOnlyFileNames.includes(name);
+          return (
           <Box
             key={name}
             onClick={() => onSelect(name)}
@@ -152,31 +158,40 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 {name}
               </Typography>
             )}
-            <Box
-              className="file-actions"
-              sx={{ display: "flex", opacity: 0, transition: "opacity 0.15s" }}
-            >
-              <Tooltip title={t("forge.renameFile")}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => startRename(name, e)}
-                  data-cy="file-explorer-rename"
-                >
-                  <Pencil size={12} color="#888" />
-                </IconButton>
+            {isReadOnly ? (
+              <Tooltip title={t("forge.readOnlyFileTooltip")}>
+                <Box sx={{ display: "flex", px: 0.5 }} data-cy="file-explorer-readonly">
+                  <Lock size={12} color="#666" />
+                </Box>
               </Tooltip>
-              <Tooltip title={t("forge.deleteFile")}>
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleDelete(name, e)}
-                  data-cy="file-explorer-delete"
-                >
-                  <Trash2 size={12} color="#888" />
-                </IconButton>
-              </Tooltip>
-            </Box>
+            ) : (
+              <Box
+                className="file-actions"
+                sx={{ display: "flex", opacity: 0, transition: "opacity 0.15s" }}
+              >
+                <Tooltip title={t("forge.renameFile")}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => startRename(name, e)}
+                    data-cy="file-explorer-rename"
+                  >
+                    <Pencil size={12} color="#888" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t("forge.deleteFile")}>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleDelete(name, e)}
+                    data-cy="file-explorer-delete"
+                  >
+                    <Trash2 size={12} color="#888" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
           </Box>
-        ))}
+          );
+        })}
       </Box>
     </Box>
   );

@@ -10,6 +10,8 @@ import {
   Drawer,
   IconButton,
   Tooltip,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import { useTranslation } from "react-i18next";
@@ -17,7 +19,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { forgeApi, missionApi } from "../../api/client";
 import RetroButton from "../RetroButton";
 import FileExplorer from "../forge/FileExplorer";
+import MarkdownContent from "../shared/MarkdownContent";
 import { useIsCompactViewport } from "../../hooks/useIsCompactViewport";
+import { getMonacoLanguage, isProtectedCadetFile } from "../../utils/missionFiles";
 import {
   MissionPlayerActions,
   MissionPlayerHeaderPortal,
@@ -57,6 +61,9 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
   // bottom-sheet Drawer-ként húzható elő.
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isMobileFilesOpen, setMobileFilesOpen] = useState(false);
+  // A kadét először a feladatleírást lássa, ne a fájlfát — a "Task" fül az
+  // alapértelmezett, csak utána vált "Files"-ra.
+  const [sidebarTab, setSidebarTab] = useState<"task" | "files">("task");
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -111,7 +118,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       });
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -122,7 +133,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName(path);
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -137,7 +152,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName((prev) => (prev === path ? null : prev));
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
   });
 
@@ -154,7 +173,11 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
       setActiveFileName((prev) => (prev === oldPath ? newPath : prev));
     },
     onError: (err: any) => {
-      setSnackbar({ open: true, message: err.message, severity: "error" });
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message,
+        severity: "error",
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["playFiles", missionId] });
@@ -170,6 +193,55 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
   }
 
   const fileNames = Object.keys(currentFileContents);
+  const readOnlyFileNames = fileNames.filter(isProtectedCadetFile);
+  const activeFileIsReadOnly = activeFileName ? isProtectedCadetFile(activeFileName) : false;
+
+  const sidebarPanel = (onFileSelected?: () => void) => (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <Tabs
+        value={sidebarTab}
+        onChange={(_e, value) => setSidebarTab(value)}
+        variant="fullWidth"
+        sx={{
+          minHeight: 36,
+          borderBottom: "1px solid #222",
+          "& .MuiTab-root": { minHeight: 36, fontSize: "0.7rem", color: "#888" },
+          "& .Mui-selected": { color: "#fff !important" },
+        }}
+      >
+        <Tab value="task" label={t("forge.taskTab")} data-cy="coding-player-task-tab" />
+        <Tab value="files" label={t("forge.filesTab")} data-cy="coding-player-files-tab" />
+      </Tabs>
+      {sidebarTab === "task" ? (
+        <Box sx={{ p: 2, overflowY: "auto", flexGrow: 1 }}>
+          {mission.descriptionMarkdown ? (
+            <MarkdownContent>{mission.descriptionMarkdown}</MarkdownContent>
+          ) : (
+            <Typography variant="body2" sx={{ color: "#666" }}>
+              {t("forge.noDescription")}
+            </Typography>
+          )}
+        </Box>
+      ) : (
+        <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+          <FileExplorer
+            fileNames={fileNames}
+            activeFileName={activeFileName}
+            readOnlyFileNames={readOnlyFileNames}
+            onSelect={(name) => {
+              setActiveFileName(name);
+              onFileSelected?.();
+            }}
+            onCreate={(path) => createFileMutation.mutate(path)}
+            onDelete={(path) => deleteFileMutation.mutate(path)}
+            onRename={(oldPath, newPath) =>
+              renameFileMutation.mutate({ oldPath, newPath })
+            }
+          />
+        </Box>
+      )}
+    </Box>
+  );
 
   return (
     <Box
@@ -222,23 +294,14 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
             {isSidebarOpen && (
               <Box
                 sx={{
-                  width: "220px",
-                  minWidth: "220px",
+                  width: "260px",
+                  minWidth: "260px",
                   flexShrink: 0,
                   bgcolor: "#111",
                   borderRight: "1px solid #222",
                 }}
               >
-                <FileExplorer
-                  fileNames={fileNames}
-                  activeFileName={activeFileName}
-                  onSelect={setActiveFileName}
-                  onCreate={(path) => createFileMutation.mutate(path)}
-                  onDelete={(path) => deleteFileMutation.mutate(path)}
-                  onRename={(oldPath, newPath) =>
-                    renameFileMutation.mutate({ oldPath, newPath })
-                  }
-                />
+                {sidebarPanel()}
               </Box>
             )}
           </>
@@ -284,47 +347,65 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
             </Box>
           )}
 
-          <Box sx={{ flexGrow: 1, position: "relative", minHeight: 0, bgcolor: "#000" }}>
-            {activeFileName ? (
-              <Editor
-                height="100%"
-                theme="vs-dark"
-                language={activeFileName.endsWith(".md") ? "markdown" : "javascript"}
-                value={currentFileContents[activeFileName] || ""}
-                onChange={(val) =>
-                  activeFileName &&
-                  val !== undefined &&
-                  setCurrentFileContents((prev) => ({
-                    ...prev,
-                    [activeFileName]: val,
-                  }))
-                }
-                onMount={handleEditorMount}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  fontFamily: "monospace",
-                  automaticLayout: true,
-                  scrollBeyondLastLine: false,
-                  padding: { top: 10 },
-                }}
-              />
-            ) : (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: "100%",
-                }}
-              >
-                <Typography sx={{ color: "#333", fontFamily: "monospace" }}>
-                  {fileNames.length === 0
-                    ? t("forge.codingPlayerNoFiles")
-                    : t("forge.selectFileToBegin")}
-                </Typography>
-              </Box>
+          <Box
+            sx={{
+              flexGrow: 1,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              bgcolor: "#000",
+            }}
+          >
+            {activeFileName && activeFileIsReadOnly && (
+              <Alert severity="info" sx={{ borderRadius: 0, flexShrink: 0 }}>
+                {t("forge.readOnlyFileBanner")}
+              </Alert>
             )}
+            <Box sx={{ flexGrow: 1, minHeight: 0, position: "relative" }}>
+              {activeFileName ? (
+                <Editor
+                  height="100%"
+                  theme="vs-dark"
+                  language={getMonacoLanguage(activeFileName)}
+                  value={currentFileContents[activeFileName] || ""}
+                  onChange={(val) =>
+                    activeFileName &&
+                    val !== undefined &&
+                    !activeFileIsReadOnly &&
+                    setCurrentFileContents((prev) => ({
+                      ...prev,
+                      [activeFileName]: val,
+                    }))
+                  }
+                  onMount={handleEditorMount}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    fontFamily: "monospace",
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false,
+                    padding: { top: 10 },
+                    readOnly: activeFileIsReadOnly,
+                    domReadOnly: activeFileIsReadOnly,
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%",
+                  }}
+                >
+                  <Typography sx={{ color: "#333", fontFamily: "monospace" }}>
+                    {fileNames.length === 0
+                      ? t("forge.codingPlayerNoFiles")
+                      : t("forge.selectFileToBegin")}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           </Box>
 
           {/* Virtuális billentyűzet feletti gyorsgombok — a mobil kódolás
@@ -397,19 +478,9 @@ const CodingMissionPlayer: React.FC<CodingMissionPlayerProps> = ({
             },
           }}
         >
-          <FileExplorer
-            fileNames={fileNames}
-            activeFileName={activeFileName}
-            onSelect={(name) => {
-              setActiveFileName(name);
-              setMobileFilesOpen(false);
-            }}
-            onCreate={(path) => createFileMutation.mutate(path)}
-            onDelete={(path) => deleteFileMutation.mutate(path)}
-            onRename={(oldPath, newPath) =>
-              renameFileMutation.mutate({ oldPath, newPath })
-            }
-          />
+          <Box sx={{ height: "60vh" }}>
+            {sidebarPanel(() => setMobileFilesOpen(false))}
+          </Box>
         </Drawer>
       )}
 

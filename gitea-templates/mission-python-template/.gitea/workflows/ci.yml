@@ -1,0 +1,32 @@
+name: Mission Verification Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Run Engineering Check
+        uses: http://gitea:3000/legymernok_admin/mission-verifier/actions@main
+        with:
+          verification_secret: ${{ secrets.MISSION_VERIFICATION_SECRET }}
+          mission_id: ${{ github.event.repository.name }}
+          backend_url: "http://backend:8080"
+          test_command: "pytest -v"
