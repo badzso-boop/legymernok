@@ -13,6 +13,7 @@ import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +35,7 @@ public class CadetService {
 
     private final CadetRepository cadetRepository;
     private final CadetMissionRepository cadetMissionRepository;
+    private final MissionResultRepository missionResultRepository;
     private final StarSystemRepository starSystemRepository;
     private final MissionRepository missionRepository;
     private final PasswordEncoder passwordEncoder;
@@ -118,6 +120,25 @@ public class CadetService {
             // Itt dobhatnánk egy OperationNotAllowedException-t
         }
 
+        // A kadét CODING/QUIZ/stb. munka-repóit startMission() az ADMIN Gitea-fiók alatt hozza
+        // létre (a kadét csak write-collaborator rajta), ezért deleteGiteaUser() — ami csak a
+        // törölt user SAJÁT tulajdonú repóit törli — ezeket nem éri el. CadetMission.repositoryUrl
+        // az app hiteles forrása arról, mely admin-tulajdonú repóhoz volt hozzáférése a kadétnak
+        // (sosem a mission-template repó URL-je, az a Mission entitáson van), ezért ez alapján,
+        // nem Gitea-oldali "list repos where user is collaborator" API-ra támaszkodva töröljük
+        // őket. Best-effort: egy-egy repo törlési hibája nem akadályozza a kadét törlését.
+        List<CadetMission> cadetMissions = cadetMissionRepository.findAllByCadetId(id);
+        for (CadetMission cadetMission : cadetMissions) {
+            String repoName = extractRepoNameFromUrl(cadetMission.getRepositoryUrl());
+            if (repoName == null) continue;
+            try {
+                giteaService.deleteAdminRepository(repoName);
+            } catch (Exception e) {
+                log.error("Failed to delete cadet work repo '{}' while deleting cadet '{}': {}",
+                        repoName, cadet.getUsername(), e.getMessage());
+            }
+        }
+
         try {
             giteaService.deleteGiteaUser(cadet.getUsername());
         } catch (Exception e) {
@@ -125,6 +146,7 @@ public class CadetService {
         }
 
         cadetMissionRepository.deleteAllByCadetId(id);
+        missionResultRepository.deleteAllByCadetId(id);
         log.info("Deleted Cadet: {}", cadet.getUsername());
 
         cadetRepository.delete(cadet);
@@ -174,6 +196,16 @@ public class CadetService {
         Cadet updatedCadet = cadetRepository.save(cadetToUpdate);
         log.info("Updated Cadet: {}", updatedCadet.getUsername());
         return mapToResponse(updatedCadet);
+    }
+
+    /** Ugyanaz a minta, mint a MissionService azonos nevű privát helperje. */
+    private String extractRepoNameFromUrl(String url) {
+        if (url == null || url.isEmpty()) return null;
+        String lastPart = url.substring(url.lastIndexOf('/') + 1);
+        if (lastPart.endsWith(".git")) {
+            return lastPart.substring(0, lastPart.length() - 4);
+        }
+        return lastPart;
     }
 
     private CadetResponse mapToResponse(Cadet cadet) {
