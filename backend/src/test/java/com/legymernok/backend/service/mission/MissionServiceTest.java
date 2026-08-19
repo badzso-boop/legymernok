@@ -887,7 +887,7 @@ class MissionServiceTest {
 
         missionService.startMission(mission.getId(), "test_user");
 
-        verify(giteaService).copyMissionRepositoryForCadet(eq("legymernok_admin"), eq("mission-repo"), anyString());
+        verify(giteaService).copyMissionRepositoryForCadet(eq("legymernok_admin"), eq("mission-repo"), anyString(), eq(mission.getId().toString()));
         verify(giteaService, never()).copyRepositoryContents(anyString(), anyString(), anyString());
     }
 
@@ -908,7 +908,7 @@ class MissionServiceTest {
         missionService.startMission(mission.getId(), "test_user");
 
         verify(giteaService).copyRepositoryContents(eq("legymernok_admin"), eq("quiz-repo"), anyString());
-        verify(giteaService, never()).copyMissionRepositoryForCadet(anyString(), anyString(), anyString());
+        verify(giteaService, never()).copyMissionRepositoryForCadet(anyString(), anyString(), anyString(), anyString());
     }
 
     // =========================================================================

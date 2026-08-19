@@ -258,7 +258,7 @@ public class GiteaService {
      * @throws ExternalServiceException Ha a forrás repó üres/nem létezik, vagy
      *                                   a szűrés után nem marad kadét-látható fájl.
      */
-    public void copyMissionRepositoryForCadet(String sourceOwner, String sourceRepoName, String targetRepoName) {
+    public void copyMissionRepositoryForCadet(String sourceOwner, String sourceRepoName, String targetRepoName, String missionId) {
         log.info("Collecting CODING mission contents from {}/{} for cadet copy to {}", sourceOwner, sourceRepoName, targetRepoName);
         Map<String, String> sourceFiles = new HashMap<>();
         collectFilesRecursive(sourceOwner, sourceRepoName, "", sourceFiles);
@@ -269,12 +269,19 @@ public class GiteaService {
                             + "' is empty or does not exist — cannot copy contents to '" + targetRepoName + "'.");
         }
 
-        Map<String, String> cadetFiles = transformForCadetCopy(sourceFiles);
+        Map<String, String> cadetFiles = transformForCadetCopy(sourceFiles, missionId);
 
         if (cadetFiles.isEmpty()) {
             throw new ExternalServiceException("Gitea",
                     "Mission repository '" + sourceOwner + "/" + sourceRepoName + "' has no cadet-visible files to copy.");
         }
+
+        // A kadét saját (admin-owned) másolat-repója NEM örökli a forrás
+        // misszió-repó Actions secret-jét — a Gitea repo-copy művelet
+        // (uploadFiles) nem CI-secreteket, csak fájlokat másol. Enélkül a
+        // CI job "verification_secret" inputja üres lenne, és a
+        // mission-verifier action 401-et kapna a callback-nél (#52).
+        setRepositorySecret(targetRepoName, "MISSION_VERIFICATION_SECRET", this.verificationSecretValue);
 
         uploadFiles(adminUsername, targetRepoName, cadetFiles, "Initial cadet copy", null);
     }
@@ -291,7 +298,17 @@ public class GiteaService {
 
     // Kiemelve a Gitea-hívásoktól, hogy HTTP-mock nélkül, tisztán
     // unit-tesztelhető legyen (GiteaServiceTest).
-    static Map<String, String> transformForCadetCopy(Map<String, String> sourceFiles) {
+    // A ci.yml sablonokban a mission_id input `${{ github.event.repository.name }}`-ből jön —
+    // ez az admin saját (Forge) repójánál helyes, mert ott a repó neve == a Mission UUID-ja.
+    // A kadét saját munkarepójának neve viszont "cadet-<username>-<missionId>" alakú, tehát
+    // ugyanez a kifejezés a callback URL-be a teljes repónevet írná be a valódi Mission UUID
+    // helyett, és a backend `/api/mission-verification/{missionId}/callback` UUID-parse-a
+    // elszállna rajta (#52). Ezért a kadét-másolatba kerülő ci.yml-ben lecseréljük a
+    // kifejezést a tényleges (ismert) Mission UUID-ra.
+    private static final String CI_YML_PATH_SUFFIX = ".gitea/workflows/ci.yml";
+    private static final String CI_YML_MISSION_ID_EXPRESSION = "${{ github.event.repository.name }}";
+
+    static Map<String, String> transformForCadetCopy(Map<String, String> sourceFiles, String missionId) {
         Map<String, String> cadetFiles = new HashMap<>();
         Set<String> starterProvidedPaths = new HashSet<>();
 
@@ -311,6 +328,11 @@ public class GiteaService {
                 String targetPath = dirOf(path) + "solution." + extension;
                 cadetFiles.put(targetPath, entry.getValue());
                 starterProvidedPaths.add(targetPath);
+                continue;
+            }
+
+            if (path.endsWith(CI_YML_PATH_SUFFIX) && entry.getValue().contains(CI_YML_MISSION_ID_EXPRESSION)) {
+                cadetFiles.put(path, entry.getValue().replace(CI_YML_MISSION_ID_EXPRESSION, missionId));
                 continue;
             }
 
