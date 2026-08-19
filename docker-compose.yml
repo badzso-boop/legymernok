@@ -4,10 +4,17 @@ services:
   # ---------------------------------------------------------------------------
   # Database Service (PostgreSQL)
   # ---------------------------------------------------------------------------
+  # profiles: ["standalone"] — csak akkor indul, ha `docker compose --profile
+  # standalone up` fut. Ez teszi lehetővé, hogy a homelab szerveren egy közös,
+  # több projektet kiszolgáló Postgres instance-ra álljunk át (lásd
+  # SPRING_DATASOURCE_URL / GITEA__database__* env-var indirekció lentebb),
+  # miközben egy friss klónnál `docker compose --profile standalone up`
+  # továbbra is teljesen önmagában felhúzza ezt a saját, lokális DB-t.
   postgres:
     image: pgvector/pgvector:pg16
     container_name: legymernok-postgres
     restart: always
+    profiles: ["standalone"]
     environment:
       POSTGRES_USER: postgres
       # .env-ből jön, mint a többi secret — lásd .env.example. NEM biztonságos
@@ -32,12 +39,14 @@ services:
       - USER_UID=1000
       - USER_GID=1000
 
-      # DATABASE
+      # DATABASE — a defaultok a lokális `postgres` service-re mutatnak (lásd a
+      # `profiles: ["standalone"]` megjegyzést fent); a homelab szerveren ezeket
+      # a .env (git-ignorolt, csak ott) a közös instance-ra írja felül.
       - GITEA__database__DB_TYPE=postgres
-      - GITEA__database__HOST=postgres:5432
-      - GITEA__database__NAME=gitea
-      - GITEA__database__USER=postgres
-      - GITEA__database__PASSWD=${POSTGRES_PASSWORD}
+      - GITEA__database__HOST=${GITEA_DATABASE_HOST:-postgres:5432}
+      - GITEA__database__NAME=${GITEA_DATABASE_NAME:-gitea}
+      - GITEA__database__USER=${GITEA_DATABASE_USER:-postgres}
+      - GITEA__database__PASSWD=${GITEA_DATABASE_PASSWORD:-${POSTGRES_PASSWORD}}
       - GITEA__actions__ENABLED=true
       - GITEA__security__INSTALL_LOCK=true
       - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY}
@@ -51,8 +60,13 @@ services:
       - "2222:22" # SSH port
     volumes:
       - gitea_data:/data
-    depends_on:
-      - postgres
+    # Nincs explicit depends_on a `postgres` service-re: az profil mögé került
+    # (lásd fent), így a shared-Postgres módban (homelab szerver, nincs profil
+    # aktiválva) nem is létezne a service, amire mutatna — Compose ilyenkor
+    # hibával elszállna egy definiálatlan service-re mutató depends_on miatt.
+    # A `postgres` service-nek amúgy sem volt healthcheck-je, tehát a korábbi
+    # depends_on is csak "induljon el a konténer" szintű garanciát adott, nem
+    # DB-readiness-t — Gitea saját maga retry-el kapcsolódáskor.
     networks:
       - legymernok-net
       # A kadét-vezérelt CI job-konténerek (legymernok-runner-net) itt futtatják
@@ -63,6 +77,10 @@ services:
       # onnan továbbra sem érik el — lásd runner-config.yaml és a
       # legymernok-runner-net hálózat leírását.)
       - legymernok-runner-net
+      # Csak akkor releváns, ha a homelab szerver közös Postgres instance-ára
+      # kötünk (lásd GITEA__database__HOST override) — standalone módban
+      # csatlakozva marad, de nem használjuk.
+      - shared-db-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
       interval: 5s
@@ -79,10 +97,12 @@ services:
     container_name: legymernok-backend
     restart: always
     environment:
-      # Kapcsolódás a fenti 'postgres' service-hez
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/legymernok
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      # Kapcsolódás a fenti 'postgres' service-hez alapból; a homelab szerveren
+      # a .env (git-ignorolt) ezeket a közös Postgres instance-ra írja felül —
+      # lásd a `postgres` service `profiles: ["standalone"]` megjegyzését fent.
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/legymernok}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${POSTGRES_PASSWORD}}
       # SPRING_JPA_HIBERNATE_DDL_AUTO SZÁNDÉKOSAN NINCS ITT: env-var-ként
       # felülírta volna az application.properties-ben beállított
       # `spring.jpa.hibernate.ddl-auto=validate` értéket (Spring Boot
@@ -102,8 +122,9 @@ services:
       GITHUB_REPO_NAME: ${GITHUB_REPO_NAME:-legymernok}
     ports:
       - "8090:8080"
-    depends_on:
-      - postgres
+    # Nincs explicit depends_on a `postgres` service-re — lásd a `gitea`
+    # service-nél lévő megjegyzést ugyanerről (profil mögé került, Spring
+    # Boot saját maga retry-el kapcsolódáskor).
     networks:
       - legymernok-net
       # A kadét-vezérelt CI job-konténerek (lásd runner-config.yaml network:)
@@ -113,6 +134,10 @@ services:
       # SOSEM — az csak a legymernok-net-en van, a job-konténerek onnan nem
       # érik el.
       - legymernok-runner-net
+      # Csak akkor releváns, ha a homelab szerver közös Postgres instance-ára
+      # kötünk (lásd SPRING_DATASOURCE_URL override) — standalone módban
+      # csatlakozva marad, de nem használjuk.
+      - shared-db-net
 
   # ---------------------------------------------------------------------------
   # Frontend Service (React + Vite + Nginx)
@@ -222,4 +247,11 @@ networks:
   # found" hibával elszállt. Így, ahogy a legymernok-net is, előre létre
   # kell hozni: `docker network create legymernok-runner-net`.
   legymernok-runner-net:
+    external: true
+  # A homelab szerver közös, több projektet kiszolgáló Postgres instance-ának
+  # hálózata — csak akkor releváns, ha a GITEA__database__HOST/
+  # SPRING_DATASOURCE_URL a .env-ben a közösre van átírva. Egy friss klónnál,
+  # standalone módban létezik, de nincs mit elérnie rajta. Előfeltétel:
+  # `docker network create shared-db-net`.
+  shared-db-net:
     external: true
