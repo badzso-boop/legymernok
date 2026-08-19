@@ -5,12 +5,14 @@ import com.legymernok.backend.dto.cadet.CreateCadetRequest;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.cadet.CadetRole;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.repository.ConnectTables.CadetMissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +39,9 @@ class CadetServiceTest {
 
     @Mock
     private CadetMissionRepository cadetMissionRepository;
+
+    @Mock
+    private MissionResultRepository missionResultRepository;
 
     @Mock
     private RoleRepository roleRepository;
@@ -146,7 +151,63 @@ class CadetServiceTest {
         // 2. CadetMission-ök törlése meghívódott
         verify(cadetMissionRepository, times(1)).deleteAllByCadetId(cadetId);
 
+        // 2b. MissionResult-ök törlése is meghívódott (wrenchly#48-hoz kapcsolódó kisebb
+        // DB-cleanup hiányosság, amit ugyanebben a körben javítottunk)
+        verify(missionResultRepository, times(1)).deleteAllByCadetId(cadetId);
+
         // 3. Cadet törlése meghívódott
+        verify(cadetRepository, times(1)).delete(cadet);
+    }
+
+    @Test
+    void deleteCadet_DeletesAdminOwnedWorkRepos() {
+        // Arrange — issue #48: a kadét munka-repói admin-tulajdonban vannak, a kadét csak
+        // collaborator rajtuk, ezért deleteGiteaUser() nem éri el őket; ezeket a CadetMission
+        // rekordokból (repositoryUrl) kell törölni, nem a mission-template repókat.
+        UUID cadetId = UUID.randomUUID();
+        Cadet cadet = new Cadet();
+        cadet.setId(cadetId);
+        cadet.setUsername("todelete");
+
+        CadetMission mission1 = CadetMission.builder()
+                .repositoryUrl("https://gitea.example.com/admin/cadet-todelete-abc.git")
+                .build();
+        CadetMission mission2 = CadetMission.builder()
+                .repositoryUrl("https://gitea.example.com/admin/cadet-todelete-def")
+                .build();
+
+        when(cadetRepository.findById(cadetId)).thenReturn(Optional.of(cadet));
+        when(cadetMissionRepository.findAllByCadetId(cadetId)).thenReturn(java.util.List.of(mission1, mission2));
+
+        // Act
+        cadetService.deleteCadet(cadetId);
+
+        // Assert — a repó nevét a repositoryUrl-ből nyeri ki, admin-tulajdonú repóként törli
+        verify(giteaService, times(1)).deleteAdminRepository("cadet-todelete-abc");
+        verify(giteaService, times(1)).deleteAdminRepository("cadet-todelete-def");
+        verify(cadetRepository, times(1)).delete(cadet);
+    }
+
+    @Test
+    void deleteCadet_WorkRepoDeletionFailure_DoesNotBlockCadetDeletion() {
+        // Arrange — best-effort: egy repo törlési hibája nem akadályozhatja a kadét törlését,
+        // ugyanaz a minta, mint a deleteGiteaUser() hívásnál.
+        UUID cadetId = UUID.randomUUID();
+        Cadet cadet = new Cadet();
+        cadet.setId(cadetId);
+        cadet.setUsername("todelete");
+
+        CadetMission mission = CadetMission.builder()
+                .repositoryUrl("https://gitea.example.com/admin/cadet-todelete-abc.git")
+                .build();
+
+        when(cadetRepository.findById(cadetId)).thenReturn(Optional.of(cadet));
+        when(cadetMissionRepository.findAllByCadetId(cadetId)).thenReturn(java.util.List.of(mission));
+        doThrow(new RuntimeException("Gitea unreachable"))
+                .when(giteaService).deleteAdminRepository("cadet-todelete-abc");
+
+        // Act & Assert — nem dob kivételt, a kadét törlése végigfut
+        assertDoesNotThrow(() -> cadetService.deleteCadet(cadetId));
         verify(cadetRepository, times(1)).delete(cadet);
     }
 
