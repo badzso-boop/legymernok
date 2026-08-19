@@ -139,7 +139,15 @@ script futtatása szükséges, mielőtt a "python" nyelvű mission-létrehozás 
 környezetben — ez a PR csak a repo-beli forrástartalmat és a script frissítését adja, magát
 a live Gitea repót nem hozza létre automatikusan.
 
-**Ismert architectural korlát:** Ha a DB tranzakció megbukik a Gitea repo létrehozása után, a repo árvává válik (nincs rollback Gitea-ra). Ez nyitott issue.
+**Árva Gitea repo esetek — két különböző eredetű, mindkettő javítva:**
+- Ha a DB tranzakció megbukik a Gitea repo létrehozása után (pl. `startMission`/`ensureMissionRepository`
+  közben), a repo maga szándékosan, helyesen jön létre, csak a followup DB-lépés bukik — ezt a
+  `deleteOrphanedGiteaRepository()` helper takarítja fel (#12, javítva PR #33-ban).
+- Kadét törlésekor a CODING/QUIZ missziókhoz tartozó, admin-tulajdonú (kadét csak collaborator)
+  munka-repók korábban örökre ott ragadtak a `deleteGiteaUser()` hívás után is, mert az csak a
+  törölt user SAJÁT repóit törli. `CadetService.deleteCadet()` mostantól végigmegy a törlendő
+  kadét `CadetMission` rekordjain, és minden hozzájuk tartozó admin-tulajdonú repót is töröl
+  (best-effort, egy repo hibája nem blokkolja a kadét törlését) — #48, javítva.
 
 ---
 
@@ -237,7 +245,8 @@ funkció/endpoint írásakor ezeket MINDIG ellenőrizd, ne csak a "boldog utat":
 
 ## Nyitott ismert hibák
 
-- **Gitea orphan repo**: DB tranzakció buktán Gitea repo árva marad (nincs rollback)
+- A **Gitea orphan repo** hibaosztály (mindkét eredete — DB-tranzakció bukás #12/PR#33, és
+  kadét-törlés #48) **javítva van**, lásd fent a "Gitea integráció" szekciót.
 - A korábbi "hardkódolt titkos adatok az `application.properties`-ben" hiba **teljesen javítva
   van** (2026-07-30-i audit megerősítette — minden secret `${ENV_VAR}`-ból jön).
 - **A teljes, aktuális biztonsági/logikai állapotfelmérés**: `plans/security_audit_2026-07-30.md`
