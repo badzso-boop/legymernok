@@ -109,10 +109,14 @@ docker network create -d bridge legymernok-net
 
 ### Indítás
 
-Egyetlen paranccsal elindítható a teljes rendszer:
+> **⚠️ Fontos, ha korábbról ismered ezt a repót:** a sima `docker compose up --build -d`
+> **önmagában már NEM indítja el a saját `postgres` service-t** — az a `standalone` Compose
+> profil mögé került (2026-08-19, lásd lentebb), hogy a homelab szerver egy közös,
+> több projektet kiszolgáló Postgres instance-t is használhasson helyette. Egy friss
+> klónnál, saját lokális adatbázissal a következő paranccsal indítsd:
 
 ```bash
-docker compose up --build -d
+docker compose --build --profile standalone up -d
 ```
 
 Ez elindítja a következő szolgáltatásokat:
@@ -122,6 +126,17 @@ Ez elindítja a következő szolgáltatásokat:
 - **Backend API:** `http://localhost:8080`
 - **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
 - **PostgreSQL:** `localhost:5432`
+
+#### Közös (megosztott) Postgres instance használata — csak a homelab szerveren
+
+A `legymernok.ujjweb.hu`-t futtató szerveren a `postgres` service **nem** fut — a backend és a
+gitea egy külön, több projektet (legymernok, wrenchly) kiszolgáló Postgres instance-hoz
+kapcsolódik a `.env`-ben beállított `SPRING_DATASOURCE_*`/`GITEA_DATABASE_*` változókon
+keresztül (lásd `.env.example`). Ez **csak** a `.env`-en múlik, nincs profil-flag hozzá — ha
+ezek a változók be vannak állítva, `docker compose up -d` (profil nélkül) pont ezt teszi.
+A teljes indoklás, a hálózat/user/backup felépítése és a más projektekre való átültetés
+menete: `~/homelab/SHARED-POSTGRES.md` (ez a szerver-szintű dokumentum, nem repó-specifikus,
+ezért nincs itt a git-ben).
 
 ### Első Lépések (Setup)
 

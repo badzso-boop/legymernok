@@ -35,6 +35,13 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 ## Architektúra megszorítások és Ismert Gotchas
 
 ### Docker / Infrastruktúra
+- **2026-08-19 óta a `postgres` service `profiles: ["standalone"]` mögé került** — sima
+  `docker compose up` már NEM indítja el. Fejlesztéshez/friss klónnál
+  `docker compose --profile standalone up -d` kell. A homelab szerveren (ez a live
+  `legymernok.ujjweb.hu`-t futtató gép) a `postgres` szándékosan nem fut — a backend/gitea
+  egy közös, több projektet kiszolgáló Postgres instance-ra kötnek a `.env`
+  `SPRING_DATASOURCE_*`/`GITEA_DATABASE_*` változóin keresztül. Teljes leírás:
+  `~/homelab/SHARED-POSTGRES.md` (szerver-szintű, nem repó-specifikus dokumentum).
 - **pgvector:** A `postgres` service image-nek `pgvector/pgvector:pg16` kell lenni, **NEM** `postgres:16` — különben a `vector` extension nem érhető el
 - **Ollama GGUF modellek:** A GGUF fájl mountolva van `/gguf/` alá, de az Ollamának regisztrálni kell: `ollama create <név> -f Modelfile` (ahol a Modelfile: `FROM /gguf/<fájlnév>.gguf`). A `CHAT_MODEL` env változónak ez a regisztrált név kell legyen
 - **Backend rebuild:** `--force-recreate` NEM fordítja újra a Java kódot — ahhoz `--build` flag kell (vagy `mvn package` + image rebuild)
@@ -85,7 +92,7 @@ legymernok/
 
 | Szolgáltatás | Port | Leírás |
 |---|---|---|
-| `postgres` | 5432 | PostgreSQL 16 |
+| `postgres` | 5432 | PostgreSQL 16 — csak `--profile standalone`-nal fut, lásd fent |
 | `gitea` | 3001 (UI), 2222 (SSH) | Gitea 1.25.0 self-hosted Git |
 | `backend` | 8090 (hoszt) → 8080 (konténer) | Spring Boot REST API — a hoszt port 2026-07-21 óta 8090, korábban 8080 volt, de az ütközött a szerveren futó qbittorrenttel |
 | `frontend` | 3000 | React SPA (Nginx prod) |
@@ -105,6 +112,16 @@ GITEA_ADMIN_TOKEN=<kötelező>
 JWT_SECRET=<kötelező>
 MISSION_VERIFICATION_SECRET=<kötelező>
 REGISTRATION_TOKEN=<kötelező, Gitea runner>
+
+# Opcionális — csak ha a helyi `postgres` service helyett egy közös Postgres
+# instance-ra kötsz (lásd `~/homelab/SHARED-POSTGRES.md`):
+SPRING_DATASOURCE_URL=<opcionális, default: jdbc:postgresql://postgres:5432/legymernok>
+SPRING_DATASOURCE_USERNAME=<opcionális, default: postgres>
+SPRING_DATASOURCE_PASSWORD=<opcionális, default: POSTGRES_PASSWORD>
+GITEA_DATABASE_HOST=<opcionális, default: postgres:5432>
+GITEA_DATABASE_NAME=<opcionális, default: gitea>
+GITEA_DATABASE_USER=<opcionális, default: postgres>
+GITEA_DATABASE_PASSWORD=<opcionális, default: POSTGRES_PASSWORD>
 ```
 
 Mindent `.env`-ből olvas — `application.properties`-ben nincsenek hardkódolt titkok.
