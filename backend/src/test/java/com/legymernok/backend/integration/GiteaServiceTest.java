@@ -20,7 +20,7 @@ class GiteaServiceTest {
         source.put("solution.js", "export function add(a, b) { return a + b; }");
         source.put("starter.js", "export function add(a, b) {}");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertEquals(1, result.size(), "only the renamed starter file should remain");
         assertEquals("export function add(a, b) {}", result.get("solution.js"),
@@ -33,7 +33,7 @@ class GiteaServiceTest {
         source.put("solution.py", "def add(a, b):\n    return a + b\n");
         source.put("starter.py", "def add(a, b):\n    pass\n");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertTrue(result.containsKey("solution.py"));
         assertEquals("def add(a, b):\n    pass\n", result.get("solution.py"));
@@ -49,7 +49,7 @@ class GiteaServiceTest {
         source.put("starter.js", "export function add(a, b) {}");
         source.put("solution.test.js", "test('adds', () => expect(add(1,2)).toBe(3));");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertTrue(result.containsKey("solution.test.js"));
         assertEquals(
@@ -64,7 +64,7 @@ class GiteaServiceTest {
         source.put("starter.py", "def add(a, b):\n    pass\n");
         source.put("test_solution.py", "from solution import add\n\ndef test_add():\n    assert add(1, 2) == 3\n");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertTrue(result.containsKey("test_solution.py"));
     }
@@ -75,7 +75,7 @@ class GiteaServiceTest {
         source.put("starter.js", "export function add(a, b) {}");
         source.put("README.md", "internal creator notes");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertFalse(result.containsKey("README.md"));
     }
@@ -87,7 +87,7 @@ class GiteaServiceTest {
         source.put("package.json", "{\"name\":\"mission\"}");
         source.put(".gitea/workflows/ci.yml", "name: verify");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertEquals("{\"name\":\"mission\"}", result.get("package.json"));
         assertEquals("name: verify", result.get(".gitea/workflows/ci.yml"));
@@ -98,7 +98,7 @@ class GiteaServiceTest {
         Map<String, String> source = new HashMap<>();
         source.put("nested/starter.py", "pass");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertTrue(result.containsKey("nested/solution.py"));
     }
@@ -114,7 +114,7 @@ class GiteaServiceTest {
         source.put("solution.js", "export function add(a, b) { return a + b; }");
         source.put("solution.test.js", "test('adds', () => {});");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertTrue(result.containsKey("solution.js"));
         assertEquals("", result.get("solution.js"), "the real reference solution must never leak, even as a fallback");
@@ -127,7 +127,7 @@ class GiteaServiceTest {
         source.put("Solution.JS", "export function add(a, b) { return a + b; }");
         source.put("Starter.JS", "export function add(a, b) {}");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertEquals(1, result.size());
         assertEquals("export function add(a, b) {}", result.get("solution.js"));
@@ -139,8 +139,24 @@ class GiteaServiceTest {
         source.put("starter.js", "export function add(a, b) {}");
         source.put("readme.md", "internal creator notes");
 
-        Map<String, String> result = GiteaService.transformForCadetCopy(source);
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
 
         assertFalse(result.containsKey("readme.md"));
+    }
+
+    @Test
+    void transformForCadetCopy_shouldRewriteCiYmlMissionIdToActualMissionId() {
+        // A ci.yml sablonban a mission_id `${{ github.event.repository.name }}`-ből jön,
+        // ami az admin saját (Forge) repójánál helyes (repónév == Mission UUID), de a
+        // kadét "cadet-<username>-<missionId>" nevű repójában a callback URL-be a teljes
+        // repónevet írná be a valódi Mission UUID helyett (#52) — ezt itt cseréljük le.
+        Map<String, String> source = new HashMap<>();
+        source.put(".gitea/workflows/ci.yml",
+                "jobs:\n  verify:\n    steps:\n      - uses: mission-verifier/actions@main\n        with:\n          mission_id: ${{ github.event.repository.name }}\n");
+
+        Map<String, String> result = GiteaService.transformForCadetCopy(source, "606ac43b-f91b-4fdb-a1db-98299c94babe");
+
+        assertTrue(result.get(".gitea/workflows/ci.yml").contains("mission_id: 606ac43b-f91b-4fdb-a1db-98299c94babe"));
+        assertFalse(result.get(".gitea/workflows/ci.yml").contains("github.event.repository.name"));
     }
 }

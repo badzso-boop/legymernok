@@ -635,7 +635,7 @@ public class MissionService {
             // a starter.<ext> a kadét solution.<ext>-jeként) — más típusoknál (pl. QUIZ)
             // marad a régi, teljes másolás.
             if (mission.getMissionType() == MissionType.CODING) {
-                giteaService.copyMissionRepositoryForCadet(sourceRepoOwner, sourceRepoName, userRepoName);
+                giteaService.copyMissionRepositoryForCadet(sourceRepoOwner, sourceRepoName, userRepoName, mission.getId().toString());
             } else {
                 giteaService.copyRepositoryContents(sourceRepoOwner, sourceRepoName, userRepoName);
             }
