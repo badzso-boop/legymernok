@@ -262,6 +262,23 @@ funkció/endpoint írásakor ezeket MINDIG ellenőrizd, ne csak a "boldog utat":
 
 ## Nyitott ismert hibák
 
+- **React Router `navigate()` nem cseréli le a komponenst két "play/*" misszió-típus-útvonal
+  között** (2026-08-20-i felfedezés, `frontend/src/components/play/ContentMissionView.tsx`
+  "Következő" gombjának debuggolása közben, élőben Playwright-tal bizonyítva). Pl. ha egy
+  `/play/content/:id` oldalon lévő komponens `navigate('/play/quiz/:otherId')`-t hív, a
+  `window.location.hash`/history helyesen frissül, DE a Router `<Outlet>`-je nem cseréli le a
+  renderelt komponenst — a cél oldal komponens-függvénye SOSEM hívódik meg (console.log-gal
+  igazolva), semmilyen hiba/warning nélkül. Nem async/await, nem `setTimeout`, nem portál-
+  probléma (mindegyiket kizárva teszteltük) — friss oldalbetöltés (hard reload) ugyanarra az
+  URL-re mindig helyesen működik. **Root cause nincs kiderítve.** Jelenlegi workaround (ld.
+  `ContentMissionView.tsx` `handleNext`): `window.location.hash` beállítás + explicit
+  `window.location.reload()` a kliens-oldali `navigate()` helyett, a `starSystemId`-t pedig egy
+  `?ss=` query paraméterrel adjuk át (a `state` egy hard reload-ot nem élné túl) — ezt olvassa
+  fallback-ként a `ContentMissionPage`/`QuizPlayerPage`/`CodingMissionPage` `handleBack`-je. Ha
+  legközelebb egy hasonló "navigate() nem vált oldalt" tünettel találkozol két `play/*` route
+  között, ez ugyanaz a hibaosztály — próbáld ki elsőként a hard-reload workaroundot, és ha időd
+  engedi, deríts fel egy szintet mélyebbre (gyanús: valami a `MissionPlayerShell`/`RootLayout`
+  körül, de a portál-elmélet és a StrictMode-elmélet is megcáfolva lett).
 - A **Gitea orphan repo** hibaosztály (mindkét eredete — DB-tranzakció bukás #12/PR#33, és
   kadét-törlés #48) **javítva van**, lásd fent a "Gitea integráció" szekciót.
 - A korábbi "hardkódolt titkos adatok az `application.properties`-ben" hiba **teljesen javítva

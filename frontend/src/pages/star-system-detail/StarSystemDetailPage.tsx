@@ -11,6 +11,7 @@ import {
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { starSystemApi, groupProgressApi, missionApi } from "../../api/client";
+import { getMissionPlayPath } from "../../utils/missionNavigation";
 import type {
   StarSystemWithItemsResponse,
   StarSystemItemResponse,
@@ -128,20 +129,14 @@ const StarSystemDetailPage: React.FC = () => {
   const handleMissionStart = async (mission: MissionResponse) => {
     setStartError(null);
 
-    if (mission.missionType === "QUIZ") {
-      navigate(`/play/quiz/${mission.id}`, { state: { starSystemId: id } });
-      return;
-    }
-    if (mission.missionType === "CONTENT") {
-      navigate(`/play/content/${mission.id}`, { state: { starSystemId: id } });
-      return;
-    }
     if (mission.missionType === "FILL_IN_BLANK") {
       setStartError(t("starSystemDetail.fillInBlankNotSupported", { name: mission.name }));
       return;
     }
-    if (mission.missionType === "CODING") {
-      navigate(`/play/coding/${mission.id}`, { state: { starSystemId: id } });
+
+    const playPath = getMissionPlayPath(mission);
+    if (playPath) {
+      navigate(playPath, { state: { starSystemId: id } });
       return;
     }
 

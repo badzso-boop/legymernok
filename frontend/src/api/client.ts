@@ -242,6 +242,15 @@ export const missionApi = {
     return response.data;
   },
 
+  /** Egy csillagrendszer összes missziója — a "Következő" gomb ebből deríti ki,
+   * melyik az önálló (nem Mission Group-ba tartozó) misszió sorban a következő. */
+  listByStarSystem: async (starSystemId: string): Promise<MissionResponse[]> => {
+    const response = await apiClient.get<MissionResponse[]>(`/missions`, {
+      params: { starSystemId },
+    });
+    return response.data;
+  },
+
   /** Lekéri a bejelentkezett kadét saját munkarepójának fájljait egy elindított CODING misszióhoz. */
   getPlayFiles: async (missionId: string) => {
     const response = await apiClient.get<Record<string, string>>(
