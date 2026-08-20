@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, CircularProgress, Typography } from "@mui/material";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { missionApi } from "../../api/client";
@@ -12,7 +12,12 @@ const CodingMissionPage: React.FC = () => {
   const { missionId } = useParams<{ missionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const starSystemId = (location.state as { starSystemId?: string } | null)?.starSystemId;
+  const [searchParams] = useSearchParams();
+  // ?ss= fallback egy hard reload-os navigációhoz — ld. ContentMissionView.tsx handleNext.
+  const starSystemId =
+    (location.state as { starSystemId?: string } | null)?.starSystemId ??
+    searchParams.get("ss") ??
+    undefined;
 
   const handleBack = () => {
     if (starSystemId) navigate(`/star-systems/${starSystemId}`);
