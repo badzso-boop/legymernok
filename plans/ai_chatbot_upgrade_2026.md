@@ -2,7 +2,7 @@
 
 > **Státusz: TERV, nincs implementáció.** Ez a dokumentum a jóváhagyás előtt álló architekturális
 > tervet rögzíti, hogy át tudjuk beszélni, mielőtt bármelyik fázis (lásd lent) ténylegesen
-> elkezdődne. Négy önálló, egymástól függetlenül review-olható PR-ra van bontva — egyiket sem
+> elkezdődne. Öt önálló, egymástól függetlenül review-olható PR-ra van bontva — egyiket sem
 > implementáljuk, amíg ezt a tervet Norbi jóvá nem hagyja.
 
 ## Kontextus
@@ -242,12 +242,95 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
   az 1-3. fázis új service-jeiben, plusz `ai-service` `test_health.py`/`test_embed.py`/
   `test_generate_stream.py`.
 
+### PR #5 — MCP-szerver + tool-calling agent-hurok
+
+**Miért ide kerül, és mi a döntés mögötte**: a PR #3-ig a chatbot csak *beszél* — kontextust kap,
+válaszol, legfeljebb egy űrlapot javasol kitölteni. Ez a fázis valódi *cselekvőképességet* ad neki:
+saját, hívható eszközöket (tools), amiket a modell maga dönt el, mikor és hogyan használjon egy
+beszélgetésen belül. Ez a Model Context Protocol (MCP) — ugyanaz a minta, amit az `ai-os` projekt
+`mcp_server.py`-ja már megépített (`propose_file_patch`, `trigger_sandbox_validation` stb.) — csak
+itt egy másik LLM-kliens (Ollama) mögé kötve.
+
+**Fontos, tudatos döntés: valódi MCP-szerver, nem csak Ollama-specifikus glue-kód.** Ollama saját
+function-calling API-ja (`/api/chat`, `tools` mező) NEM ugyanaz, mint az MCP — egy külön,
+JSON-RPC-alapú protokoll. Írhatnánk egy egyszerű Python dispatch-táblát is (név → függvény), ami
+csak Ollamának szólna — de ehelyett egy **valódi `mcp` Python SDK-val épített MCP-szervert**
+teszünk (ugyanazt a csomagot használva, mint az `ai-os`), amit egy vékony híd köt Ollama saját
+tool-calling hurkához. Ennek ára van (egy plusz protokoll-réteg egy olyan helyzetben, ahol
+egyelőre csak egy kliens — Ollama — beszélne vele), de a nyereség: (1) a tool-implementációk
+később bármilyen más MCP-kompatibilis kliensből (Claude Desktop, Claude Code) is elérhetők
+lennének, nem csak ebből a chatbotból; (2) konzisztens, névvel megnevezhető minta a két projekt
+(`ai-os`, `legymernok`) között — erős, konkrét interjú-sztori.
+
+**Auth-kérdés, ami itt élesebb, mint az `ai-os`-nál**: az `ai-os` egyfelhasználós CLI-eszköz, a
+`legymernok` viszont többfelhasználós, RBAC-védett alkalmazás. **A tool-implementációk sose
+hívjanak közvetlenül adatbázist/service-réteget** — mindegyik a meglévő, hitelesített Spring REST
+API-t hívja, **a beszélgető felhasználó saját JWT-jével** továbbítva. Ez azt jelenti, hogy a
+meglévő `@PreAuthorize`/owner-check logika (pl. `mission:create`, `StarSystem` tulajdon-ellenőrzés)
+automatikusan, ingyen érvényesül a tool-hívásokon is — nem kell újraírni Pythonban semmilyen
+jogosultság-logikát, és egy nem-admin kadét egy ügyes prompttal sem tud admin-műveletet kicsikarni.
+
+**Mutáló vs. olvasó toolok — eltérő biztonsági szint**: az olvasó toolok (`search_platform_content`,
+`get_cadet_progress`) side-effect-mentesek, ezeket a modell szabadon, automatikusan hívhatja. A
+**mutáló** `create_mission_draft` viszont — ugyanúgy, mint a FILL_FORM minta — **javaslatot** ad,
+nem hajtja végre automatikusan: a tool eredménye egy "ide egy javasolt vázlat, egy gombnyomással
+hozd létre" UI-akció, nem egy csendben lezajlott létrehozás. Ez védelem prompt-injection ellen is
+(pl. ha egy admin által írt, de manipulált misszió-leírás a retrieveelt kontextusba kerül, és
+megpróbálná "meggyőzni" a modellt egy nem kért létrehozásra).
+
+**Az induló 4 tool**:
+
+| Tool | Típus | Mit hív | Megjegyzés |
+|---|---|---|---|
+| `search_platform_content` | olvasó, auto | a PR #2 hibrid retrieval-je (`GET /api/search/hybrid`, új végpont) | a modell explicit dönt a keresésről, nem minden üzenetnél fut automatikusan, mint most |
+| `get_cadet_progress` | olvasó, auto | meglévő admin `user`/`mission` lekérdező végpontok | csak akkor sikeres, ha a hívó JWT-je admin — a backend dobja a 403-at, ha nem |
+| `create_mission_draft` | **mutáló, javaslat** | `POST /api/missions/forge/initialize` | a tool NEM hívja meg automatikusan — SSE `action` eseményként (`type: PROPOSE_MISSION`) megy a frontendnek, ami egy megerősítő UI-t mutat |
+| `navigate_to` | UI-side-effect, nem "igazi" MCP-adat-tool | — | ez technikailag nem egy adatot visszaadó tool, hanem egy UI-vezérlő jel; a FILL_FORM/PROPOSE_MISSION mintájára egy külön SSE `action` eseményként (`type: NAVIGATE`) modellezve, nem a klasszikus MCP tool-return-value séma szerint |
+
+**Architektúra**:
+
+```
+ChatWidget → ChatService.streamChat() → Ollama tool-calling hurok (max N iteráció)
+                                              │
+                                    tool_call esemény esetén
+                                              ▼
+                                    AiServiceClient.callTool(name, args, userJwt)
+                                              │
+                                              ▼
+                                    MCP kliens ⇄ MCP szerver (ai-service/mcp_server.py, mcp SDK)
+                                              │
+                                              ▼
+                                    tool implementáció → Spring REST API hívás a userJwt-vel
+```
+
+- **`ai-service/mcp_server.py`** (új) — `mcp` SDK-val épített szerver, a 4 tool JSON-schema
+  definíciójával + implementációjával (mindegyik egy `httpx` hívás a Spring backend felé, a kapott
+  JWT-t `Authorization` fejlécként továbbítva).
+- **`AiServiceClient` bővítés**: `chatWithTools(messages, tools, userJwt)` — Ollama natív
+  `/api/chat` (nem `/api/generate`) hívása `tools` mezővel; ha a válasz `tool_calls`-t tartalmaz,
+  a hurok meghívja a megfelelő MCP toolt, az eredményt visszateszi az üzenet-listába
+  `role:"tool"`-ként, és újra hívja Ollamát — max ~10 iterációig (ugyanaz a védőháló, mint az
+  `ai-os` `max_tool_iterations`-e).
+- **`ChatService.streamChat()` bővítés**: a mostani egy-kör (retrieval → generate → extractAction)
+  helyett egy tool-hurok, ami közben is streameli a látható szöveges részeket, a `PROPOSE_MISSION`/
+  `NAVIGATE` akciókat pedig ugyanúgy záró SSE-eseményként küldi, mint a FILL_FORM-ot.
+
+**Tesztek**: `mcp_server.py` toolonként (`pytest`, mockolt `httpx` a Spring hívásokhoz — érvényes
+JWT-vel sikeres hívás, érvénytelen/hiányzó jogosultsággal 403 helyesen propagálódik); a Java-oldali
+tool-hurok mockolt `AiServiceClient.chatWithTools()`-szal (több körös tool_call szekvenciák, max
+iteráció-korlát tesztelése, `create_mission_draft` sosem hív automatikusan mutáló végpontot).
+
+**Kézi ellenőrzés (Norbi)**: valódi többkörös tool-használat élő Ollamával (kell egy
+function-calling-képes modell, pl. `qwen2.5`/`llama3.1` — nem minden kis GGUF-modell támogatja jól
+a natív tool-callinget, ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
+
 ## Függőségek — mindegyik indokolt, semmi spekulatív
 
 | Függőség | Hol | Indoklás |
 |---|---|---|
 | `pytest` (új `requirements-dev.txt`) | `ai-service/` | Ma nulla teszt létezik; kell a 2-3. fázis Python-változásainak felelős leszállításához élő Ollama nélkül. |
 | `psycopg[binary]` (új `requirements-eval.txt`) | `ai-service/eval/` | Az eval szkriptnek közvetlen Postgres-elérés kell, hogy a Spring backend nélkül lereplikálja a hibrid retrievalt; elkülönítve az éles image-től. |
+| `mcp` (bekerül `requirements.txt`-be) | `ai-service/mcp_server.py` | Ugyanaz a Python SDK, amit az `ai-os` projekt is használ — valódi, szabványos MCP-szerver a 4 tool-hoz, nem csak Ollama-specifikus glue-kód (PR #5). |
 | **Semmi** a backendhez | — | `SseEmitter` (spring-boot-starter-web), `RestTemplate` (már bean), `ObjectMapper` (már bean) mindent lefed — nincs `spring-webflux`, nincs reaktív lib. |
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
@@ -261,9 +344,18 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
    mielőtt elindítja az `ollama`/`ai-service` konténereket.
 3. A `SseEmitter` 120 másodperces timeoutja egy becslés — érdemes a saját modell tényleges
    sebességéhez hangolni élő teszt után.
-4. Ez a terv NEM tartalmazza a multi-provider absztrakciót, a guardrails/prompt-injection védelmet,
-   és egy teljes teszt-lefedettséget — ezeket Norbi kifejezetten később-priorizálta, egy jövőbeli
-   ötödik fázis/PR tárgya lehet, ha még mélyebbre akar menni.
+4. Ez a terv NEM tartalmazza a multi-provider absztrakciót és egy teljes teszt-lefedettséget —
+   ezeket Norbi kifejezetten később-priorizálta, egy jövőbeli PR tárgya lehet, ha még mélyebbre
+   akar menni. **A guardrails/prompt-injection kérdés viszont a PR #5 (tool-calling) miatt már
+   most releváns lett** — a jelenlegi terv erre a válasz a "mutáló tool = javaslat, nem
+   auto-végrehajtás" minta + a meglévő `@PreAuthorize`/owner-check újrahasznosítása minden
+   tool-hívásnál, de egy alaposabb, dedikált guardrails-átvilágítás (pl. mennyire lehet a
+   retrieveelt kontextuson keresztül manipulálni a modellt) továbbra sincs ebben a körben — ha ez
+   fontos, érdemes külön téma legyen, mielőtt a PR #5 élesedik.
+5. A `qwen2.5`/`llama3.1` méretű, function-calling-képes modellek nagyobb erőforrás-igényűek, mint
+   a jelenlegi `gemma3:8b-q4_K_M` default — Norbinak érdemes lesz ellenőriznie, hogy a saját gépén
+   elérhető modellek közül melyik támogatja jól a natív Ollama tool-callinget, mielőtt a PR #5-öt
+   élesben tesztelné.
 
 ## Ellenőrzés / verifikáció összefoglalva
 
