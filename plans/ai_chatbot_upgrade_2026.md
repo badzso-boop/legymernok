@@ -96,11 +96,10 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
 - **Observability**: nincs új pipeline — csak `@Slf4j` log-sorok `key=value` szöveggel minden
   fázishatáron (retrieval, rerank, generálás, akció-kinyerés), amik automatikusan megjelennek a
   meglévő `/admin/logs` nézetben.
-- **Eval harness**: egy önálló Python szkript az `ai-service/eval/`-ben (közvetlen Postgres-elérés
-  `psycopg[binary]`-vel, egy indokolt, csak-eval dependency, kimarad az éles Docker image-ből), ami
-  egy kis kézzel írt "golden" kérdés-válasz halmazt futtat végig a retrieval pipeline-on, hit-rate@k-t
-  jelent, és egy `report.md`-t ír — önmagában futtatható, csak Postgres+Ollama+ai-service kell hozzá,
-  a teljes Spring/React stack nem.
+- **Eval harness**: admin UI fül (`/admin/eval`), nem önálló szkript — a golden set (kérdés-válasz
+  halmaz) adatbázisban tárolva és a UI-n szerkeszthető, a futtatás egy gombnyomás a backendről, ami
+  a valódi Java retrieval-service-eket hívja (nem egy külön Python-implementáció), az eredmény
+  (hit-rate@k, kérdésenkénti bontás, futás-történet) közvetlenül az oldalon jelenik meg.
 
 ## Fázisok — mindegyik önálló, mergelhető PR
 
@@ -226,21 +225,73 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
 - **Kézi ellenőrzés (kizárólag Norbi)**: valódi token-streaming élő Ollama ellen, SSE-stabilitás,
   hogy a 120s `SseEmitter`-timeout elég-e a saját modellje sebességéhez.
 
-### PR #4 — Observability + eval harness + polish
+### PR #4 — Observability (log-pipeline) + admin Eval fül + polish
 
-- `key=value`-stílusú `@Slf4j` log-sorok a maradék fázishatárokon (`content_index`,
-  `chat_turn_start`/`chat_turn_end` token-számokkal az `OllamaStreamChunk` `evalCount`/
-  `promptEvalCount` mezőiből) — nincs új infrastruktúra, egyenesen a `/admin/logs`-ba folyik.
-- **Új** `ai-service/eval/run_eval.py` + `ai-service/eval/golden_set.json` (~3 illusztratív tétel
-  vázlatosan; a többit Norbi tölti ki a saját, valós seed-adatai alapján) +
-  `ai-service/eval/requirements-eval.txt` (`psycopg[binary]`, csak-eval, kimarad az éles image-ből).
-  A szkript: minden golden-tételnél embedeli a kérdést, közvetlenül a Postgres ellen lereplikálja a
-  vektor+FTS+RRF lekérdezést, hit-rate@k-t számol, opcionálisan LLM-judge-ol `/generate`
-  `format:"json"`-nal, `report.json`+`report.md`-t ír. Dokumentált, egyszeri parancsként, nem CI-ba
-  kötve.
+**Observability — változatlan, Norbi jóváhagyta**: `key=value`-stílusú `@Slf4j` log-sorok a
+fázishatárokon (`content_index`, `chat_retrieval`, `chat_rerank`, `chat_turn_start`/
+`chat_turn_end` token-számokkal az `OllamaStreamChunk` `evalCount`/`promptEvalCount` mezőiből) —
+nincs új infrastruktúra, egyenesen a meglévő `/admin/logs`-ba folyik.
+
+**Eval — újratervezve Norbi kérésére**: a korábbi verzióban ez egy önálló, kézzel indított Python
+szkript lett volna (`ai-service/eval/run_eval.py`, saját `golden_set.json` fájllal). Norbi ehelyett
+egy **admin UI fület** kér: a golden set szerkeszthető legyen az oldalon (nem egy fájlban kell
+piszkálni), az eval futtatható legyen egy gombnyomással, és az eredmény is ott jelenjen meg —
+ne kelljen terminálba menni egy jelentés-fájl elolvasásához. Ez egyben **egyszerűsítés** is: mivel
+az eval-logika (embed + hibrid vektor/FTS keresés + RRF + rerank) most a Spring backendben él (PR
+#1/#2), a Java-oldali eval-futtató **közvetlenül a valódi, éles service-eket hívja**
+(`HybridRetrievalService`, `RerankingService`, `StarSystemService`) — nem kell egy második,
+Pythonban külön lereplikált verziót karbantartani, ami idővel elcsúszhatna a valóditól. Emiatt a
+korábban tervezett `psycopg[binary]`/`ai-service/eval/` Python-szkript **törlődik a tervből**.
+
+**Backend — új adatmodell**: a golden set adatbázisban él, nem fájlban.
+- **Új migráció** (a következő szabad `V` szám a PR #1 `V10`-e után) — két tábla:
+  - `eval_golden_entries` (`id UUID`, `query TEXT`, `expected_source_type VARCHAR`,
+    `expected_source_name_contains VARCHAR`, `expected_keywords TEXT[]`, `created_at`, `updated_at`)
+  - `eval_runs` (`id UUID`, `started_at`, `finished_at`, `hit_rate_at_3 FLOAT`,
+    `hit_rate_at_5 FLOAT`, `status VARCHAR`) + `eval_run_results` (`run_id FK`,
+    `golden_entry_id FK`, `hit_at_3 BOOLEAN`, `hit_at_5 BOOLEAN`, `top_result_name VARCHAR`,
+    `latency_ms INT`) — így nem csak az utolsó futás eredménye látszik, hanem **idővel követhető a
+    trend** (javult/romlott-e a retrieval minőség az utolsó változtatás óta — ez egy valódi,
+    interjún elmondható "eval regression tracking" minta).
+- **Új permission-pár** `eval:read`/`eval:write` (`DataInitializer.java`-ban, a `feature_flag:*`/
+  `sector:*` mintáját követve), csak `ROLE_ADMIN`-hoz rendelve.
+- **Új** `service/eval/EvalService.java`:
+  - CRUD a golden set fölött (`listGoldenEntries`, `createGoldenEntry`, `updateGoldenEntry`,
+    `deleteGoldenEntry`).
+  - `runEval()` — végigmegy az összes golden entry-n, mindegyikre lefuttatja a valódi retrieval-
+    pipeline-t, számolja a hit-rate@3/@5-öt, **közben soronként logol** (`eval_progress
+    query="..." hit@3=true latency_ms=210`) — így a futás élőben, kérdésenként követhető a meglévő
+    `/admin/logs` nézetben, pont úgy, ahogy a chat-observability is oda folyik (ugyanaz a pipeline,
+    kétszeresen hasznosítva). A futás szinkron (blokkolja a kérést, amíg végez — 15-20 golden
+    entry-nél ez néhány másodperc, nem indokol async/polling bonyodalmat), a végén elmenti az
+    `eval_runs`/`eval_run_results` sorokat és visszaadja az összefoglalót.
+  - Opcionális LLM-judge lépés (checkbox a UI-n) — újrahasznosítja a PR #2 `AiServiceClient.generateJson()`-t, nincs hozzá új infrastruktúra.
+- **Új** `web/eval/EvalController.java` — `GET/POST/PUT/DELETE /api/admin/eval/golden-set`,
+  `POST /api/admin/eval/run` (`?llmJudge=true|false`), `GET /api/admin/eval/runs` (futtatás-
+  történet), mind `@PreAuthorize("hasAuthority('eval:read')")`/`'eval:write'`.
+
+**Frontend — új admin oldal, a meglévő mintát követve**: a `SectorList`/`FeatureFlagList` egy-
+oldalas DataGrid+dialog mintáját másoljuk (ezek is minimális adatmodellt kezelnek, mint most a
+golden set), nem a kétoldalas `StarSystemList`/`Edit` mintát.
+- **Új** `frontend/src/pages/admin/eval/EvalPage.tsx` — egy `MUI DataGrid` a golden set sorokkal
+  (query, elvárt forrás, kulcsszavak) + hozzáadás/szerkesztés/törlés dialógus; egy **"Futtatás"**
+  gomb, ami `POST /api/admin/eval/run`-t hív, betöltés közben spinner, siker után egy
+  összefoglaló-kártya (hit-rate@3, hit-rate@5) + egy táblázat kérdésenkénti bontásban (talált-e,
+  mit talált, mennyi ideig tartott); egy kis "korábbi futások" lista/select a trend követéséhez.
+- **Új** `evalApi` modul a `client.ts`-ben (golden set CRUD + `runEval`/`getRuns`).
+- Új route `/admin/eval` (`router/index.tsx`), nav-link az `AdminLayout.tsx` admin sidebarjába.
+
+**Tesztek**: `EvalServiceTest.java` (Mockito, mockolt `HybridRetrievalService`/
+`RerankingService`/`StarSystemService` — hit-rate@k számítás helyessége ismert bemenetekre),
+`EvalControllerSecurityTest.java` (a meglévő minta szerint), frontend `EvalPage.test.tsx`
+(mockolt API-hívások, CRUD-interakció + futtatás-eredmény megjelenítés).
 - A maradék negatív-eset teszt-hiányok pótlása (embed-null / ai-service-elérhetetlen / hibás-JSON)
   az 1-3. fázis új service-jeiben, plusz `ai-service` `test_health.py`/`test_embed.py`/
   `test_generate_stream.py`.
+
+**Kézi ellenőrzés (Norbi)**: a golden set feltöltése valós kérdésekkel az admin UI-n keresztül,
+a "Futtatás" gomb kipróbálása élő Ollamával, és hogy a `/admin/logs` tényleg mutatja-e élőben a
+soronkénti eval-progresszust.
 
 ### PR #5 — MCP-szerver + tool-calling agent-hurok
 
@@ -329,16 +380,17 @@ a natív tool-callinget, ezt érdemes lesz kipróbálni a saját gépén elérhe
 | Függőség | Hol | Indoklás |
 |---|---|---|
 | `pytest` (új `requirements-dev.txt`) | `ai-service/` | Ma nulla teszt létezik; kell a 2-3. fázis Python-változásainak felelős leszállításához élő Ollama nélkül. |
-| `psycopg[binary]` (új `requirements-eval.txt`) | `ai-service/eval/` | Az eval szkriptnek közvetlen Postgres-elérés kell, hogy a Spring backend nélkül lereplikálja a hibrid retrievalt; elkülönítve az éles image-től. |
 | `mcp` (bekerül `requirements.txt`-be) | `ai-service/mcp_server.py` | Ugyanaz a Python SDK, amit az `ai-os` projekt is használ — valódi, szabványos MCP-szerver a 4 tool-hoz, nem csak Ollama-specifikus glue-kód (PR #5). |
 | **Semmi** a backendhez | — | `SseEmitter` (spring-boot-starter-web), `RestTemplate` (már bean), `ObjectMapper` (már bean) mindent lefed — nincs `spring-webflux`, nincs reaktív lib. |
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
+| **Semmi** az evalhoz | — | Az admin UI-alapú eval (PR #4, újratervezve) a meglévő Java retrieval-service-eket hívja közvetlenül — nincs külön Python-implementáció, tehát a korábban tervezett `psycopg[binary]` sem kell. |
 
 ## Nyitott kérdések / Norbi feladatai a végén
 
-1. A `golden_set.json` eval-tételeit valós, élő seed-adatokkal (star system/mission nevek) kell
-   kitölteni — ezt csak Norbi tudja értelmesen megcsinálni.
+1. A golden set tételeit valós, élő seed-adatokkal (star system/mission nevek) kell kitölteni az
+   admin `/admin/eval` oldalon — ezt csak Norbi tudja értelmesen megcsinálni, de legalább nem egy
+   fájlt kell szerkesztenie hozzá, hanem egy UI-t.
 2. A `docker-compose.yml` `ollama` service `/mnt/g/Projects/AI Models:/gguf:ro` volume-mountja egy
    Windows/WSL-stílusú útvonal — a saját gépén a tényleges GGUF-modell-mappára kell igazítani,
    mielőtt elindítja az `ollama`/`ai-service` konténereket.
@@ -366,5 +418,6 @@ a natív tool-callinget, ezt érdemes lesz kipróbálni a saját gépén elérhe
 - **Csak Norbi, miután lehúzta a branch-et a saját gépére, élő Ollamával**: V10 alkalmazása egy
   valódi Postgres ellen + a `reindex-content` végpont ellenőrzése; hogy a retrieval-minőség/
   reranking ténylegesen jobb választ ad-e; hogy a valódi token-streaming helyesen jelenik-e meg a
-  widgetben; az `ai-service/eval/run_eval.py` futtatása a kitöltött golden set-tel, és a
-  `report.md` screenshotolása/megosztása (ez lehet a LinkedIn-poszt konkrét "bizonyítéka").
+  widgetben; a golden set feltöltése + a "Futtatás" gomb kipróbálása az `/admin/eval` oldalon, és
+  az eredmény-táblázat screenshotolása/megosztása (ez lehet a LinkedIn-poszt konkrét
+  "bizonyítéka").
