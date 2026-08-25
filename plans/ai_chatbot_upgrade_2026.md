@@ -111,13 +111,14 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       source_type VARCHAR(32) NOT NULL,
       source_id UUID NOT NULL,
+      file_path VARCHAR(500) NOT NULL DEFAULT '',
       chunk_index INT NOT NULL,
       chunk_text TEXT NOT NULL,
       content_embedding vector(768),
       search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', chunk_text)) STORED,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK')),
-      CONSTRAINT content_chunks_unique_chunk UNIQUE (source_type, source_id, chunk_index)
+      CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE')),
+      CONSTRAINT content_chunks_unique_chunk UNIQUE (source_type, source_id, file_path, chunk_index)
   );
   CREATE INDEX IF NOT EXISTS idx_content_chunks_embedding
       ON content_chunks USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 10);
@@ -128,8 +129,17 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
   ```
   (A `V2__add_pgvector.sql` index-stílusát követi; a generált `tsvector` oszlop nem igényel
   service-oldali karbantartást.)
+  **2026-08-25-i pontosítás**: a `file_path` oszlop `NOT NULL DEFAULT ''` (nem NULL-abilis) —
+  ez tudatos döntés, mert Postgres-ben két `NULL` érték SOSE számít egyenlőnek egy UNIQUE
+  constraintben, tehát ha `file_path` NULL-abilis lenne, a `MISSION`/`MISSION_FILL_IN_BLANK`
+  típusú (fájlhoz nem köthető) chunkoknál a `content_chunks_unique_chunk` constraint csendben
+  KIkapcsolódna (két NULL sose ütközik) — üres string-gyel ez a védelem megmarad mindhárom
+  `source_type`-ra. Részletek és a `MISSION_CODE_FILE` típus indoklása:
+  [`pr1_rag_chunking_architecture_2026.md`](pr1_rag_chunking_architecture_2026.md) 12. szakasz.
 - **Új** `backend/.../dto/rag/ContentChunkDto.java` —
-  `record ContentChunkDto(UUID id, String sourceType, UUID sourceId, int chunkIndex, String chunkText, double score)`.
+  `record ContentChunkDto(UUID id, String sourceType, UUID sourceId, String filePath, int chunkIndex, String chunkText, double score)`
+  (`filePath` üres string a `MISSION`/`MISSION_FILL_IN_BLANK` típusoknál, a tényleges fájl-
+  útvonal `MISSION_CODE_FILE`-nál — ld. a pontosítás fent).
 - **Új** `backend/.../service/rag/ContentChunkingService.java` — pure JDBC (a `StarSystemService`
   meglévő pgvector-mintáját követve, nincs JPA entitás ehhez a táblához):
   - `List<String> chunkText(String text)` — pure function, 800/150 sliding window, `\n\n` törésre

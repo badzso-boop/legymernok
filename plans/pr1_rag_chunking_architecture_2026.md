@@ -356,12 +356,237 @@ Postgres ellen, a `reindex-content` végpont hívása Postmanből/curl-lel, majd
 `SELECT count(*), source_type FROM content_chunks GROUP BY source_type;` — hogy a
 várt darabszám jön-e ki egy ismert tartalmú misszión.
 
-## 11. Nyitott kérdés hozzád
+## 11. ~~Nyitott kérdés hozzád~~ — MEGVÁLASZOLVA (2026-08-25), ld. 12. szakasz
 
-Az 1. szakaszban feltett kérdésen túl: a `chunkText()` jelenlegi terve **nem veszi
-figyelembe a Markdown-struktúrát** (pl. egy kód-blokk `\`\`\`` határai közé eshet a vágás,
-ami egy kódolási misszió leírásánál — `descriptionMarkdown` — problémás lehet, mert egy
-félbevágott kódrészlet rontja a retrieval-minőséget). Ez a `FEATURE-MAPPING`-es projektnél
-egy tudatosan ki nem fejtett részlet volt. Szeretnéd, hogy ezt a PR #1 scope-jába vegyük
-(kód-blokk-tudatos vágás), vagy ez egy jövőbeli finomítás, és most az egyszerű,
-bekezdés-alapú vágással indulunk?
+~~Az 1. szakaszban feltett kérdésen túl: a `chunkText()` jelenlegi terve nem veszi
+figyelembe a Markdown-struktúrát...~~ **Norbi döntése: több chunkolási stratégia legyen,
+misszió-típusonként — CONTENT-missziónál marad a bekezdés-alapú `chunkText()`, CODING-
+missziónál fájlonkénti + azon belül metódusonkénti vágás.** Ld. részletesen lent.
+
+## 12. Kiegészítés (2026-08-25) — típusfüggő chunkolási stratégia
+
+### 12.1 A kérés pontosítása
+
+CONTENT-missziónál (a `descriptionMarkdown`/`content` mezők, sima szöveg) marad a 4.1
+szakaszban leírt bekezdés-alapú `chunkText()`. **CODING-missziónál viszont NEM a
+`descriptionMarkdown`/`content` mezőket kell így vágni** — a tényleges forráskód nem a DB-
+ben, hanem a **Gitea repóban** él (`templateRepositoryUrl`, ld. `backend/CLAUDE.md` "Gitea
+integráció" szakasz). Egy CODING-misszió "tartalma", amit a chatbotnak érdemes ismernie, a
+**Forge-ban admin által megírt kiinduló/referencia kódfájlok** — ezeket kell fájlonként,
+majd fájlon belül metódusonként chunkolni ("egy chunkba egy metódus").
+
+### 12.2 Fontos, kimondott scope-döntés: KIZÁRÓLAG az admin Forge-repója, NEM a kadétok egyéni beadásai
+
+A `backend/CLAUDE.md` "Gitea integráció" szakasza szerint minden mission-repo **admin-
+tulajdonú**, a `CadetMission.repositoryUrl` mező pedig arra utal, hogy egy kadét indításkor
+**saját másolatot** kap (`copyRepositoryContents`) — tehát potenciálisan **több ezer, egyénileg
+eltérő repó** tartozhatna egyetlen misszióhoz, ha minden kadét-beadást indexelnénk. **Ez a terv
+tudatosan KIZÁRÓLAG az admin saját, Forge-ban szerkesztett repóját indexeli** (a
+`saveForgeMissionContent()`-tel mentett fájlokat) — ez az egyetlen, misszió-szintű, kanonikus
+forrás, aminek van értelme a "segíts megérteni ezt a missziót" RAG-kontextusban. A kadétok
+saját beadásainak indexelése (ha valaha felmerülne, pl. "nézd meg a saját korábbi
+megoldásomat") **egy teljesen más, sokkal nagyobb, önálló feature lenne** — ez a PR nem
+foglalkozik vele. **Kérlek erősítsd meg, hogy ez a scope helyes** — ha tévedek, és mégis a
+kadét-repókra gondoltál, szólj, mert az a tervezést gyökeresen máshogy kellene felépítse
+(adatvédelem, méretezés, per-kadét retrieval-szűrés).
+
+### 12.3 Új komponensek
+
+```
+service/rag/
+├── ContentChunkingService.java          (MÓDOSUL — 2 új publikus + 4 új privát metódus)
+└── strategy/
+    ├── CodeFileChunker.java              (ÚJ — nyelv-diszpécser + fájl-szűrés)
+    ├── PythonMethodSplitter.java          (ÚJ — indentáció-alapú)
+    └── JsMethodSplitter.java              (ÚJ — regex + zárójel-számláló)
+```
+
+**A `CodeFileChunker` egy önálló, `ContentChunkingService`-be injektált osztály** (nem a
+`ContentChunkingService`-en belüli privát metódus), mert 3 konkrét felelőssége van
+(fájlszűrés, nyelv-detektálás, diszpécselés a két splitter közt), amit külön egység-
+tesztelni érdemes a fő service mockolása nélkül.
+
+### 12.4 `CodeFileChunker` — metódustábla
+
+| Metódus | Szignatúra | Mit csinál |
+|---|---|---|
+| `isIndexableSourceFile` | `boolean isIndexableSourceFile(String filePath)` | Kiterjesztés-alapú whitelist: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`. Minden más (pl. `README.md`, `package.json`, `.gitea/workflows/ci.yml`, `requirements.txt`) → `false`, kihagyva — a misszió leírása (`descriptionMarkdown`) amúgy is indexelve van a `reindexMission()`-ön keresztül, nincs duplikáció. |
+| `chunkFile` | `List<String> chunkFile(String filePath, String content)` | Kiterjesztés alapján diszpécsel a megfelelő splitterre. Ha a splitter **0 találatot** ad (nincs felismerhető függvény/metódus a fájlban — pl. egy konstans-definíciós fájl), **visszaesik a meglévő `chunkText()`-re** (4.1 szakasz) — így egyetlen indexelhető fájl sem marad kimaradva, csak esetleg nem metódus-pontosan vágva. |
+
+### 12.5 `PythonMethodSplitter` — indentáció-alapú vágás
+
+```
+bemenet: fájltartalom (String)
+kimenet: List<String> (egy elem = egy függvény/metódus, TOP-LEVEL indentációs
+         szinten — a beágyazott/helper függvényeket a szülőjük chunkjában hagyjuk,
+         tudatos egyszerűsítés, nem próbáljuk teljesen szét-lapítani a fát)
+
+1. sorokra bontás
+2. minden sorra: ha a (bal oldali whitespace-t levágva) sor "def " vagy "async def "-fel
+   kezdődik ÉS az indentációs szintje MEGEGYEZIK az eddig látott legkisebb "def"-
+   indentációs szinttel a fájlban (azaz ez egy top-level vagy osztály-metódus szintű
+   def, nem egy beágyazott helper-függvény):
+   → lezárjuk az eddigi puffert (ha nem üres, hozzáadjuk az eredményhez), és egy ÚJ
+     puffert kezdünk ezzel a sorral
+   egyébként: hozzáfűzzük az aktuális pufferhez (ide esik minden import, class-
+     deklaráció, dekorátor, és minden beágyazott/helper def is)
+3. a fájl VÉGÉN megmaradt puffert is hozzáadjuk
+4. ha 0 "def" volt a fájlban → üres lista (a hívó `CodeFileChunker` ilyenkor
+   visszaesik `chunkText()`-re)
+```
+
+### 12.6 `JsMethodSplitter` — regex-indítás + zárójel-számlálás
+
+```
+FÜGGVÉNY-KEZDET mintázatok (soronként illesztve, opcionális "export"/"async" prefixszel):
+  - function NÉV(...) {
+  - NÉV(...) {                          // class-metódus rövid szintaxis
+  - const|let NÉV = (...) => {          // arrow function változó-hozzárendelésben
+  - const|let NÉV = async (...) => {
+
+algoritmus:
+1. sorokra bontás
+2. soronként: ha illeszkedik egy FÜGGVÉNY-KEZDET mintázatra:
+     - jegyezzük a kezdő sor indexét
+     - számláljuk a nyitott/zárt kapcsos zárójelek egyenlegét a sortól kezdve,
+       soronként haladva, amíg az egyenleg vissza nem esik 0-ra (= a függvénytörzs vége)
+     - az érintett sorok (kezdő ... záró) egy chunk
+   egyébként: következő sor
+3. ha 0 találat → üres lista (fallback `chunkText()`-re)
+```
+
+**⚠️ Fontos, kimondott korlát**: ez a zárójel-számlálás **NEM string-/komment-tudatos** — egy
+`"valami { furcsa }"` stringliterál vagy egy `// { comment` sor tévesen befolyásolhatja a
+mélység-számlálást, és rosszul vághatja a chunk-határt. Ez egy **heurisztika**, nem egy
+valódi JavaScript-parser (egy pontos megoldáshoz egy tényleges AST-parser kellene, pl. egy
+Node-alapú `@babel/parser` subprocess-hívás a Java-ból — ez explicit KÍVÜL esik ennek a
+PR-nak a keretein, tudatos kompromisszum, nem felejtés). Gyakorlati hatás: néhány fájlnál a
+chunk-határ pontatlan lehet (pl. egy stringben lévő `{` miatt egy metódus "korábban lezár",
+mint kellene) — ez a retrieval-minőséget rontja, DE nem okoz hibát/crash-t, és a `chunkText()`
+fallback mindig garantálja, hogy legalább VALAMILYEN, kb. 800 karakteres granularitású index
+legyen minden fájlról.
+
+### 12.7 `ContentChunkingService` — új/módosult metódusok
+
+| Metódus | Szignatúra | Tranzakció | Hívó |
+|---|---|---|---|
+| `reindexCodingMissionFiles` | `void reindexCodingMissionFiles(UUID missionId, Map<String, String> files)` | `@Transactional` | `MissionService.saveForgeMissionContent()` — **a fájlok már memóriában vannak a hívás pillanatában** (a Forge-mentés `request.getFiles()`-e), nincs szükség extra Gitea-hívásra ezen az útvonalon. |
+| `reindexCodingMissionFilesFromGitea` | `void reindexCodingMissionFilesFromGitea(UUID missionId)` | `@Transactional` | `reindexAllMissions()` belső ága, CODING-típusú missziókra — itt NINCS memóriában lévő fájl-map, tehát `GiteaService.getRepoContents()`-t hív rekurzívan (a `dir` típusú bejegyzéseken bejárva), majd minden `file`-nak `GiteaService.getFileContent()`-et, hogy megkapja a tényleges tartalmat (a lista-végpont csak metaadatot ad, tartalmat nem). |
+
+Mindkettő ugyanazt a belső logikát futtatja (a különbség csak a fájlok forrása): minden
+fájlra `codeFileChunker.isIndexableSourceFile()` → ha igen, `codeFileChunker.chunkFile()` →
+minden visszakapott chunkra `embeddingService.embed()` (ugyanaz az **embed-first**
+biztonsági szabály, mint a 4.2 szakaszban — ha BÁRMELYIK fájl BÁRMELYIK chunkja embed-hibát
+ad, a teljes CODING-fájl-reindex megszakad a jelenlegi állapoton, a régi `MISSION_CODE_FILE`
+chunkok változatlanok maradnak), majd csak teljes sikeren `deleteChunks("MISSION_CODE_FILE",
+missionId)` + batch insert, a `file_path` oszlopot is kitöltve.
+
+**Új konstruktor-függőség**: `GiteaService` bekerül a `ContentChunkingService`
+konstruktorába (csak a `reindexCodingMissionFilesFromGitea` úton használt).
+
+### 12.8 Hook-pont kiegészítés
+
+| Fájl | Metódus | Hova kerül a hívás |
+|---|---|---|
+| `service/mission/MissionService.java:180` (`saveForgeMissionContent`) | a `giteaService.uploadFiles(...)` hívás UTÁN, a `mission.setVerificationStatus(...)` előtt/után (sorrend mindegy, mindkettő ugyanabban a tranzakcióban fut) | `contentChunkingService.reindexCodingMissionFiles(mission.getId(), request.getFiles())` — csak akkor, ha `mission.getMissionType() == MissionType.CODING` (a metódus más misszió-típusra is meghívható lehet, bár ma gyakorlatilag CODING-ra használt — védekező típus-ellenőrzés indokolt). |
+
+### 12.9 Frissített class diagram (csak az új rész)
+
+```mermaid
+classDiagram
+    class ContentChunkingService {
+        -GiteaService giteaService
+        -CodeFileChunker codeFileChunker
+        +reindexCodingMissionFiles(UUID missionId, Map~String,String~ files) void
+        +reindexCodingMissionFilesFromGitea(UUID missionId) void
+    }
+
+    class CodeFileChunker {
+        -PythonMethodSplitter pythonSplitter
+        -JsMethodSplitter jsSplitter
+        +isIndexableSourceFile(String filePath) boolean
+        +chunkFile(String filePath, String content) List~String~
+    }
+
+    class PythonMethodSplitter {
+        +split(String content) List~String~
+    }
+
+    class JsMethodSplitter {
+        +split(String content) List~String~
+    }
+
+    class GiteaService {
+        +getRepoContents(String owner, String repo, String path) List~GiteaContent~
+        +getFileContent(String owner, String repo, String filePath) String
+    }
+
+    ContentChunkingService --> CodeFileChunker : chunkFile()
+    ContentChunkingService --> GiteaService : getRepoContents() / getFileContent()
+    CodeFileChunker --> PythonMethodSplitter
+    CodeFileChunker --> JsMethodSplitter
+```
+
+### 12.10 Sequence diagram — Forge-mentés → kódfájlok chunkolása
+
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant MC as MissionController
+    participant MS as MissionService
+    participant GS as GiteaService
+    participant CCS as ContentChunkingService
+    participant CFC as CodeFileChunker
+    participant AES as AiEmbeddingService
+    participant DB as Postgres (content_chunks)
+
+    Admin->>MC: POST /api/missions/{id}/forge/save {files: {"solution.py": "...", "test_solution.py": "..."}}
+    MC->>MS: saveForgeMissionContent(request)
+    MS->>GS: uploadFiles(repoOwner, repoName, files, commitMsg, user)
+    GS-->>MS: (Gitea commit kész)
+    alt mission.missionType == CODING
+        MS->>CCS: reindexCodingMissionFiles(missionId, files)
+        loop minden fájlra a files map-ben
+            CCS->>CFC: isIndexableSourceFile(path)
+            alt indexelhető (.py/.js/.ts/...)
+                CCS->>CFC: chunkFile(path, content)
+                CFC-->>CCS: List~String~ (egy elem = egy metódus, vagy fallback chunkText())
+                loop minden chunkra
+                    CCS->>AES: embed(chunkText)
+                    AES-->>CCS: float[] vagy null
+                end
+            end
+        end
+        alt minden chunk minden fájlban sikeresen embedelt
+            CCS->>DB: DELETE FROM content_chunks WHERE source_type='MISSION_CODE_FILE' AND source_id=?
+            CCS->>DB: batch INSERT (fájlanként, metódusonként, file_path kitöltve)
+        else bármelyik embed hiba
+            CCS->>CCS: log.warn(...) — DB-hez nem nyúl, régi kódindex változatlan
+        end
+    end
+    MS->>MS: mission.setVerificationStatus(PENDING); missionRepository.save(mission)
+    MS-->>MC: MissionResponse
+    MC-->>Admin: 200 OK
+```
+
+### 12.11 Tesztterv-kiegészítés
+
+| Teszteset | Osztály | Mit ellenőriz |
+|---|---|---|
+| `split_singleFunction_returnsOneChunk` | `PythonMethodSplitterTest` | Egy `def`-es fájl → 1 chunk, a teljes függvénytörzzsel |
+| `split_multipleTopLevelFunctions_returnsSeparateChunks` | `PythonMethodSplitterTest` | 3 top-level `def` → 3 chunk, határok helyesek |
+| `split_nestedHelperFunction_staysInParentChunk` | `PythonMethodSplitterTest` | Egy `def`-en belüli beágyazott `def` NEM vág új chunkot |
+| `split_noFunctions_returnsEmptyList` | `PythonMethodSplitterTest` | Csak import+konstans, `def` nélkül → üres lista (fallback jelzés) |
+| `split_arrowFunctionAssignment_detected` | `JsMethodSplitterTest` | `const foo = (x) => { ... }` mintázat helyesen detektált+bezárt |
+| `split_classMethodShorthand_detected` | `JsMethodSplitterTest` | `methodName(x) { ... }` (class body) helyesen detektált |
+| `split_braceInsideString_knownLimitation` | `JsMethodSplitterTest` | **Dokumentált, elvárt hibás eset** — explicit teszt, ami bizonyítja és rögzíti a 12.6-ban leírt korlátot (nem regresszió, hanem tudatosan rögzített viselkedés, hogy ha valaha javítjuk, tudjuk mit változtattunk) |
+| `chunkFile_unindexableExtension_returnsEmpty` | `CodeFileChunkerTest` | `.json`/`.md` fájl → `isIndexableSourceFile()` false, `chunkFile()`-t meg sem hívjuk |
+| `chunkFile_noFunctionsFound_fallsBackToChunkText` | `CodeFileChunkerTest` | Mockolt splitter üres listát ad → a `ContentChunkingService.chunkText()` fut le helyette |
+| `reindexCodingMissionFiles_allEmbedsSucceed_replacesOldFileChunks` | `ContentChunkingServiceTest` | Több fájl, több chunk, minden embed sikeres → DELETE+batch INSERT megtörténik, `file_path` helyesen kitöltve |
+| `reindexCodingMissionFiles_oneEmbedFailsInSecondFile_keepsAllOldChunksUntouched` | `ContentChunkingServiceTest` | Az embed-first szabály CODING-fájloknál is tartja magát — akkor is, ha csak a 2. fájl 3. chunkja hasal el |
+
+**Kézi ellenőrzés (Norbi, itt nem elvégezhető)**: egy valódi `mission-python-template`/
+`mission-js-template`-alapú misszió Forge-mentése után `SELECT file_path, chunk_index,
+LEFT(chunk_text, 80) FROM content_chunks WHERE source_type='MISSION_CODE_FILE' ORDER BY
+file_path, chunk_index;` — vizuálisan ellenőrizve, hogy a vágások tényleg metódus-határon
+vannak-e, nem félbevágva.
