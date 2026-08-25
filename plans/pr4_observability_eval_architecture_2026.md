@@ -233,6 +233,7 @@ egy egyszerű, ingyenes védelem a felesleges erőforrás-versengés ellen, kül
 | `runEvalAsync` | `private void runEvalAsync(UUID runId, boolean llmJudge)` | nincs (a háttérszálon fut, saját `@Transactional` blokkokkal entry-nként) | A tényleges hit-rate-számító ciklus — ezt futtatja az `evalExecutor` a `startEvalRun()`-ból elindítva. Ld. 5.1. |
 | `listRuns` | `List<EvalRunResponse> listRuns()` | `@Transactional(readOnly = true)` | `evalRunRepository.findAllByOrderByStartedAtDesc()` → DTO-lista (a "korábbi futások" UI-listához, RUNNING/COMPLETED/FAILED állapottal együtt). |
 | `getRunDetail` | `EvalRunResponse getRunDetail(UUID runId)` | `@Transactional(readOnly = true)` | Egy run + a hozzá tartozó `EvalRunResult`-ok kérdésenkénti bontásban — **ez a metódus szolgálja ki a frontend polling-ját is**, ld. 7. szakasz. |
+| `deleteRun` | `void deleteRun(UUID runId)` | `@Transactional` | **ELDÖNTVE (2026-08-25): teljes CRUD a futás-történethez is.** `evalRunRepository.deleteById(runId)` — az `eval_run_results` sorok a `V11` migráció `ON DELETE CASCADE` FK-ja miatt automatikusan törlődnek vele együtt, nem kell külön törölni őket. Ha egy `RUNNING` státuszú run-t próbálnak törölni (még fut a háttérben), `ResourceConflictException`-t dob — ld. lent. |
 
 **Miért aszinkron már most, nem csak "ha problémává válik"**: Norbert kérésére ez a
 professzionálisabb alapból megtervezett megoldás — így a golden-set mérete sosem korlátozza
@@ -401,6 +402,7 @@ judge csak egy mélyebb, drágább kiegészítés.
 | `POST` | `/api/admin/eval/run?llmJudge=true\|false` | `eval:write` | **202 Accepted**, `EvalRunResponse` (`status="RUNNING"`) — **ELDÖNTVE (2026-08-25): aszinkron**, NEM várja meg a futás végét (ld. 5.1) |
 | `GET` | `/api/admin/eval/runs` | `eval:read` | `List<EvalRunResponse>` |
 | `GET` | `/api/admin/eval/runs/{id}` | `eval:read` | `EvalRunResponse` (részletes, `results` beágyazva) — **ezt hívja a frontend polling-ban**, ld. 7. szakasz |
+| `DELETE` | `/api/admin/eval/runs/{id}` | `eval:write` | 204 — **ÚJ (2026-08-25, Norbert kérésére: "határozottan törölhetők legyen, teljes CRUD")**. `409 Conflict` (`ResourceConflictException`), ha a run még `RUNNING` státuszú — ld. 6.1. |
 
 A `SectorController` mintáját követve — `@Valid @RequestBody` a mutáló végpontokon,
 `ResponseEntity` minden metódusból, `@RequestParam(defaultValue = "false") boolean llmJudge`
@@ -411,6 +413,29 @@ mondja ki explicit, de logikusan következik abból, hogy a futtatás egy AI-hí
 erőforrás-igényes (és `llmJudge=true` esetén pénzbe/API-kvótába kerülő, ha valaha nem lokális
 Ollama-t használnának) művelet, nem egy sima olvasás — ugyanaz a minta, mint a
 `sector:write` a `reorder`-nél (ami is egy "cselekvés", nem CRUD a szó szoros értelmében).
+
+### 6.1 `deleteRun()` — miért véd a `RUNNING` státusz ellen
+
+```java
+@Transactional
+public void deleteRun(UUID runId) {
+    EvalRun run = evalRunRepository.findById(runId)
+            .orElseThrow(() -> new ResourceNotFoundException("EvalRun", "id", runId));
+    if ("RUNNING".equals(run.getStatus())) {
+        throw new ResourceConflictException("EvalRun", "status",
+                "Cannot delete a run that is still in progress.");
+    }
+    evalRunRepository.deleteById(runId);
+}
+```
+
+Ha egy `RUNNING` futást törölnénk, miközben a `runEvalAsync()` még a háttérszálon dolgozik
+rajta, a háttérszál a törölt `run_id`-re próbálna `EvalRunResult` sorokat menteni — ez vagy
+egy FK-violation hibát dobna (mert a szülő `eval_runs` sor már nincs meg), vagy (ha a
+CASCADE valahogy mégis lefutna közben) csendben elveszne a futás eredménye anélkül, hogy
+bárki észrevenné. A `409 Conflict` egyértelmű visszajelzés az adminnak: "várd meg, amíg
+végez, utána törölheted" — a frontend ez alapján a `RUNNING` sorok törlés-gombját
+`disabled`-nek jelenítheti meg a "Korábbi futások" listában (ld. 7. szakasz).
 
 ## 7. Frontend — `EvalPage.tsx`
 
@@ -448,8 +473,11 @@ EvalPage.tsx
 │   └── Kérdésenkénti bontás táblázat (query, hit@3 ✓/✗, hit@5 ✓/✗, topResultName, latencyMs)
 └── "Korábbi futások" szekció
     ├── Select/lista a `evalApi.getRuns()` eredményéből (dátum + hit-rate@3/@5 + státusz badge)
-    └── Kiválasztásra betölti az adott run részleteit (`evalApi.getRunDetail(id)`) ugyanabba
-        az eredmény-táblázatba, mint a legutóbbi futás
+    ├── Kiválasztásra betölti az adott run részleteit (`evalApi.getRunDetail(id)`) ugyanabba
+    │   az eredmény-táblázatba, mint a legutóbbi futás
+    └── **ÚJ (2026-08-25): törlés-ikon soronként** → `evalApi.deleteRun(id)`, megerősítő
+        dialógussal (a `SectorList` törlés-mintáját követve). `RUNNING` státuszú soroknál az
+        ikon `disabled`, tooltippel ("Futás közben nem törölhető") — ld. 6.1 szakasz indoklása.
 ```
 
 ### 7.1 `evalApi` — `client.ts` bővítés
@@ -486,6 +514,11 @@ export const evalApi = {
   getRunDetail: async (id: string): Promise<EvalRunResponse> => {
     const response = await apiClient.get<EvalRunResponse>(`/admin/eval/runs/${id}`);
     return response.data;
+  },
+  deleteRun: async (id: string): Promise<void> => {
+    // 409-et dob (interceptorban/hívóban kezelendő), ha a run még RUNNING —
+    // a UI ezt Snackbar-ral jelzi, ld. 6.1 szakasz.
+    await apiClient.delete(`/admin/eval/runs/${id}`);
   },
 };
 ```
@@ -577,6 +610,7 @@ classDiagram
         -runLlmJudge(EvalGoldenEntry, List~RetrievalResult~) void
         +listRuns() List~EvalRunResponse~
         +getRunDetail(UUID) EvalRunResponse
+        +deleteRun(UUID) void
         -matchesAny(List~RetrievalResult~, EvalGoldenEntry) boolean
         -runRetrievalFor(EvalGoldenEntry) List~RetrievalResult~
     }
@@ -590,6 +624,7 @@ classDiagram
         +startEvalRun(boolean) ResponseEntity~202~
         +getRuns() ResponseEntity
         +getRunDetail(UUID) ResponseEntity
+        +deleteRun(UUID) ResponseEntity
     }
 
     class AppConfig {
@@ -702,6 +737,9 @@ sequenceDiagram
 | `matchesAny_caseInsensitive` | `EvalServiceTest` | Kis/nagybetű-eltérés a névben/kulcsszóban nem befolyásolja az egyezést |
 | `EvalControllerSecurityTest` | — | `eval:read`/`eval:write` helyesen elválasztva (olvasás vs. mutáló+futtató végpontok), a meglévő `SectorControllerSecurityTest`/`FeatureFlagControllerSecurityTest` mintája szerint |
 | `EvalControllerTest_runReturns202` | — | A `POST /api/admin/eval/run` végpont ténylegesen `202 Accepted`-et ad vissza, nem `200 OK`-t (a REST-szemantika helyessége — aszinkron, még-nem-kész erőforrás létrehozása) |
+| `deleteRun_completedRun_deletesSuccessfully` | `EvalServiceTest` | `COMPLETED`/`FAILED` státuszú run törölhető, a hozzá tartozó `EvalRunResult` sorok is eltűnnek (CASCADE) |
+| `deleteRun_runningRun_throwsConflict` | `EvalServiceTest` | `RUNNING` státuszú run törlési kísérlete `ResourceConflictException`-t dob, a sor a DB-ben megmarad |
+| `deleteRun_notFound_throwsNotFound` | `EvalServiceTest` | Ismeretlen `runId` → `ResourceNotFoundException` |
 | `usePollingEvalRun.test.ts` | frontend | Mockolt `evalApi.getRunDetail()`, ami első hívásra `RUNNING`-ot, másodikra `COMPLETED`-et ad → a hook pontosan 2 hívást indít, a második után leáll (nem pollingol tovább) |
 | `EvalPage.test.tsx` | frontend | Golden set CRUD-interakció (mockolt `evalApi`), "Futtatás" gomb → azonnal "folyamatban" jelzés (NEM várja meg a végét) → polling-gal frissül → eredmény-kártya megjelenik, korábbi futás kiválasztása betölti a régi eredményt |
 
@@ -724,10 +762,10 @@ soronkénti `eval_progress` sorokat, ahogy a futás a háttérben halad.
    `usePollingEvalRun()` hook (7.2 szakasz) mind bekerült ebbe a körbe — nincs explicit
    felső korlát a golden set méretére, mert a szinkron-blokkolás kockázata ezzel a
    tervezéssel eleve megszűnt.
-3. **A korábbi futások (`eval_runs`) törölhetők-e, és ha igen, ki törölheti** — a fő terv
-   nem említ törlési útvonalat a futás-történethez. Idővel ez a tábla korlátlanul nőhet.
-   Kell-e egy `DELETE /api/admin/eval/runs/{id}` végpont, vagy egyelőre nem szükséges
-   (a futás-történet amúgy is kis méretű, nem project-kritikus adat)?
+3. ~~A korábbi futások törölhetők-e~~ — **ELDÖNTVE (2026-08-25): igen, teljes CRUD.**
+   `DELETE /api/admin/eval/runs/{id}` (`eval:write`), `RUNNING` státuszú run-t nem lehet
+   törölni (`409 Conflict`, ld. 6.1 szakasz), a frontend törlés-ikonnal + megerősítő
+   dialógussal a "Korábbi futások" listában (7. szakasz).
 4. **`STAR_SYSTEM` mint `expected_source_type`** — én vezettem be ezt az értéket a CHECK-
    constraint-be (a fő terv nem sorolja fel explicit az `expected_source_type` lehetséges
    értékeit), mert enélkül a golden set nem tudna a RÉGI, csillagrendszer-szintű flat
