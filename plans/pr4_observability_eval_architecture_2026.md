@@ -202,6 +202,25 @@ public class EvalRunResult {
 (Lombok `@Data @Builder @NoArgsConstructor @AllArgsConstructor` mindegyiken, a projekt
 szokása szerint — a fenti csak a mezőlistát mutatja a tömörség kedvéért.)
 
+## 4.5 `AppConfig` — `evalExecutor` bean (ÚJ, az aszinkron döntés miatt)
+
+Ugyanaz a minta, mint a PR #3 `chatStreamExecutor()` bean-je:
+
+```java
+@Bean
+public ExecutorService evalExecutor() {
+    return Executors.newSingleThreadExecutor();
+}
+```
+
+**Miért `newSingleThreadExecutor()`, nem `newCachedThreadPool()` (mint a chat-streamnél)**:
+egy Eval-futtatás egy admin-akció, nem sok egyidejű felhasználó indítja párhuzamosan (a
+PR #3 chat-streamnél viszont sok kadét is chatelhet egyszerre, ott indokolt volt a
+cached pool). Egyetlen szál azt is garantálja, hogy **sosem fut két Eval-futás
+párhuzamosan** — ha valaki a "Futtatás" gombra kattint, amíg egy korábbi még fut, a
+második feladat egyszerűen bekerül a végrehajtási sorba, és csak az első után indul. Ez
+egy egyszerű, ingyenes védelem a felesleges erőforrás-versengés ellen, külön kód nélkül.
+
 ## 5. `EvalService` — teljes metódustábla
 
 | Metódus | Szignatúra | Tranzakció | Mit csinál |
@@ -210,20 +229,43 @@ szokása szerint — a fenti csak a mezőlistát mutatja a tömörség kedvéér
 | `createGoldenEntry` | `EvalGoldenEntryResponse createGoldenEntry(CreateGoldenEntryRequest request)` | `@Transactional` | Egyszerű mentés, a `SectorService.createSector()` mintáját követve. |
 | `updateGoldenEntry` | `EvalGoldenEntryResponse updateGoldenEntry(UUID id, CreateGoldenEntryRequest request)` | `@Transactional` | `findById` + mezők felülírása + mentés. |
 | `deleteGoldenEntry` | `void deleteGoldenEntry(UUID id)` | `@Transactional` | `evalGoldenEntryRepository.deleteById(id)`. |
-| `runEval` | `EvalRunResponse runEval(boolean llmJudge)` | `@Transactional` | Ld. 5.1 — a fő logika. |
-| `listRuns` | `List<EvalRunResponse> listRuns()` | `@Transactional(readOnly = true)` | `evalRunRepository.findAllByOrderByStartedAtDesc()` → DTO-lista (a "korábbi futások" UI-listához). |
-| `getRunDetail` | `EvalRunResponse getRunDetail(UUID runId)` | `@Transactional(readOnly = true)` | Egy run + a hozzá tartozó `EvalRunResult`-ok kérdésenkénti bontásban. |
+| `startEvalRun` | `EvalRunResponse startEvalRun(boolean llmJudge)` | `@Transactional` | **ELDÖNTVE (2026-08-25): aszinkron indítás** — létrehozza+elmenti az `EvalRun` sort `RUNNING` státusszal, elindítja a tényleges futást a háttér-executoron, és AZONNAL visszatér (nem várja meg a végét). Ld. 5.1. |
+| `runEvalAsync` | `private void runEvalAsync(UUID runId, boolean llmJudge)` | nincs (a háttérszálon fut, saját `@Transactional` blokkokkal entry-nként) | A tényleges hit-rate-számító ciklus — ezt futtatja az `evalExecutor` a `startEvalRun()`-ból elindítva. Ld. 5.1. |
+| `listRuns` | `List<EvalRunResponse> listRuns()` | `@Transactional(readOnly = true)` | `evalRunRepository.findAllByOrderByStartedAtDesc()` → DTO-lista (a "korábbi futások" UI-listához, RUNNING/COMPLETED/FAILED állapottal együtt). |
+| `getRunDetail` | `EvalRunResponse getRunDetail(UUID runId)` | `@Transactional(readOnly = true)` | Egy run + a hozzá tartozó `EvalRunResult`-ok kérdésenkénti bontásban — **ez a metódus szolgálja ki a frontend polling-ját is**, ld. 7. szakasz. |
 
-### 5.1 `runEval()` — a pontos algoritmus
+**Miért aszinkron már most, nem csak "ha problémává válik"**: Norbert kérésére ez a
+professzionálisabb alapból megtervezett megoldás — így a golden-set mérete sosem korlátozza
+mesterségesen a rendszert, nincs kockázat egy hosszú futásnál timeoutra, ÉS a UI a futás
+ALATT is tud élő visszajelzést mutatni (polling + a meglévő `/admin/logs` élő
+`eval_progress` sorai együtt), ami jobb felhasználói élmény, mint egy néma, blokkoló várakozás.
+
+### 5.1 `startEvalRun()` + `runEvalAsync()` — a pontos algoritmus
+
+**`startEvalRun(llmJudge)` — a szinkron, azonnal visszatérő rész:**
 
 ```
 bemenet: llmJudge (boolean)
-kimenet: EvalRunResponse
+kimenet: EvalRunResponse (status="RUNNING")
 
 1. run = EvalRun.builder().startedAt(now()).status("RUNNING").llmJudgeUsed(llmJudge).build()
    run = evalRunRepository.save(run)   // azonnal elmentve, hogy egy összeomlás esetén is
                                           lássuk a DB-ben, hogy elindult egy futás
 
+2. evalExecutor.execute(() -> runEvalAsync(run.getId(), llmJudge))
+   # A metódus ITT visszatér — a hívó (EvalController) azonnal 202 Accepted-et küld a
+   # RUNNING állapotú EvalRunResponse-szal, NEM várja meg a ciklust.
+
+3. return mapToResponse(run)
+```
+
+**`runEvalAsync(runId, llmJudge)` — a háttérszálon futó, tényleges ciklus:**
+
+```
+bemenet: runId (UUID), llmJudge (boolean)
+kimenet: nincs (a DB-be írja az eredményt, a frontend polling-gal olvassa ki)
+
+1. run = evalRunRepository.findById(runId)   // az executor-szálon ÚJ tranzakcióban
 2. entries = evalGoldenEntryRepository.findAll()
    hits3 = 0; hits5 = 0
 
@@ -269,8 +311,18 @@ kimenet: EvalRunResponse
      # — nem dobjuk el a már megszerzett részleges adatot
 
 4. evalRunRepository.save(run)
-5. return mapToResponse(run)
+   # Ezen a ponton nincs mit "visszaadni" — ez egy háttérszál, a hívó (startEvalRun) már
+   # régen visszatért. A frontend a polling (GET /api/admin/eval/runs/{id}) következő
+   # körénél fogja látni a frissült status/hitRate mezőket.
 ```
+
+**Miért kell külön tranzakció a `runEvalAsync()`-ban**: mivel ez egy MÁSIK szálon fut (az
+`evalExecutor`-on, nem a HTTP-kérést kiszolgáló szálon), a Spring `@Transactional`
+szál-lokális tranzakció-kezelése miatt **nem örökölheti** a `startEvalRun()` tranzakcióját —
+saját, önálló tranzakciós blokkokra van szükség (pl. entry-nkénti `@Transactional`
+mentés, ahogy a fenti pszeudokód `evalRunResultRepository.save(...)` hívásai is
+implikálják) — ez ugyanaz a minta, mint a PR #3 `chatStreamExecutor`-on futó
+`streamChat()`-je, ami szintén nem az eredeti HTTP-kérés tranzakcióján belül dolgozik.
 
 **`matchesAny(results, entry)` — a determinisztikus egyezés-ellenőrzés pontos definíciója**
 (ezt a fő terv nem specifikálta karakter-szinten, itt pótolva, mert a hit-rate-számítás
@@ -331,11 +383,12 @@ runLlmJudge(entry, results):
 ```
 
 **Fontos, indoklással**: a judge-hívás **entry-nkénti, szinkron, plusz LLM-hívás** — ha
-`llmJudge=true`, a teljes `runEval()` futásideje kb. **megduplázódik** (minden golden
-entry-nél egy plusz Ollama-hívás a retrieval mellett). Ez az oka, hogy ez explicit
-opcionális (checkbox), NEM az alapértelmezett viselkedés — a hit-rate@3/@5 önmagában is
-egy teljesen működő, gyors mérőszám, a judge csak egy mélyebb, drágább kiegészítés, amikor
-tényleg minőségi visszajelzés kell, nem csak "megtalálta-e".
+`llmJudge=true`, a teljes `runEvalAsync()` futásideje kb. **megduplázódik** (minden golden
+entry-nél egy plusz Ollama-hívás a retrieval mellett). Mivel ez a PR #4 aszinkron
+tervezése miatt már amúgy sem blokkolja a felhasználót (ld. 5.1 szakasz), ez a
+megduplázódás elfogadhatóbb, mint egy szinkron világban lenne — de a checkbox/opcionális
+jelleg megmarad, mert a hit-rate@3/@5 önmagában is egy teljesen működő, gyors mérőszám, a
+judge csak egy mélyebb, drágább kiegészítés.
 
 ## 6. `EvalController` — végpontok
 
@@ -345,9 +398,9 @@ tényleg minőségi visszajelzés kell, nem csak "megtalálta-e".
 | `POST` | `/api/admin/eval/golden-set` | `eval:write` | `EvalGoldenEntryResponse` (201) |
 | `PUT` | `/api/admin/eval/golden-set/{id}` | `eval:write` | `EvalGoldenEntryResponse` |
 | `DELETE` | `/api/admin/eval/golden-set/{id}` | `eval:write` | 204 |
-| `POST` | `/api/admin/eval/run?llmJudge=true\|false` | `eval:write` | `EvalRunResponse` |
+| `POST` | `/api/admin/eval/run?llmJudge=true\|false` | `eval:write` | **202 Accepted**, `EvalRunResponse` (`status="RUNNING"`) — **ELDÖNTVE (2026-08-25): aszinkron**, NEM várja meg a futás végét (ld. 5.1) |
 | `GET` | `/api/admin/eval/runs` | `eval:read` | `List<EvalRunResponse>` |
-| `GET` | `/api/admin/eval/runs/{id}` | `eval:read` | `EvalRunResponse` (részletes, `results` beágyazva) |
+| `GET` | `/api/admin/eval/runs/{id}` | `eval:read` | `EvalRunResponse` (részletes, `results` beágyazva) — **ezt hívja a frontend polling-ban**, ld. 7. szakasz |
 
 A `SectorController` mintáját követve — `@Valid @RequestBody` a mutáló végpontokon,
 `ResponseEntity` minden metódusból, `@RequestParam(defaultValue = "false") boolean llmJudge`
@@ -378,10 +431,19 @@ EvalPage.tsx
 │   └── Szerkesztés/törlés dialógus — a `FeatureFlagList` szerkesztő-dialógusának mintája
 ├── "Futtatás" gomb-sáv
 │   ├── Checkbox: "LLM-judge is fusson" (a `llmJudge` paraméterhez)
-│   ├── "Futtatás" gomb → `evalApi.runEval(llmJudge)`, `loading` állapot spinnerrel
-│   │   (a futás szinkron, néhány másodperces — a gomb `disabled` + spinner amíg fut)
-│   └── Hiba esetén Snackbar/Alert (a `FeatureFlagList` `toggleError` mintája)
-├── Eredmény-összefoglaló kártya (a legutóbbi futás után jelenik meg)
+│   ├── "Futtatás" gomb → `evalApi.runEval(llmJudge)` — **ELDÖNTVE (2026-08-25): aszinkron
+│   │   indítás + polling**, NEM egy szinkron, blokkoló hívás. A gomb megnyomása AZONNAL
+│   │   visszakapja a `RUNNING` státuszú run-t (202 Accepted), a UI ettől kezdve 2
+│   │   másodpercenként lekérdezi `evalApi.getRunDetail(runId)`-t, amíg a `status` el nem
+│   │   éri a `COMPLETED`/`FAILED`-et — ld. 7.2 szakasz a pontos polling-hook-ra.
+│   ├── Futás közben: "Futtatás folyamatban…" jelzés + spinner + egy link/megjegyzés,
+│   │   hogy a soronkénti haladás élőben követhető az `/admin/logs` oldalon
+│   │   (`eval_progress`-sorok, ld. 8. szakasz) — ez a "professzionálisabb" UX-nek pont a
+│   │   lényege: nem néma várakozás, hanem élő visszajelzés két csatornán (polling + logok)
+│   └── Hiba esetén (`status="FAILED"` VAGY a `POST /run` hívás maga hibázik) Snackbar/Alert
+│       (a `FeatureFlagList` `toggleError` mintája)
+├── Eredmény-összefoglaló kártya (a legutóbbi BEFEJEZETT futás után jelenik meg, a polling
+│   automatikusan lecseréli a "folyamatban" jelzést, amint `status != RUNNING`)
 │   ├── hit-rate@3, hit-rate@5 (nagy szám + %, pl. Card + Typography variant="h3")
 │   └── Kérdésenkénti bontás táblázat (query, hit@3 ✓/✗, hit@5 ✓/✗, topResultName, latencyMs)
 └── "Korábbi futások" szekció
@@ -412,6 +474,8 @@ export const evalApi = {
     await apiClient.delete(`/admin/eval/golden-set/${id}`);
   },
   runEval: async (llmJudge: boolean): Promise<EvalRunResponse> => {
+    // A visszakapott EvalRunResponse.status itt még "RUNNING" — a hívó felelőssége,
+    // hogy elindítsa a pollingot (ld. 7.2 usePollingEvalRun hook).
     const response = await apiClient.post<EvalRunResponse>(`/admin/eval/run?llmJudge=${llmJudge}`);
     return response.data;
   },
@@ -426,7 +490,44 @@ export const evalApi = {
 };
 ```
 
-### 7.2 Hook-pontok — routing és navigáció
+### 7.2 `usePollingEvalRun()` — a polling-hook (ÚJ, 2026-08-25-i aszinkron döntés miatt)
+
+```typescript
+function usePollingEvalRun(runId: string | null, intervalMs = 2000) {
+  const [run, setRun] = useState<EvalRunResponse | null>(null);
+
+  useEffect(() => {
+    if (!runId) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      const result = await evalApi.getRunDetail(runId);
+      if (cancelled) return;
+      setRun(result);
+      if (result.status === "RUNNING") {
+        setTimeout(poll, intervalMs);
+      }
+    };
+    poll();
+
+    return () => { cancelled = true; };   // unmount/runId-váltás esetén leáll a lánc
+  }, [runId, intervalMs]);
+
+  return run;
+}
+```
+
+**Miért `setTimeout`-lánc, nem `setInterval`**: ha egy `getRunDetail()` hívás lassabb lenne,
+mint az `intervalMs`, egy `setInterval` egymást átfedő kéréseket indítana — a `setTimeout`-
+lánc mindig megvárja az ELŐZŐ hívás válaszát, mielőtt a következőt ütemezné, tehát sosem
+fut párhuzamosan két polling-kérés ugyanarra a run-ra.
+
+**Használat az `EvalPage.tsx`-ben**: a "Futtatás" gomb `onClick`-je elmenti a
+`evalApi.runEval(llmJudge)` válaszából kapott `id`-t egy `activeRunId` state-be, ez a hook
+pedig automatikusan pollingol, amíg a `status` `RUNNING` — a komponens ebből az `run` értékből
+dönti el, spinnert vagy eredmény-táblázatot mutat-e.
+
+### 7.3 Hook-pontok — routing és navigáció
 
 | Fájl | Hova kerül a hívás |
 |---|---|
@@ -443,7 +544,7 @@ megfelelő helyekre beszúrni a PR #1/#2/#3 service-jeibe:
 
 | Log-esemény | Hol (PR) | Pontos formátum |
 |---|---|---|
-| `eval_progress` | Ez a PR, `EvalService.runEval()` | `eval_progress query="{}" hit@3={} hit@5={} latency_ms={}` |
+| `eval_progress` | Ez a PR, `EvalService.runEvalAsync()` (a háttérszálon, ld. 5.1) | `eval_progress query="{}" hit@3={} hit@5={} latency_ms={}` |
 | `content_index` | PR #1, `ContentChunkingService` | `content_index mission_id={} chunks={} status={success\|failed}` (a fő terv csak a nevet adja meg, a mezőlistát itt egészítem ki a PR #1 doksi tartalma alapján — ha a `pr1_rag_chunking_architecture_2026.md` idővel máshogy nevezi, azt a doksit kell mérvadónak tekinteni) |
 | `chat_retrieval` | PR #2 | *(a `pr2_...md` architektúra-doksira hivatkozik, ha az elkészült — ott kell a pontos mezőlistát megadni, itt nem duplikálom)* |
 | `chat_rerank` | PR #2 | *(ua.)* |
@@ -466,11 +567,14 @@ classDiagram
         -HybridRetrievalService hybridRetrievalService
         -StarSystemService starSystemService
         -AiServiceClient aiServiceClient
+        -ExecutorService evalExecutor
         +listGoldenEntries() List~EvalGoldenEntryResponse~
         +createGoldenEntry(CreateGoldenEntryRequest) EvalGoldenEntryResponse
         +updateGoldenEntry(UUID, CreateGoldenEntryRequest) EvalGoldenEntryResponse
         +deleteGoldenEntry(UUID) void
-        +runEval(boolean llmJudge) EvalRunResponse
+        +startEvalRun(boolean llmJudge) EvalRunResponse
+        -runEvalAsync(UUID runId, boolean llmJudge) void
+        -runLlmJudge(EvalGoldenEntry, List~RetrievalResult~) void
         +listRuns() List~EvalRunResponse~
         +getRunDetail(UUID) EvalRunResponse
         -matchesAny(List~RetrievalResult~, EvalGoldenEntry) boolean
@@ -483,9 +587,13 @@ classDiagram
         +createGoldenEntry(CreateGoldenEntryRequest) ResponseEntity
         +updateGoldenEntry(UUID, CreateGoldenEntryRequest) ResponseEntity
         +deleteGoldenEntry(UUID) ResponseEntity
-        +runEval(boolean) ResponseEntity
+        +startEvalRun(boolean) ResponseEntity~202~
         +getRuns() ResponseEntity
         +getRunDetail(UUID) ResponseEntity
+    }
+
+    class AppConfig {
+        +evalExecutor() ExecutorService
     }
 
     class EvalGoldenEntry {
@@ -523,11 +631,12 @@ classDiagram
     EvalService --> EvalRunResult
     EvalRunResult --> EvalRun : run_id FK
     EvalRunResult --> EvalGoldenEntry : golden_entry_id FK
-    EvalService ..> "HybridRetrievalService (PR #2)" : runEval() hívja
-    EvalService ..> "StarSystemService (meglévő)" : runEval() hívja
+    EvalService ..> "HybridRetrievalService (PR #2)" : runEvalAsync() hívja
+    EvalService ..> "StarSystemService (meglévő)" : runEvalAsync() hívja
+    EvalService --> AppConfig : evalExecutor bean
 ```
 
-## 10. Sequence diagram — Admin lefuttatja az Eval-t
+## 10. Sequence diagram — Admin lefuttatja az Eval-t (aszinkron + polling, 2026-08-25)
 
 ```mermaid
 sequenceDiagram
@@ -535,6 +644,7 @@ sequenceDiagram
     participant EP as EvalPage (frontend)
     participant EC as EvalController
     participant ES as EvalService
+    participant EX as evalExecutor (háttérszál)
     participant GER as EvalGoldenEntryRepository
     participant RS as retrieval (Hybrid/StarSystem)
     participant DB as Postgres (eval_run_results)
@@ -542,22 +652,40 @@ sequenceDiagram
 
     Admin->>EP: "Futtatás" gomb (llmJudge checkbox állapota)
     EP->>EC: POST /api/admin/eval/run?llmJudge=false
-    EC->>ES: runEval(false)
-    ES->>ES: run = new EvalRun(status=RUNNING); save
-    ES->>GER: findAll()
-    GER-->>ES: List~EvalGoldenEntry~
-    loop minden golden entry-re
-        ES->>RS: runRetrievalFor(entry)
-        RS-->>ES: List~RetrievalResult~ (top 5)
-        ES->>ES: matchesAny() → hit@3, hit@5
-        ES->>WS: log.info("eval_progress ...") — élőben megy a /admin/logs-ba
-        ES->>DB: save(EvalRunResult)
+    EC->>ES: startEvalRun(false)
+    ES->>DB: run = new EvalRun(status=RUNNING); save
+    ES->>EX: execute(() -> runEvalAsync(run.id, false))
+    ES-->>EC: EvalRunResponse (status=RUNNING)
+    EC-->>EP: 202 Accepted
+    EP->>EP: activeRunId = response.id — usePollingEvalRun() elindul
+
+    par háttérszálon fut, a HTTP-választól függetlenül
+        EX->>ES: runEvalAsync(runId, false)
+        ES->>GER: findAll()
+        GER-->>ES: List~EvalGoldenEntry~
+        loop minden golden entry-re
+            ES->>RS: runRetrievalFor(entry)
+            RS-->>ES: List~RetrievalResult~ (top 5)
+            ES->>ES: matchesAny() → hit@3, hit@5
+            ES->>WS: log.info("eval_progress ...") — élőben megy a /admin/logs-ba
+            ES->>DB: save(EvalRunResult)
+        end
+        ES->>ES: run.hitRateAt3/At5 számítás, status=COMPLETED
+        ES->>DB: save(run)
+    and a frontend párhuzamosan pollingol
+        loop 2 másodpercenként, amíg status=RUNNING
+            EP->>EC: GET /api/admin/eval/runs/{activeRunId}
+            EC->>ES: getRunDetail(activeRunId)
+            ES->>DB: findById + results
+            DB-->>ES: EvalRun (status még RUNNING)
+            ES-->>EC: EvalRunResponse
+            EC-->>EP: 200 OK (status=RUNNING)
+        end
+        Note over EP: a háttérfutás időközben COMPLETED-re vált a DB-ben
+        EP->>EC: GET /api/admin/eval/runs/{activeRunId} (következő poll)
+        EC-->>EP: 200 OK (status=COMPLETED, hitRateAt3/At5 kitöltve)
+        EP->>EP: polling leáll, eredmény-összefoglaló kártya + táblázat megjelenítése
     end
-    ES->>ES: run.hitRateAt3/At5 számítás, status=COMPLETED
-    ES->>DB: save(run)
-    ES-->>EC: EvalRunResponse
-    EC-->>EP: 200 OK
-    EP->>EP: eredmény-összefoglaló kártya + táblázat megjelenítése
 ```
 
 ## 11. Tesztterv
@@ -565,18 +693,23 @@ sequenceDiagram
 | Teszteset | Osztály | Mit ellenőriz |
 |---|---|---|
 | `createGoldenEntry_savesCorrectly` | `EvalServiceTest` | Alap CRUD, a `SectorServiceTest`-hez hasonló mintával |
-| `runEval_allHit_hitRateIsOne` | `EvalServiceTest` | Mockolt retrieval mindig egyezik → `hitRateAt3 == 1.0` |
-| `runEval_noHits_hitRateIsZero` | `EvalServiceTest` | Mockolt retrieval sosem egyezik → `hitRateAt3 == 0.0`, de a run státusza `COMPLETED` marad (a 0% is egy érvényes eredmény, nem hiba) |
-| `runEval_emptyGoldenSet_returnsZeroWithoutError` | `EvalServiceTest` | 0 golden entry → `hitRateAt3/At5 == 0.0`, nem `NaN`/`ArithmeticException` (a nullával-osztás elkerülése expliciten tesztelve) |
-| `runEval_retrievalThrows_marksRunFailed` | `EvalServiceTest` | A retrieval-hívás kivételt dob → a run `status=FAILED`-del mentődik, a már addig megszerzett `EvalRunResult` sorok megmaradnak |
+| `startEvalRun_returnsImmediatelyWithRunningStatus` | `EvalServiceTest` | Mockolt `evalExecutor` (`doNothing()` a `execute()`-on) → a visszaadott `EvalRunResponse.status == "RUNNING"`, és a teszt bizonyítja, hogy a `runEvalAsync()` NEM hívódott meg szinkron a `startEvalRun()` szálán |
+| `runEvalAsync_allHit_hitRateIsOne` | `EvalServiceTest` | Mockolt retrieval mindig egyezik → a mentett `EvalRun.hitRateAt3 == 1.0`, `status == "COMPLETED"` |
+| `runEvalAsync_noHits_hitRateIsZero` | `EvalServiceTest` | Mockolt retrieval sosem egyezik → `hitRateAt3 == 0.0`, de a run státusza `COMPLETED` marad (a 0% is egy érvényes eredmény, nem hiba) |
+| `runEvalAsync_emptyGoldenSet_returnsZeroWithoutError` | `EvalServiceTest` | 0 golden entry → `hitRateAt3/At5 == 0.0`, nem `NaN`/`ArithmeticException` (a nullával-osztás elkerülése expliciten tesztelve) |
+| `runEvalAsync_retrievalThrows_marksRunFailed` | `EvalServiceTest` | A retrieval-hívás kivételt dob → a run `status=FAILED`-del mentődik, a már addig megszerzett `EvalRunResult` sorok megmaradnak |
 | `matchesAny_typeMismatch_returnsFalse` | `EvalServiceTest` | Egyező név/kulcsszó, de eltérő `sourceType` → nem számít találatnak |
 | `matchesAny_caseInsensitive` | `EvalServiceTest` | Kis/nagybetű-eltérés a névben/kulcsszóban nem befolyásolja az egyezést |
 | `EvalControllerSecurityTest` | — | `eval:read`/`eval:write` helyesen elválasztva (olvasás vs. mutáló+futtató végpontok), a meglévő `SectorControllerSecurityTest`/`FeatureFlagControllerSecurityTest` mintája szerint |
-| `EvalPage.test.tsx` | frontend | Golden set CRUD-interakció (mockolt `evalApi`), "Futtatás" gomb → loading state → eredmény-kártya megjelenik, korábbi futás kiválasztása betölti a régi eredményt |
+| `EvalControllerTest_runReturns202` | — | A `POST /api/admin/eval/run` végpont ténylegesen `202 Accepted`-et ad vissza, nem `200 OK`-t (a REST-szemantika helyessége — aszinkron, még-nem-kész erőforrás létrehozása) |
+| `usePollingEvalRun.test.ts` | frontend | Mockolt `evalApi.getRunDetail()`, ami első hívásra `RUNNING`-ot, másodikra `COMPLETED`-et ad → a hook pontosan 2 hívást indít, a második után leáll (nem pollingol tovább) |
+| `EvalPage.test.tsx` | frontend | Golden set CRUD-interakció (mockolt `evalApi`), "Futtatás" gomb → azonnal "folyamatban" jelzés (NEM várja meg a végét) → polling-gal frissül → eredmény-kártya megjelenik, korábbi futás kiválasztása betölti a régi eredményt |
 
 **Kézi ellenőrzés (Norbi, itt nem elvégezhető)**: golden set feltöltése valós kérdésekkel,
-"Futtatás" élő Ollamával, és hogy a `/admin/logs` ténylegesen mutatja-e élőben a soronkénti
-`eval_progress` sorokat, ahogy a futás halad.
+"Futtatás" élő Ollamával — ellenőrizd, hogy a gomb megnyomása UTÁN AZONNAL (nem a teljes
+futás végén) visszakapod a "folyamatban" állapotot, hogy a polling ténylegesen 2
+másodpercenként frissül, és hogy a `/admin/logs` párhuzamosan mutatja-e élőben a
+soronkénti `eval_progress` sorokat, ahogy a futás a háttérben halad.
 
 ## 12. Nyitott kérdések Norbertnek
 
@@ -584,13 +717,13 @@ sequenceDiagram
    retrieveelt (top) chunkok relevanciáját ítéli meg a kérdéshez képest (NEM a teljes
    generált választ), 0-10 skálán, `llm_judge_score DOUBLE PRECISION` oszlop az
    `eval_run_results`-ban (NULL, ha nem volt bekapcsolva). Részletek: 2. és 5.2 szakasz.
-2. **A golden-set méretének felső korlátja** — a fő terv szerint "15-20 golden entry-nél ez
-   néhány másodperc, nem indokol async/polling bonyodalmat", és a `runEval()` terve ennek
-   megfelelően **szinkron, blokkoló** HTTP-hívás. Ha a golden set idővel jelentősen nő (pl.
-   100+ tétel), ez percekig blokkolhatja a kérést, és Spring/böngésző-oldali timeoutba
-   futhat. Szeretnél-e egy explicit felső korlátot a golden set méretére (pl. a UI ne
-   engedjen 50 fölé menni), vagy ez most nem probléma, és majd ha azzá válik, külön
-   foglalkozunk vele (async+polling-ra átalakítás)?
+2. ~~A golden-set méretének felső korlátja~~ — **ELDÖNTVE (2026-08-25): aszinkron
+   indítás + polling, MOST rögtön, nem "majd ha problémává válik".** Norbert kifejezett
+   kérésére a `startEvalRun()`/`runEvalAsync()` szétválasztás (5.1 szakasz), a `202
+   Accepted` válasz (6. szakasz), az `evalExecutor` bean (4.5 szakasz) és a frontend
+   `usePollingEvalRun()` hook (7.2 szakasz) mind bekerült ebbe a körbe — nincs explicit
+   felső korlát a golden set méretére, mert a szinkron-blokkolás kockázata ezzel a
+   tervezéssel eleve megszűnt.
 3. **A korábbi futások (`eval_runs`) törölhetők-e, és ha igen, ki törölheti** — a fő terv
    nem említ törlési útvonalat a futás-történethez. Idővel ez a tábla korlátlanul nőhet.
    Kell-e egy `DELETE /api/admin/eval/runs/{id}` végpont, vagy egyelőre nem szükséges
