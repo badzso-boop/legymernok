@@ -435,36 +435,76 @@ kimenet: List<String> (egy elem = egy függvény/metódus, TOP-LEVEL indentáci�
    visszaesik `chunkText()`-re)
 ```
 
-### 12.6 `JsMethodSplitter` — regex-indítás + zárójel-számlálás
+### 12.6 `JsMethodSplitter` — valódi AST-alapú vágás Rhino-val (2026-08-25-i spike alapján TESZTELVE)
+
+**Eredetileg regex+zárójel-számláló heurisztikát terveztünk ide (string-/komment-tudatlan,
+dokumentált korláttal) — Norbi rákérdezett, hogy egy valódi parser mennyivel lenne nehezebb,
+ezért **ténylegesen kipróbáltuk** egy gyors spike-kal, éles minta-fájlokon
+(`gitea-templates/mission-js-template/solution.js` és `solution.test.js`), mielőtt
+eldöntöttük. Az eredmény: **egy valódi, pure-Java parser (Mozilla Rhino) használható, és
+NEM nehezebb megvalósítani, mint a regex-heurisztikát** — csak egy apró, jól körülhatárolt
+előfeldolgozási lépés kell mellé.
+
+**Mit találtunk a spike során:**
+- A `mission-js-template` ES modul szintaxist használ (`import ... from "...";`,
+  `export function ...`). A Rhino (kipróbálva mind az 1.7.14, mind a legfrissebb 1.7.15.1
+  verzióval) **NEM támogatja az ES modul `import`/`export` szintaxist** — ezen elhasal a
+  parse (`identifier is a reserved word: import`). Ez fontos, valós korlát, amit jó, hogy a
+  spike ELŐRE kiderített, nem implementáció közben.
+- **Megoldás, amit ki is próbáltunk**: az `import`/`export` sorokat egy célzott, jól
+  körülhatárolt regex-szel eltávolítjuk parse ELŐTT (ez egy jelentősen egyszerűbb,
+  megbízhatóbb regex-feladat, mint a korábbi zárójel-számlálás — az import/export
+  utasítások szintaxisa fix mintát követ, nem kell benne kapcsos zárójel-mélységet
+  számolni). Ezután a Rhino **hibátlanul** parse-olja a maradék kódot, és a
+  `NodeVisitor`-ral bejárt AST-ból pontosan, string-/komment-tudatosan kinyerhető minden
+  `FunctionNode` (deklarált függvény, class-metódus, arrow function) — **beleértve a
+  beágyazott arrow function-öket is** (pl. `describe(() => { test(() => {...}) })` — a
+  spike ezt is helyesen, külön-külön chunkként azonosította, ami a Jest-stílusú
+  teszt-fájloknál kifejezetten hasznos granularitás).
+- **Multi-soros import is helyesen kezelhető**, ha a regex `import\s+.*?;` mintát
+  `DOTALL`-lal (sorhatáron át is engedve) illesztjük, nem soronként — ezt is kipróbáltuk
+  egy 3-soros `import { add, subtract } from "./solution";` mintán, helyesen működött.
+
+**A tényleges algoritmus (implementációra kész terv)**:
 
 ```
-FÜGGVÉNY-KEZDET mintázatok (soronként illesztve, opcionális "export"/"async" prefixszel):
-  - function NÉV(...) {
-  - NÉV(...) {                          // class-metódus rövid szintaxis
-  - const|let NÉV = (...) => {          // arrow function változó-hozzárendelésben
-  - const|let NÉV = async (...) => {
-
-algoritmus:
-1. sorokra bontás
-2. soronként: ha illeszkedik egy FÜGGVÉNY-KEZDET mintázatra:
-     - jegyezzük a kezdő sor indexét
-     - számláljuk a nyitott/zárt kapcsos zárójelek egyenlegét a sortól kezdve,
-       soronként haladva, amíg az egyenleg vissza nem esik 0-ra (= a függvénytörzs vége)
-     - az érintett sorok (kezdő ... záró) egy chunk
-   egyébként: következő sor
-3. ha 0 találat → üres lista (fallback `chunkText()`-re)
+1. ELŐFELDOLGOZÁS — modul-szintaxis eltávolítása:
+   a. "import <bármi>;" mintázat eltávolítása (DOTALL, hogy a több-soros import
+      destructuring is helyesen illeszkedjen)
+   b. "export default " prefix eltávolítása (a sor eleji "export default "-ot törli,
+      a mögötte lévő deklaráció megmarad)
+   c. "export " prefix eltávolítása (sor elején)
+2. PARSE — Rhino `Parser` (`CompilerEnvirons.setLanguageVersion(VERSION_ES6)`),
+   try/catch az `EvaluatorException`-re:
+   - ha a parse SIKERTELEN (pl. valamilyen, az 1. lépés által le nem fedett, nem
+     támogatott szintaxis miatt) → üres lista (fallback `chunkText()`-re, ugyanaz a
+     védőháló, mint a Python-splitternél)
+3. AST BEJÁRÁS — `AstRoot.visitAll(NodeVisitor)`, minden `FunctionNode`-nál:
+   - `getAbsolutePosition()` + `getLength()` → pontos forrás-tartomány kinyerése az
+     EREDETI (nem az előfeldolgozott!) szöveg megfelelő pozíciójából — FONTOS: az
+     eltávolított import/export sorok miatt a pozíciók az ELŐFELDOLGOZOTT szövegre
+     vonatkoznak, tehát vagy (a) a chunk-szöveget az előfeldolgozott forrásból vesszük
+     ki (egyszerűbb, az apró export-prefix hiánya a chunk szövegében nem gond, mert a
+     RAG-kontextusnak a metódus-törzs a lényeg, nem az export-kulcsszó), vagy (b) egy
+     pozíció-eltolási térképet tartunk az előfeldolgozás közben, hogy az eredeti
+     forrásra tudjunk visszamutatni. **Javaslat: (a), az egyszerűbb út** — a chunk-
+     szöveg forrása maradjon az előfeldolgozott (import/export nélküli) verzió, ez
+     RAG-kontextusnak semennyivel nem rosszabb, és nem kell pozíció-eltolást
+     karbantartani.
+4. ha 0 `FunctionNode` található → üres lista (fallback `chunkText()`-re)
 ```
 
-**⚠️ Fontos, kimondott korlát**: ez a zárójel-számlálás **NEM string-/komment-tudatos** — egy
-`"valami { furcsa }"` stringliterál vagy egy `// { comment` sor tévesen befolyásolhatja a
-mélység-számlálást, és rosszul vághatja a chunk-határt. Ez egy **heurisztika**, nem egy
-valódi JavaScript-parser (egy pontos megoldáshoz egy tényleges AST-parser kellene, pl. egy
-Node-alapú `@babel/parser` subprocess-hívás a Java-ból — ez explicit KÍVÜL esik ennek a
-PR-nak a keretein, tudatos kompromisszum, nem felejtés). Gyakorlati hatás: néhány fájlnál a
-chunk-határ pontatlan lehet (pl. egy stringben lévő `{` miatt egy metódus "korábban lezár",
-mint kellene) — ez a retrieval-minőséget rontja, DE nem okoz hibát/crash-t, és a `chunkText()`
-fallback mindig garantálja, hogy legalább VALAMILYEN, kb. 800 karakteres granularitású index
-legyen minden fájlról.
+**Maven-függőség**: `org.mozilla:rhino:1.7.15.1` (pure Java, nincs natív/subprocess
+igény — ellentétben egy Node-alapú `@babel/parser`-hívással, amit korábban elvetettünk).
+
+**Megmaradó, jóval szűkebb ismert korlát** (a korábbi, teljes zárójel-számlálós
+korláthoz képest): ha egy fájl olyan modern JS-szintaxist használ, amit ez a Rhino-
+verzió nem támogat (pl. bizonyos legújabb ES2022+ elemek, amiket a spike nem tesztelt
+— a *jelenlegi* sablon-fájlok mindegyike sikeresen parse-olódott), a parse elhasal, és
+a fájl a `chunkText()` fallback-kal indexelődik (kevésbé pontos vágás, de nem törik el
+semmi). Ez egy jóval kisebb, ritkábban előforduló eset, mint a korábbi terv string-
+literálban lévő `{` problémája, ami GYAKORI, hétköznapi kódban is előfordulhat (pl.
+minden JSDoc-komment vagy stringes teszt-elvárás tartalmazhat `{`/`}`-t).
 
 ### 12.7 `ContentChunkingService` — új/módosult metódusok
 
@@ -577,9 +617,11 @@ sequenceDiagram
 | `split_multipleTopLevelFunctions_returnsSeparateChunks` | `PythonMethodSplitterTest` | 3 top-level `def` → 3 chunk, határok helyesek |
 | `split_nestedHelperFunction_staysInParentChunk` | `PythonMethodSplitterTest` | Egy `def`-en belüli beágyazott `def` NEM vág új chunkot |
 | `split_noFunctions_returnsEmptyList` | `PythonMethodSplitterTest` | Csak import+konstans, `def` nélkül → üres lista (fallback jelzés) |
-| `split_arrowFunctionAssignment_detected` | `JsMethodSplitterTest` | `const foo = (x) => { ... }` mintázat helyesen detektált+bezárt |
-| `split_classMethodShorthand_detected` | `JsMethodSplitterTest` | `methodName(x) { ... }` (class body) helyesen detektált |
-| `split_braceInsideString_knownLimitation` | `JsMethodSplitterTest` | **Dokumentált, elvárt hibás eset** — explicit teszt, ami bizonyítja és rögzíti a 12.6-ban leírt korlátot (nem regresszió, hanem tudatosan rögzített viselkedés, hogy ha valaha javítjuk, tudjuk mit változtattunk) |
+| `split_realSolutionJs_findsAddFunction` | `JsMethodSplitterTest` | A tényleges `mission-js-template/solution.js` tartalmán (a spike-ban is használt fájl) → 1 chunk, `add` metódus, kommentestül helyesen kinyerve |
+| `split_realSolutionTestJs_findsNestedArrowFunctions` | `JsMethodSplitterTest` | A tényleges `solution.test.js` tartalmán → a beágyazott `test(() => {...})` arrow function-ök KÜLÖN chunkokként jelennek meg (a spike által megfigyelt, hasznos granularitás) |
+| `split_multilineImport_stripsCorrectly` | `JsMethodSplitterTest` | 3-soros `import { a, b } from "...";` destructuring → a maradék kód helyesen parse-olódik (a spike által kipróbált `DOTALL`-regex helyessége) |
+| `split_braceInsideStringLiteral_noLongerAProblem` | `JsMethodSplitterTest` | Egy `"valami { furcsa }"` stringliterált tartalmazó függvény → a Rhino AST helyesen kezeli (ez a REGRESSZIÓS teszt, ami bizonyítja, hogy a korábban tervezett regex-heurisztika ismert hibaosztálya a Rhino-val ténylegesen megszűnt) |
+| `split_unparseableSyntax_fallsBackGracefully` | `JsMethodSplitterTest` | Egy szándékosan Rhino-számára nem támogatott szintaxisú fájl → üres lista, a hívó `CodeFileChunker` a `chunkText()` fallbackre esik, nem dob kivételt |
 | `chunkFile_unindexableExtension_returnsEmpty` | `CodeFileChunkerTest` | `.json`/`.md` fájl → `isIndexableSourceFile()` false, `chunkFile()`-t meg sem hívjuk |
 | `chunkFile_noFunctionsFound_fallsBackToChunkText` | `CodeFileChunkerTest` | Mockolt splitter üres listát ad → a `ContentChunkingService.chunkText()` fut le helyette |
 | `reindexCodingMissionFiles_allEmbedsSucceed_replacesOldFileChunks` | `ContentChunkingServiceTest` | Több fájl, több chunk, minden embed sikeres → DELETE+batch INSERT megtörténik, `file_path` helyesen kitöltve |
