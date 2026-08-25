@@ -506,6 +506,132 @@ semmi). Ez egy jóval kisebb, ritkábban előforduló eset, mint a korábbi terv
 literálban lévő `{` problémája, ami GYAKORI, hétköznapi kódban is előfordulhat (pl.
 minden JSDoc-komment vagy stringes teszt-elvárás tartalmazhat `{`/`}`-t).
 
+#### 12.6.1 A spike forráskódja és a tényleges kimenet (ellenőrizhetőség kedvéért)
+
+Ez nem elméleti terv — 2026-08-25-én ténylegesen lefuttattuk ezt a Java 21 + Rhino
+1.7.15.1 kombinációval, a repo valódi `gitea-templates/mission-js-template/solution.js`
+és `solution.test.js` fájljain. A spike-kód (`RhinoSpike.java`):
+
+```java
+import org.mozilla.javascript.CompilerEnvirons;
+import org.mozilla.javascript.Parser;
+import org.mozilla.javascript.ast.AstRoot;
+import org.mozilla.javascript.ast.FunctionNode;
+import org.mozilla.javascript.EvaluatorException;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class RhinoSpike {
+    public static void main(String[] args) throws Exception {
+        String source = Files.readString(Path.of(args[0]));
+
+        CompilerEnvirons env = new CompilerEnvirons();
+        env.setRecordingComments(true);
+        env.setLanguageVersion(org.mozilla.javascript.Context.VERSION_ES6);
+        env.setRecoverFromErrors(false);
+
+        Parser parser = new Parser(env);
+
+        AstRoot root;
+        try {
+            root = parser.parse(source, args[0], 1);
+        } catch (EvaluatorException e) {
+            System.out.println("PARSE FAILED: " + e.getMessage());
+            return;
+        }
+
+        System.out.println("PARSE OK. Walking AST for functions...\n");
+
+        root.visitAll(node -> {
+            if (node instanceof FunctionNode fn) {
+                String name = fn.getName();
+                if (name == null || name.isEmpty()) {
+                    name = fn.getFunctionName() != null ? fn.getFunctionName().getIdentifier() : "<anonymous/arrow>";
+                }
+                int start = fn.getAbsolutePosition();
+                int end = start + fn.getLength();
+                String snippet = source.substring(start, Math.min(end, source.length()));
+                System.out.println("=== function: " + name
+                        + " | isArrow=" + (fn.getFunctionType() == FunctionNode.ARROW_FUNCTION)
+                        + " | start=" + start + " end=" + end + " ===");
+                System.out.println(snippet);
+                System.out.println("--- end ---\n");
+            }
+            return true;
+        });
+    }
+}
+```
+
+**1. kísérlet — a nyers `solution.test.js` (ES modul `import`-tal), előfeldolgozás nélkül:**
+
+```
+$ java -cp .:rhino-1.7.15.1.jar RhinoSpike test-sample.js
+PARSE FAILED: identifier is a reserved word: import (test-sample.js#1)
+
+$ java -cp .:rhino-1.7.15.1.jar RhinoSpike solution-sample.js
+PARSE FAILED: identifier is a reserved word: export (solution-sample.js#7)
+```
+
+→ **Ez igazolta a korlátot**: sem az 1.7.14, sem az akkori legfrissebb 1.7.15.1 Rhino-
+verzió nem érti az ES modul szintaxist — enélkül a spike nélkül ezt csak
+implementáció közben, egy sikertelen build/teszt formájában derítettük volna ki.
+
+**2. kísérlet — az `import`/`export` sorok eltávolítása után (a végleges előfeldolgozó
+regex: `import\s+.*?;` `DOTALL`-lal, `export(\s+default)?\s+` prefix-eltávolítás):**
+
+```
+$ python3 strip_modules_v2.py test-sample.js > test-sample.stripped.js
+$ java -cp .:rhino-1.7.15.1.jar RhinoSpike test-sample.stripped.js
+PARSE OK. Walking AST for functions...
+
+=== function: <anonymous/arrow> | isArrow=true | start=26 end=476 ===
+() => {
+  test("should correctly add two positive numbers", () => {
+    expect(add(2, 3)).toBe(5);
+  });
+  ... (a teljes describe-blokk törzse)
+}
+--- end ---
+
+=== function: <anonymous/arrow> | isArrow=true | start=86 end=128 ===
+() => {
+    expect(add(2, 3)).toBe(5);
+  }
+--- end ---
+
+... (a másik 3 test()-blokk ugyanígy, külön-külön chunkként)
+
+$ java -cp .:rhino-1.7.15.1.jar RhinoSpike solution-sample.stripped.js
+PARSE OK. Walking AST for functions...
+
+=== function: add | isArrow=false | start=144 end=206 ===
+function add(a, b) {
+  // Itt van a megoldás
+  return a + b;
+}
+--- end ---
+```
+
+**3. kísérlet — 3-soros, destructuring-es multi-line import** (`import {\n  add,\n
+subtract\n} from "./solution";`), a `DOTALL`-regex ellenőrzésére:
+
+```
+$ java -cp .:rhino-1.7.15.1.jar RhinoSpike multiline-stripped.js
+PARSE OK. Walking AST for functions...
+
+=== function: useThem | isArrow=false | start=0 end=63 ===
+function useThem(a, b) {
+  return add(a, b) + subtract(a, b);
+}
+--- end ---
+```
+
+→ Mindhárom kísérlet megerősítette a 12.6-ban leírt tervet: az előfeldolgozás
+szükséges és elégséges, az AST-bejárás pontosan, string-/komment-tudatosan találja
+meg a függvényhatárokat, beleértve a beágyazott arrow function-öket is.
+
 ### 12.7 `ContentChunkingService` — új/módosult metódusok
 
 | Metódus | Szignatúra | Tranzakció | Hívó |
