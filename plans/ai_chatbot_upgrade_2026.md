@@ -313,6 +313,20 @@ később bármilyen más MCP-kompatibilis kliensből (Claude Desktop, Claude Cod
 lennének, nem csak ebből a chatbotból; (2) konzisztens, névvel megnevezhető minta a két projekt
 (`ai-os`, `legymernok`) között — erős, konkrét interjú-sztori.
 
+**2026-08-25-i pontosítás — transport és elhelyezés.** Az `ai-os` `mcp_server.py`-ja **stdio-
+transporttal** fut: a kliens (az `ai-os` saját `task_runner.py`-ja) egy adott taszk-futtatáshoz
+**alfolyamatként indítja el**, egy konkrét sandbox-mappához (`ToolContext`) kötve — nem egy
+folyamatosan futó, hálózaton elérhető szolgáltatás. Ez a minta itt NEM alkalmazható közvetlenül:
+a legymernok-nál a kliens (Spring backend) és a szerver (Python) **más nyelv, más konténer** —
+egy Java-folyamat nem tud egy másik Docker-konténerben lévő Python-alfolyamat stdin/stdout-jához
+hozzáférni. Emiatt a legymernok MCP-szervere **HTTP/SSE-transporttal** fut (az `mcp` SDK ezt is
+támogatja stdio mellett), **saját, önálló konténerben** (`mcp-server`, ld. lent) — folyamatosan,
+nem taszkonként újraindítva. Az `ai-os`-t ez a döntés **nem érinti**, marad a jelenlegi,
+stdio-alfolyamatos, taszkonkénti mintája — a két projekt MCP-szervere tudatosan **külön marad**
+(más bizalmi szint: az `ai-os` toolai fájlt módosítanak/kódot futtatnak, a legymernok toolai
+egy hitelesített végfelhasználó JWT-jével, a Spring `@PreAuthorize`-on át korlátozott REST
+hívások), nem egy közös, megosztott MCP-hubba kerülnek.
+
 **Auth-kérdés, ami itt élesebb, mint az `ai-os`-nál**: az `ai-os` egyfelhasználós CLI-eszköz, a
 `legymernok` viszont többfelhasználós, RBAC-védett alkalmazás. **A tool-implementációk sose
 hívjanak közvetlenül adatbázist/service-réteget** — mindegyik a meglévő, hitelesített Spring REST
@@ -347,40 +361,68 @@ ChatWidget → ChatService.streamChat() → Ollama tool-calling hurok (max N ite
                                               ▼
                                     AiServiceClient.callTool(name, args, userJwt)
                                               │
-                                              ▼
-                                    MCP kliens ⇄ MCP szerver (ai-service/mcp_server.py, mcp SDK)
+                                              ▼  HTTP (belső Docker-hálózat: legymernok-net)
+                                    MCP kliens ⇄ MCP szerver — ÖNÁLLÓ KONTÉNER (mcp-server, mcp SDK,
+                                    HTTP/SSE transport, folyamatosan fut, nem taszkonként indul)
                                               │
                                               ▼
                                     tool implementáció → Spring REST API hívás a userJwt-vel
 ```
 
-- **`ai-service/mcp_server.py`** (új) — `mcp` SDK-val épített szerver, a 4 tool JSON-schema
-  definíciójával + implementációjával (mindegyik egy `httpx` hívás a Spring backend felé, a kapott
-  JWT-t `Authorization` fejlécként továbbítva).
+- **Új top-level mappa és konténer: `mcp-server/`** (NEM az `ai-service/` alá kerül — külön build-
+  kontextus, külön image, külön életciklus, mert ez egy állandóan futó daemon, nem egy Ollama-
+  wrapper). Fájlok: `mcp-server/main.py` (`mcp` SDK-val épített szerver, HTTP/SSE transport, a 4
+  tool JSON-schema definíciójával + implementációjával — mindegyik egy `httpx` hívás a Spring
+  backend felé, a kapott JWT-t `Authorization` fejlécként továbbítva), `mcp-server/requirements.txt`
+  (`mcp`, `httpx`, a HTTP/SSE transporthoz szükséges ASGI-szerver, pl. `uvicorn`),
+  `mcp-server/Dockerfile` (a meglévő `ai-service/Dockerfile` mintáját követve).
+- **`docker-compose.yml` bővítés** — új service, a meglévő `ai-service`/`ollama` blokkok mintáját
+  követve:
+  ```yaml
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: legymernok-mcp-server
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      BACKEND_URL: http://backend:8080
+    depends_on:
+      - backend
+    networks:
+      - legymernok-net
+  ```
+  Nincs `depends_on: ollama` — a tool-implementációk sosem hívják közvetlenül az Ollamát, csak a
+  Spring backendet; az Ollama-hívás iránya fordított (Java → Ollama, a tool-calling hurokban).
 - **`AiServiceClient` bővítés**: `chatWithTools(messages, tools, userJwt)` — Ollama natív
   `/api/chat` (nem `/api/generate`) hívása `tools` mezővel; ha a válasz `tool_calls`-t tartalmaz,
-  a hurok meghívja a megfelelő MCP toolt, az eredményt visszateszi az üzenet-listába
-  `role:"tool"`-ként, és újra hívja Ollamát — max ~10 iterációig (ugyanaz a védőháló, mint az
-  `ai-os` `max_tool_iterations`-e).
+  a hurok HTTP-n hívja a megfelelő toolt a `mcp-server` konténeren (`http://mcp-server:8082`), az
+  eredményt visszateszi az üzenet-listába `role:"tool"`-ként, és újra hívja Ollamát — max ~10
+  iterációig (ugyanaz a védőháló, mint az `ai-os` `max_tool_iterations`-e).
 - **`ChatService.streamChat()` bővítés**: a mostani egy-kör (retrieval → generate → extractAction)
   helyett egy tool-hurok, ami közben is streameli a látható szöveges részeket, a `PROPOSE_MISSION`/
   `NAVIGATE` akciókat pedig ugyanúgy záró SSE-eseményként küldi, mint a FILL_FORM-ot.
 
-**Tesztek**: `mcp_server.py` toolonként (`pytest`, mockolt `httpx` a Spring hívásokhoz — érvényes
-JWT-vel sikeres hívás, érvénytelen/hiányzó jogosultsággal 403 helyesen propagálódik); a Java-oldali
-tool-hurok mockolt `AiServiceClient.chatWithTools()`-szal (több körös tool_call szekvenciák, max
+**Tesztek**: `mcp-server/` toolonként (`pytest`, mockolt `httpx` a Spring hívásokhoz — érvényes
+JWT-vel sikeres hívás, érvénytelen/hiányzó jogosultsággal 403 helyesen propagálódik, plusz egy
+alap health-check teszt, hogy a HTTP/SSE szerver ténylegesen elindul); a Java-oldali tool-hurok
+mockolt `AiServiceClient.chatWithTools()`-szal (több körös tool_call szekvenciák, max
 iteráció-korlát tesztelése, `create_mission_draft` sosem hív automatikusan mutáló végpontot).
 
-**Kézi ellenőrzés (Norbi)**: valódi többkörös tool-használat élő Ollamával (kell egy
-function-calling-képes modell, pl. `qwen2.5`/`llama3.1` — nem minden kis GGUF-modell támogatja jól
-a natív tool-callinget, ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
+**Kézi ellenőrzés (Norbi)**: `docker compose up mcp-server --build -d` a saját gépén (a többi
+konténerrel — `backend`, `ollama`, `ai-service` — együtt, mind ugyanazon a `legymernok-net`
+hálózaton), majd valódi többkörös tool-használat élő Ollamával (kell egy function-calling-képes
+modell, pl. `qwen2.5`/`llama3.1` — nem minden kis GGUF-modell támogatja jól a natív tool-callinget,
+ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
 
 ## Függőségek — mindegyik indokolt, semmi spekulatív
 
 | Függőség | Hol | Indoklás |
 |---|---|---|
 | `pytest` (új `requirements-dev.txt`) | `ai-service/` | Ma nulla teszt létezik; kell a 2-3. fázis Python-változásainak felelős leszállításához élő Ollama nélkül. |
-| `mcp` (bekerül `requirements.txt`-be) | `ai-service/mcp_server.py` | Ugyanaz a Python SDK, amit az `ai-os` projekt is használ — valódi, szabványos MCP-szerver a 4 tool-hoz, nem csak Ollama-specifikus glue-kód (PR #5). |
+| `mcp`, `httpx`, `uvicorn` (új `mcp-server/requirements.txt`) | `mcp-server/` (önálló konténer, NEM az `ai-service/` alá) | Ugyanaz a Python SDK, amit az `ai-os` projekt is használ, de itt HTTP/SSE-transporttal, mert a kliens (Spring backend) és a szerver külön konténerben fut — valódi, szabványos, folyamatosan futó MCP-szerver a 4 tool-hoz, nem csak Ollama-specifikus glue-kód, és nem az `ai-service` életciklusához kötve (PR #5). |
 | **Semmi** a backendhez | — | `SseEmitter` (spring-boot-starter-web), `RestTemplate` (már bean), `ObjectMapper` (már bean) mindent lefed — nincs `spring-webflux`, nincs reaktív lib. |
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
@@ -408,6 +450,12 @@ a natív tool-callinget, ezt érdemes lesz kipróbálni a saját gépén elérhe
    a jelenlegi `gemma3:8b-q4_K_M` default — Norbinak érdemes lesz ellenőriznie, hogy a saját gépén
    elérhető modellek közül melyik támogatja jól a natív Ollama tool-callinget, mielőtt a PR #5-öt
    élesben tesztelné.
+6. **Az `ai-os` MCP-szervere ebben a körben szándékosan nem változik** — marad a jelenlegi,
+   taszkonként alfolyamatként induló, stdio-transportos mintája. Nincs közös, megosztott
+   MCP-hub a két projekt között (2026-08-25-i döntés, ld. PR #5 fenti pontosítása) — ha ez
+   valaha mégis felmerülne, az egy külön, önállóan átgondolandó téma lenne (az `ai-os` toolai
+   fájlt módosítanak/kódot futtatnak, más bizalmi szint, mint a legymernok JWT-hitelesített
+   toolai).
 
 ## Ellenőrzés / verifikáció összefoglalva
 
