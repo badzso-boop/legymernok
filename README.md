@@ -1,125 +1,100 @@
-# 🚀 LégyMérnök.hu (Be an Engineer)
+# LégyMérnök.hu (Be an Engineer)
 
-> _"A tudás határa a csillagos ég."_
+> _"Knowledge has no limit but the stars."_
 
-A **LégyMérnök.hu** egy nyílt forráskódú, gamifikált oktatási platform, amelynek célja a mérnöki gondolkodásmód és gyakorlati készségek (szoftverfejlesztés, elektronika) átadása. A rendszer egy űr-témájú narratívára épül, ahol a hallgatók ("Kadétok") küldetéseket teljesítenek, valós kódot írnak, és áramköröket terveznek.
+**LégyMérnök.hu** is a gamified education platform for teaching practical engineering skills — software development and, longer-term, electronics — built around a space-themed narrative. Learners ("Cadets") complete missions inside **star systems** (courses): they write real code, answer quizzes, and fill in structured exercises, with every submission tracked in a dedicated Git repository.
 
 ---
 
-## 🛠️ Technológiai Stack
-
-A projekt modern, ipari szabványokra épülő technológiákat használ:
+## Tech stack
 
 ### Backend (Mission Control)
 
-- **Nyelv:** Java 17
-- **Keretrendszer:** Spring Boot 3.x
-- **Adatbázis:** PostgreSQL 16
-- **Biztonság:** Spring Security, JWT (Stateless Authentication)
-- **API Dokumentáció:** SpringDoc OpenAPI (Swagger UI)
-- **Tesztelés:** JUnit 5, Mockito
+- **Language:** Java 17
+- **Framework:** Spring Boot 3.4
+- **Database:** PostgreSQL 16 (with `pgvector` for semantic search)
+- **Security:** Spring Security, stateless JWT auth, permission-based RBAC
+- **API docs:** SpringDoc OpenAPI (Swagger UI)
+- **Testing:** JUnit 5, Mockito
 
 ### Frontend (Cockpit)
 
-- **Keretrendszer:** React 18
-- **Build Tool:** Vite
-- **Nyelv:** TypeScript
-- **Szerkesztő:** Monaco Editor (tervezett integráció)
+- **Framework:** React 19
+- **Build tool:** Vite 7
+- **Language:** TypeScript
+- **Editor:** Monaco Editor (for coding missions)
 
-### DevOps & Infrastruktúra
+### DevOps & infrastructure
 
-- **Konténerizáció:** Docker & Docker Compose (Teljes környezet egy parancsra)
-- **Verziókezelés (Internal):** **Gitea** (Self-hosted Git Server) - _A rendszer lelke._ Minden feladat és minden diák megoldása dedikált Git repository-ban tárolódik.
+- **Containerization:** Docker & Docker Compose — the full stack comes up with one command.
+- **Internal version control:** self-hosted **Gitea**, the backbone of the platform — every mission and every cadet's submission lives in its own Git repository, with Gitea Actions running the automated checks.
 
 ---
 
-## 🏗️ Architektúra
+## Architecture
 
-A rendszer mikroszerviz-jellegű, de monorepóban kezelt architektúrát követ. A komponensek Docker konténerekben futnak és egy belső hálózaton (`legymernok-net`) kommunikálnak.
+A monorepo housing a set of Docker services that talk to each other over an internal network (`legymernok-net`):
 
 ```mermaid
 graph TD
-    User((Felhasználó)) --> Frontend
+    User((User)) --> Frontend
     Frontend[React Frontend] --> Backend[Spring Boot Backend]
     Backend --> DB[(PostgreSQL)]
     Backend --> Gitea[Gitea Git Server]
     Gitea --> DB
 ```
 
-### Kiemelt Funkció: Gitea Automatizáció
+### Gitea automation
 
-A rendszer nem csak tárolja a kódot, hanem **menedzseli** is a Git szervert.
+The backend doesn't just store code — it actively manages the Git server on the platform's behalf:
 
-- **Admin Flow:** Amikor az oktató létrehoz egy feladatot, a Backend automatikusan létrehoz egy _Template Repository_-t Giteán, és feltölti a kezdő kódot.
-- **Student Flow (Terv):** Amikor a diák elindít egy feladatot, a rendszer "Smart Copy" módszerrel létrehoz neki egy privát repót, ami csak a megoldandó feladatot tartalmazza (a megoldókulcs nélkül).
-
----
-
-## 💾 Adatbázis Séma
-
-Az adatbázis (`legymernok` DB) a felhasználókat, kurzusokat és a haladást tárolja. A Git repository-k metaadatai (URL-ek) is itt vannak, de a forráskód a Gitea-ban lakik.
-
-**Főbb Entitások:**
-
-- **`Cadet`**: Felhasználó (Admin / Cadet szerepkörrel).
-- **`StarSystem`**: Kurzus / Témakör (pl. "Java Alapok").
-- **`Mission`**: Egy konkrét lecke/feladat. Tartalmazza a leírást és a _Template Repo URL_-t.
-- **`CadetMission`**: A diák és a feladat kapcsolata (Status, _Student Repo URL_).
-
-_Részletes leírás: [`plans/database_schema.md`](plans/database_schema.md)_
+- **Admin flow:** when an instructor creates a coding mission through the Mission Forge editor, the backend automatically provisions a template repository on Gitea and pushes the starter code.
+- **Cadet flow:** when a cadet starts a mission, the backend copies the relevant files into a repository the cadet has write access to, keeps solution files out of reach, and reports Gitea Actions results back to the platform as the mission's verification status.
 
 ---
 
-## 🚦 Projekt Státusz
+## Data model
 
-A projekt jelenleg az **Adminisztrációs és Tartalomgyártó (Mérföldkő 1)** fázis végén jár.
+The core entities, in brief:
 
-### ✅ Megvalósítva (KÉSZ)
-
-- [x] **Infrastruktúra:** Stabil Docker Compose környezet.
-- [x] **Backend Core:** Rétegzett Spring Boot architektúra.
-- [x] **Biztonság:** Regisztráció, Login, JWT Tokenek (Role-based), Jelszó hash.
-- [x] **Gitea Integráció (Full CRUD):**
-  - User létrehozás/törlés.
-  - Repo létrehozás/törlés API-n keresztül.
-  - Fájl feltöltés API-n keresztül.
-- [x] **Tartalomkezelés:** Kurzusok és Feladatok létrehozása (a kód automatikus feltöltésével Giteára).
-- [x] **Dokumentáció:** Swagger UI (`/swagger-ui.html`).
-
-### 🚧 Folyamatban / Tervezett
-
-- [ ] **Frontend Admin UI:** React felület a fenti backend funkciókhoz.
-- [ ] **Student Flow:** "Start Mission" gomb -> Diák repó generálása.
-- [ ] **Runner:** Docker alapú kódkiértékelő rendszer.
-
-_Részletes ütemterv: [`plans/terv.md`](plans/terv.md)_
+- **`Cadet`** — a platform user (Cadet or Admin role, RBAC-based permissions beyond that).
+- **`StarSystem`** — a course/topic (e.g. "Java Fundamentals").
+- **`Mission`** — a single lesson or exercise. Comes in several types — `CODING`, `QUIZ`, `FILL_IN_BLANK`, `CONTENT`, `CIRCUIT_SIMULATION` — each with its own dedicated data model and verification flow.
+- **`CadetMission`** — links a cadet to a mission (status, repository URL, progress).
 
 ---
 
-## 🚀 Getting Started (Telepítés és Futtatás)
+## Project status
 
-### Előfeltételek
+The core platform is live and in active use: authentication, course/mission authoring (including the Mission Forge editor with Monaco), Gitea-backed coding missions with automated verification, quizzes, fill-in-the-blank exercises, and an admin dashboard are all implemented and covered by backend/frontend tests and Cypress E2E suites.
 
-- Docker és Docker Compose telepítve.
-- (Opcionális) Java 17+ és Node.js a helyi fejlesztéshez.
+Development happens in small, frequent PRs — the day-to-day roadmap and design decisions are tracked in [`plans/`](plans/) rather than in this README, so check there for the current state of any specific feature rather than relying on this section, which we don't always remember to update in lockstep.
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Docker and Docker Compose.
+- (Optional, for local development outside containers) Java 17+ and Node.js.
 
 ```bash
 docker network create -d bridge legymernok-net
 ```
 
-### Indítás
+### Starting the stack
 
-> **⚠️ Fontos, ha korábbról ismered ezt a repót:** a sima `docker compose up --build -d`
-> **önmagában már NEM indítja el a saját `postgres` service-t** — az a `standalone` Compose
-> profil mögé került (2026-08-19, lásd lentebb), hogy a homelab szerver egy közös,
-> több projektet kiszolgáló Postgres instance-t is használhasson helyette. Egy friss
-> klónnál, saját lokális adatbázissal a következő paranccsal indítsd:
+> **Note:** plain `docker compose up --build -d` **no longer starts the bundled `postgres`
+> service on its own** — it now sits behind the `standalone` Compose profile, so that a
+> shared server can point the backend/Gitea at one common Postgres instance instead. For a
+> fresh clone with its own local database, use:
 
 ```bash
 docker compose --build --profile standalone up -d
 ```
 
-Ez elindítja a következő szolgáltatásokat:
+This brings up:
 
 - **Frontend:** `http://localhost:3000`
 - **Gitea:** `http://localhost:3001`
@@ -127,37 +102,31 @@ Ez elindítja a következő szolgáltatásokat:
 - **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
 - **PostgreSQL:** `localhost:5432`
 
-#### Közös (megosztott) Postgres instance használata — csak a homelab szerveren
+#### Using a shared Postgres instance instead
 
-A `legymernok.ujjweb.hu`-t futtató szerveren a `postgres` service **nem** fut — a backend és a
-gitea egy külön, több projektet (legymernok, wrenchly) kiszolgáló Postgres instance-hoz
-kapcsolódik a `.env`-ben beállított `SPRING_DATASOURCE_*`/`GITEA_DATABASE_*` változókon
-keresztül (lásd `.env.example`). Ez **csak** a `.env`-en múlik, nincs profil-flag hozzá — ha
-ezek a változók be vannak állítva, `docker compose up -d` (profil nélkül) pont ezt teszi.
-A teljes indoklás, a hálózat/user/backup felépítése és a más projektekre való átültetés
-menete: `~/homelab/SHARED-POSTGRES.md` (ez a szerver-szintű dokumentum, nem repó-specifikus,
-ezért nincs itt a git-ben).
+On a server that already runs Postgres for other projects, `postgres` can be left out of the
+Compose run entirely — the backend and Gitea connect to whatever instance the `.env`
+`SPRING_DATASOURCE_*`/`GITEA_DATABASE_*` variables point to (see `.env.example`). This is
+purely `.env`-driven, no profile flag needed: with those variables set, a plain
+`docker compose up -d` (no `--profile`) does exactly that.
 
-### Első Lépések (Setup)
+### First-time setup
 
-1.  **Gitea Admin:** Az első indításkor nyisd meg a `localhost:3001`-et. A telepítőnél állítsd be az admin fiókot (`legymernok_admin`).
-    - _Tipp:_ A `docker-compose.yml` és `application.properties` már előre konfigurált értékeket tartalmaz, ezeket használd!
-2.  **Backend Admin:** Hozz létre egy admint a Backend oldalon is (vagy használd a Gitea szinkronizációt).
+1. **Gitea admin:** open `localhost:3001` on first boot and complete the install wizard, setting up the admin account (`legymernok_admin`). `docker-compose.yml`/`application.properties` already ship with matching default values — use them.
+2. **Backend admin:** create an admin account on the backend side as well (or rely on the Gitea sync).
 
-### Nem-interaktív / automatizált setup (szkriptekhez, CI-hez, home serverhez)
+### Non-interactive setup (for scripts, CI, or a headless server)
 
-A fenti webes telepítő-varázsló kihagyható — a Gitea CLI-je és a `docker compose`
-env változói teljesen non-interaktívan is felállítják a rendszert. Ez akkor hasznos,
-ha egy szerveren (pl. otthoni home serveren) automatizáltan, kattintgatás nélkül
-kell felhúzni a stacket.
+The web install wizard above can be skipped entirely — Gitea's CLI plus the `docker compose`
+env variables are enough to bring the whole system up non-interactively, which is what a
+scripted or CI deployment needs.
 
-**1. Gitea telepítés kihagyása (`INSTALL_LOCK`)**
+**1. Skip the Gitea install wizard (`INSTALL_LOCK`)**
 
-Alapból a `docker-compose.yml`-ben a Gitea `INSTALL_LOCK` nincs beállítva, ezért a
-konténer "nem telepített" állapotban indul, és a CLI parancsok (`gitea admin ...`)
-elutasítják magukat, amíg a webes telepítő le nem fut. Ezt megkerülve — miután a
-stack már fut egyszer (`docker compose up --build -d`) — a Gitea konténer még
-"nem telepített" állapotban is tud titkokat generálni:
+By default `INSTALL_LOCK` isn't set in `docker-compose.yml`, so the Gitea container starts in
+an "uninstalled" state and refuses any CLI admin commands until the web wizard has run. Once
+the stack is up once (`docker compose up --build -d`), the still-"uninstalled" container can
+already generate the secrets it needs:
 
 ```bash
 docker exec -u git legymernok-gitea gitea generate secret SECRET_KEY
@@ -165,21 +134,21 @@ docker exec -u git legymernok-gitea gitea generate secret INTERNAL_TOKEN
 docker exec -u git legymernok-gitea gitea generate secret JWT_SECRET
 ```
 
-A kapott 3 értéket írd be a `.env`-be (`GITEA_SECRET_KEY`, `GITEA_INTERNAL_TOKEN`,
-`GITEA_JWT_SECRET` — lásd `.env.example`); a `docker-compose.yml` már ezekre az env
-változókra hivatkozik, nem kell hozzá kódot módosítani. Majd:
+Put the three resulting values into `.env` (`GITEA_SECRET_KEY`, `GITEA_INTERNAL_TOKEN`,
+`GITEA_JWT_SECRET` — see `.env.example`); `docker-compose.yml` already references these env
+vars, no code changes needed. Then:
 
 ```bash
 docker compose up -d gitea
 ```
 
-— a konténer a webes varázsló nélkül, "telepített" állapotban indul újra
-(`INSTALL_LOCK = true` az `app.ini`-ben ellenőrizhető).
+— the container restarts in an "installed" state without the web wizard (`INSTALL_LOCK = true`
+in `app.ini` confirms it).
 
-**2. Admin fiók + tokenek CLI-vel**
+**2. Admin account + tokens via the CLI**
 
 ```bash
-# Admin user létrehozása (jelszó a .env GITEA_ADMIN_PASSWORD-jából)
+# Create the admin user (password from .env's GITEA_ADMIN_PASSWORD)
 docker exec -u git legymernok-gitea gitea admin user create \
   --username legymernok_admin \
   --password "<GITEA_ADMIN_PASSWORD>" \
@@ -187,58 +156,59 @@ docker exec -u git legymernok-gitea gitea admin user create \
   --admin \
   --must-change-password=false
 
-# Backend API token (ez kell a .env GITEA_ADMIN_TOKEN-jébe)
+# Backend API token (goes into .env's GITEA_ADMIN_TOKEN)
 docker exec -u git legymernok-gitea gitea admin user generate-access-token \
   --username legymernok_admin \
   --token-name backend-integration \
   --scopes all
 
-# Actions runner regisztrációs token (ez kell a .env REGISTRATION_TOKEN-jébe)
+# Actions runner registration token (goes into .env's REGISTRATION_TOKEN)
 docker exec -u git legymernok-gitea gitea actions generate-runner-token
 ```
 
-A két kapott tokent írd be a `.env`-be (`GITEA_ADMIN_TOKEN`, `REGISTRATION_TOKEN`),
-majd `docker compose up -d backend runner` — a backend felveszi a Gitea API tokent,
-a runner pedig sikeresen regisztrál (`docker logs legymernok-gitea-runner` mutatja
-a `Runner registered successfully` sort).
+Put the two resulting tokens into `.env` (`GITEA_ADMIN_TOKEN`, `REGISTRATION_TOKEN`), then run
+`docker compose up -d backend runner` — the backend picks up the Gitea API token, and the
+runner registers successfully (`docker logs legymernok-gitea-runner` shows a `Runner
+registered successfully` line).
 
-Ezzel a teljes stack (Postgres, Gitea, admin fiók, backend↔Gitea integráció,
-Actions runner) egyetlen script/CI job részeként, kattintgatás nélkül felállítható.
-Fontos: a `GITEA_SECRET_KEY`/`GITEA_INTERNAL_TOKEN`/`GITEA_JWT_SECRET`/tokenek csak
-a `.env`-be kerülnek (git-ignored), sosem a verziókezelt `docker-compose.yml`-be.
+With that, the whole stack (Postgres, Gitea, admin account, backend↔Gitea integration, Actions
+runner) can be brought up as part of a script or CI job with zero manual clicking. Note that
+`GITEA_SECRET_KEY`/`GITEA_INTERNAL_TOKEN`/`GITEA_JWT_SECRET`/tokens only ever go into `.env`
+(git-ignored), never into the version-controlled `docker-compose.yml`.
 
 ---
 
-## 🧪 Fejlesztés és Tesztelés
+## Development & testing
 
-### API Tesztelés (Bruno / Swagger)
+### API testing (Bruno / Swagger)
 
-A fejlesztéshez ajánlott a **Bruno** használata, vagy a beépített **Swagger UI**.
+Either **Bruno** or the built-in **Swagger UI** works well for exercising the API during
+development.
 
-- **Swagger UI:** [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html) - Itt kipróbálhatod az összes végpontot.
+- **Swagger UI:** [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html) — try out every endpoint from here.
 
-### Backend Fejlesztés
+### Backend development
 
-A backend mappa egy szabványos Maven projekt.
+Standard Maven project.
 
 - Build: `./mvnw clean install`
-- Futtatás (lokálisan): `./mvnw spring-boot:run`
-- Tesztek: `./mvnw test`
+- Run locally: `./mvnw spring-boot:run`
+- Tests: `./mvnw test`
 
-### Frontend Fejlesztés
+### Frontend development
 
-A frontend mappa egy Vite + React projekt.
+Standard Vite + React project.
 
 - Install: `npm install`
-- Dev Server: `npm run dev`
+- Dev server: `npm run dev`
 
 ---
 
-## 📂 Dokumentációk
+## Further documentation
 
-A `plans` mappában találod a részletes tervezési dokumentumokat:
+The [`plans/`](plans/) directory holds the detailed design docs and planning history:
 
-- [`terv.md`](plans/terv.md) - Részletes roadmap.
-- [`api_spec.md`](plans/api_spec.md) - API specifikáció.
-- [`database_schema.md`](plans/database_schema.md) - Adatbázis terv.
-- [`CHANGELOG.md`](CHANGELOG.md) - Fejlesztési napló.
+- [`terv.md`](plans/terv.md) — roadmap (some sections predate later milestones — treat as historical context more than a current TODO list).
+- [`api_spec.md`](plans/api_spec.md) — API specification.
+- [`database_schema.md`](plans/database_schema.md) — database design.
+- [`CHANGELOG.md`](CHANGELOG.md) — development log.
