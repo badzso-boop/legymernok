@@ -235,6 +235,82 @@ irreleváns, mert a szöveg ugyanaz, csak a duplikált objektum-létrehozást ke
 Mivel ez **statikus, side-effect-mentes függvény**, a `ContentChunkDto` listákat kézzel
 összeállítva, mock nélkül tesztelhető — ld. 8. szakasz tesztterve.
 
+### 4.4 Miért két keresés + RRF — a döntés indoklása (2026-08-25-i egyeztetés alapján)
+
+Ez a szakasz azért került be, mert Norbert megkérdezte, mit csinál pontosan a `TOP_K`, és
+mi az az RRF — a válasz itt van rögzítve, hogy implementáláskor (és bárkinek, aki később
+olvassa ezt a tervet) ne kelljen újra levezetni.
+
+**Miért fut két, teljesen eltérő keresés párhuzamosan?**
+
+- **Vektor-keresés (szemantikus)**: a kérdést is beágyazza egy embedding-vektorrá, és a
+  `content_chunks.content_embedding` oszlopon koszinusz-hasonlóság szerint keres. Megtalálja
+  azt is, ami **jelentésben** hasonló, még ha más szavakkal van megfogalmazva (pl. "hogyan
+  adjak össze két számot" megtalálja azt a chunkot is, ami "summing two integers"-t ír).
+- **Full-text keresés (`ts_rank`)**: a Postgres beépített kulcsszó-keresője. Pontos és gyors
+  ott, ahol a szemantikus keresés "elcsúszhat" — pl. egy konkrét függvénynév vagy egzakt
+  kifejezés (`add(a, b)`) esetén a full-text pontosan megtalálja, míg a vektor-keresés
+  esetleg csak valami hasonlót hoz fel.
+
+Külön-külön mindkettőnek vannak vakfoltjai (a vektor-keresés "elmossa" a pontos egyezéseket,
+a full-text nem érti a parafrázist) — együtt kiegészítik egymást. Ezért van szükség az RRF-re
+is: egy módszer, ami a két, egymással **nem összehasonlítható skálájú** eredménylistát
+(koszinusz-hasonlóság 0-1 között vs. `ts_rank` egy egészen más skálán) egyetlen, közös
+rangsorrá fésüli.
+
+**Mit jelent a `TOP_K`?** Mindkét keresés rangsorolt listát ad vissza. A `TOP_K`
+(`retrieveMissionChunks(query, topK)` paramétere) szabja meg, mindkét listából hány elemet
+engedünk be a fúzióba — ez a tölcsér **bemenete**. Ha túl kicsi, egy chunk, ami az egyik
+listában csak a 8. helyen áll, sosem jut be az összefésülésbe, még akkor sem, ha a másik
+listában elsőként szerepelne.
+
+**Hogyan működik a Reciprocal Rank Fusion?** Nem a nyers pontszámokkal számol (mert azok nem
+összehasonlíthatók), hanem a **helyezésekkel**: `pontszám = 1 / (RRF_K + helyezés)`, ahol
+`RRF_K = 60` egy szabványos, tapasztalati konstans (egy 2009-es kutatási cikkből származik,
+azóta gyakorlatilag mindenhol ezt használják — tompítja a helyezések közti különbséget). Ha
+egy chunk mindkét listában szerepel, a két pontszáma **összeadódik**. Konkrét példa:
+
+| Chunk | Vektor-keresés helyezése | Full-text helyezése | RRF-pontszám |
+|---|---|---|---|
+| A ("add" függvény kódja) | 1. | 3. | 1/61 + 1/63 ≈ **0,0323** |
+| B (leírás, "összeadás" szóval) | 2. | 1. | 1/62 + 1/61 ≈ **0,0325** |
+| C (kevésbé releváns) | 3. | — | 1/63 ≈ **0,0159** |
+| D (más kulcsszó-egyezés) | — | 2. | 1/62 ≈ **0,0161** |
+
+Végső sorrend: **B > A > D > C**. B nyert, pedig egyik listában sem volt önmagában 1.
+helyezett — de mivel **mindkét módszer szerint is jó volt**, az összesített pontszáma
+felülmúlta A-t, ami az egyik listában 1. volt, de a másikban lejjebb csúszott. Ez a lényeg:
+azok a találatok kerülnek előre, amiket mindkét keresési módszer megerősít, nem csak az, ami
+az egyikben véletlenül a csúcsra ugrott.
+
+**A `TOP_K`/`RERANK_KEEP_TOP` a tölcsér két vége**: a `TOP_K` szabja meg, mennyi kerül be a
+"versenybe" (a fúzió elé) — ez a **bemenet**. A `RERANK_KEEP_TOP` (ld. 5. és 10. szakasz)
+szabja meg, az RRF+rerank után végül hány darab kerül ténylegesen a chatbot promptjába — ez
+a **kimenet**.
+
+### 4.5 Alternatívák, amiket megfontoltunk az RRF helyett (miért RRF nyert)
+
+Nem az RRF az egyetlen módja két rangsorolt lista összefésülésének — érdemes tudni, milyen
+más utak léteznek, és miért pont ez lett a választás egy ilyen léptékű projektnél.
+
+| Módszer | Hogyan működik | Miért NEM ezt választottuk |
+|---|---|---|
+| **CombSUM / lineáris pontszám-kombinálás** | A két lista nyers pontszámait (koszinusz-hasonlóság, `ts_rank`) [0,1]-re normalizáljuk (pl. min-max normalizálás a lekérdezett halmazon belül), majd súlyozva összeadjuk: `score = w1*vector_score + w2*fulltext_score`. | A normalizálás **lekérdezésenként** más eredményt adhat (egy adott futás min/max értékei mástól függenek), ami instabillá, nehezen kiszámíthatóvá teszi a rangsort. Az RRF ezt a problémát teljesen kikerüli, mert csak a HELYEZÉSSEL számol, sosem a nyers pontszámmal. |
+| **CombMNZ** | A CombSUM egy változata: a végső pontszámot megszorozza azzal, hány listában szerepelt az adott találat (jobban jutalmazza, ami mindkét listában megjelenik). | Ugyanaz a normalizálási instabilitás, mint a CombSUM-nál, csak egy extra szorzóval — nem old meg semmit, amit az RRF ne oldana meg egyszerűbben. |
+| **Borda count** | Hasonló az RRF-hez, de damping-konstans (a mi `k=60`-unk) nélkül: `pontszám = N - helyezés` (N = lista hossza). | Ebben a formában **túl élesen** különbözteti meg az 1. és 2. helyezettet — egy kis, gyakorlatilag lényegtelen sorrend-eltérés is aránytalanul nagy pontszám-különbséget okoz. A `k=60` konstans pont ezt tompítja az RRF-ben. |
+| **Learning to Rank (LTR)** | Egy gépi tanulásos modellt (pl. gradient boosted trees) tanítunk arra, hogyan súlyozza a jelzéseket, valós relevancia-címkézett adatokon. | Ehhez **relevancia-címkézett tanító adat** kellene (emberi értékelés, mi releváns egy adott kérdésre) — ezen a léptéken (egy oktatási platform belső chatbotja, nem egy nagy keresőmotor) nincs elég adat/erőforrás ehhez, jelentős túlmérnökölés lenne. |
+| **Egyetlen körös reranking, RRF nélkül** | A vektor- és full-text-eredményeket egyszerűen egyesítjük (unió, duplikátum-szűréssel), rangsorolás nélkül, és a **rerank-lépésre bízzuk** a teljes sorrend kialakítását (a rerank amúgy is egy LLM-hívás, ami mindent újraértékel). | Működne, de a rerank-prompt mérete (és költsége/latenciája) nagyobb lenne, mert nem szűrjük előre a legjobb jelölteket egy olcsó, gyors lépéssel (RRF) — az RRF egy szinte ingyenes "előszűrés", mielőtt a drágább LLM-hívás (rerank) egyáltalán lefutna. |
+
+**Miért RRF a végső döntés**: nincs normalizálási bizonytalanság (csak helyezéssel számol),
+nincs tanító adat igénye, nincs paraméter-hangolási teher (a `k=60` egy széles körben
+elfogadott, "csak működik" alapérték — pl. az Elasticsearch, az Azure AI Search és a legtöbb
+nyílt forráskódú RAG-keretrendszer is ezt használja alapértelmezettként hibrid keresésnél),
+és a pure-function jellege miatt triviálisan unit-tesztelhető. Erre a léptékre (egy belső,
+oktatási chatbot, nem egy nagyvállalati keresőmotor) ez a legjobb ár/érték arányú választás —
+de ha később kiderülne, hogy a minőség nem elég jó, a fenti táblázat pontosan megmutatja, mi
+lenne a következő lépés (valószínűleg a CombSUM/súlyozott kombinálás lenne az első próbálkozás,
+mert az igényel legkevesebb új infrastruktúrát).
+
 ## 5. `RerankingService` — teljes metódustábla
 
 | Metódus | Szignatúra | Mit csinál |
@@ -494,23 +570,15 @@ misszió tartalmára (nem csak a csillagrendszer-szintű névre, mint eddig).
 
 ## 10. Nyitott kérdések Norbertnek
 
-1. **`RETRIEVAL_TOP_K` konkrét értéke** — a fő terv csak annyit mond, hogy a
-   `retrieveMissionChunks()` `topK*3`-at hoz le mindkét ágon a RRF-fúzió elé, de a
-   **végső, RRF utáni, rerank-nek átadott jelölt-számot** nem rögzíti konkrét számmal
-   (csak "top ~10 RRF-jelölt" szerepel a fő tervben, hozzávetőlegesen). Javaslat: `topK=5`
-   a `retrieveMissionChunks()`-hoz (a meglévő csillagrendszer-keresés is 3-at használ, ez
-   nagyságrendileg illeszkedik), de ez egyeztetendő — nagyobb szám jobb recall-t adhat,
-   de nagyobb rerank-prompt méretet és hosszabb választ is.
-2. **`RERANK_KEEP_TOP` konkrét értéke** — hasonlóan, a fő terv nem mondja ki explicit,
-   hány chunk kerüljön be VÉGÜL a chat-kontextusba a rerank UTÁN (ez különbözik a
-   rerank-nek átadott jelölt-számtól). Javaslat: 3 (elég kontextus a válaszhoz, de nem
-   dagasztja túl a promptot) — de ez közvetlenül befolyásolja a válaszminőség/
-   promptméret-sebesség egyensúlyt, érdemes együtt eldönteni az 1. ponttal.
-3. **Latencia-hatás, amiről tudnod kell, mielőtt élesíted**: ebben a PR-ban (PR #3
-   streamingje előtt) a rerank egy **szinkron, plusz Ollama-hívás**, ami a MEGLÉVŐ generate-
-   hívás ELŐTT fut le — tehát a felhasználó a válasz ELSŐ karakteréig két egymást követő
-   LLM-hívást vár meg (rerank + generate), nem csak egyet. Ha ez érezhetően lassítja a
-   chatet a saját gépeden mért Ollama-sebességgel, érdemes már itt eldönteni, hogy ez
-   elfogadható-e addig, amíg a PR #3 streamingje élesedik, vagy esetleg a reranking
-   opcionálissá/kikapcsolhatóvá tétele (pl. egy feature flag mögé) jobb átmeneti megoldás
-   lenne.
+1. ~~`RETRIEVAL_TOP_K` konkrét értéke~~ — **ELDÖNTVE (2026-08-25): `TOP_K = 5`**
+   (`retrieveMissionChunks()`-hoz, tehát `topK*3=15` jelölt megy be mindkét ágból az
+   RRF-be). Norbert megerősítette a javaslatot a 4.4 szakaszban leírt indoklás (mit csinál
+   a `TOP_K`, mi az RRF) átbeszélése után.
+2. ~~`RERANK_KEEP_TOP` konkrét értéke~~ — **ELDÖNTVE (2026-08-25): 3.** A rerank UTÁN
+   végül 3 chunk kerül a chat-kontextusba.
+3. ~~Latencia-hatás~~ — **ELDÖNTVE (2026-08-25): elfogadva, nincs szükség külön feature
+   flag-re.** A rerank okozta plusz várakozás (egy második, szinkron Ollama-hívás a
+   generálás előtt, streamelés nélkül) elfogadható, mert az egész `ai_chatbot` feature már
+   amúgy is egy meglévő feature flag mögött van (`/admin/feature-flags`) — nem indokolt egy
+   újabb, belső flag-et bevezetni csak a reranking be/ki kapcsolásához. Ha a PR #3
+   streamingje élesedik, ez a kérdés amúgy is okafogyottá válik.
