@@ -480,3 +480,9 @@ ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
   widgetben; a golden set feltöltése + a "Futtatás" gomb kipróbálása az `/admin/eval` oldalon, és
   az eredmény-táblázat screenshotolása/megosztása (ez lehet a LinkedIn-poszt konkrét
   "bizonyítéka").
+- **Kifejezetten kiemelve (2026-08-25, Norbi kérésére) — `extractAction()` prompt-minőség
+  (PR #3)**: a `plans/pr3_streaming_architecture_2026.md` 8.3 szakaszában megtervezett,
+  `format:"json"` alapú akció-kinyerő prompt egy első tervezet, NEM tesztelt élő modellel —
+  élő Ollamával mindenképp ki kell próbálni, hogy tényleg jó minőségű, parse-olható JSON-t
+  ad-e vissza (pl. egy `STAR_SYSTEM_CREATE` oldalon egy olyan üzenetre, ami form-kitöltést
+  kér), mielőtt a PR #3 készre jelentődik.

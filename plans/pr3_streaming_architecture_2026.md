@@ -240,9 +240,45 @@ private static final Set<String> FORM_FILLABLE_PAGE_TYPES = Set.of(
 
 ### 8.2 `streamChat()` — a teljes kör
 
+**2026-08-25-i pontosítás — timeout konfigurálhatóvá téve, és csak egy aktív stream
+engedélyezett felhasználónként** (Norbert döntése, ld. 14. szakasz):
+
+```java
+// ChatService mezői közé:
+@Value("${chat.stream.timeout-ms:300000}")
+private long streamTimeoutMs;
+
+private final Map<String, SseEmitter> activeStreamsByUsername = new ConcurrentHashMap<>();
+```
+
+`application.properties`-be (a meglévő `ai.service.url=http://ai-service:8081` mintáját
+követve, ugyanabban a fájlban):
+
+```properties
+chat.stream.timeout-ms=${CHAT_STREAM_TIMEOUT_MS:300000}
+```
+
+Alapérték **300 000 ms (5 perc)** a korábban feltételezett 120 másodperc helyett — Norbert
+kérésére megnöveltük, mert lassabb helyi modelleknél a 120s szűknek bizonyulhat, és mivel
+mostantól env-változóval (`CHAT_STREAM_TIMEOUT_MS`) felülírható, élesben bármikor
+finomhangolható újraépítés nélkül.
+
 ```java
 public SseEmitter streamChat(String message, ChatContextDto context, String username) {
-    SseEmitter emitter = new SseEmitter(120_000L); // 120s — ld. 12. Nyitott kérdés
+    // Csak egy aktív stream engedélyezett felhasználónként — ha már fut egy korábbi,
+    // azt lezárjuk (nem elutasítjuk az újat), hogy egy elfeledett/beragadt tab ne
+    // blokkolja a felhasználó következő kérdését, és ne fusson feleslegesen két
+    // párhuzamos Ollama-hívás ugyanannak a usernek.
+    SseEmitter previous = activeStreamsByUsername.remove(username);
+    if (previous != null) {
+        previous.complete();
+    }
+
+    SseEmitter emitter = new SseEmitter(streamTimeoutMs);
+    activeStreamsByUsername.put(username, emitter);
+    emitter.onCompletion(() -> activeStreamsByUsername.remove(username, emitter));
+    emitter.onTimeout(() -> activeStreamsByUsername.remove(username, emitter));
+    emitter.onError(e -> activeStreamsByUsername.remove(username, emitter));
 
     chatStreamExecutor.execute(() -> {
         try {
@@ -496,6 +532,8 @@ classDiagram
         -HybridRetrievalService hybridRetrievalService
         -StarSystemService starSystemService
         -ExecutorService chatStreamExecutor
+        -long streamTimeoutMs
+        -Map~String,SseEmitter~ activeStreamsByUsername
         +streamChat(String message, ChatContextDto context, String username) SseEmitter
         -extractAction(String assistantResponse, ChatContextDto context) ChatAction
         -buildContextLines(...) List~String~
@@ -616,22 +654,19 @@ ellenőrizve, hogy a tokenek folyamatosan, nem "egyszerre kupacban" jelennek-e m
 
 ## 14. Nyitott kérdés Norbertnek
 
-1. **`SseEmitter` timeout (jelenleg 120 000 ms feltételezve)** — ezt csak élő Ollama-teszttel
-   lehet ténylegesen belőni, a saját modell sebességétől függ. A fő terv is ezt Norbi kézi
-   feladataként jelöli — itt csak megerősítjük, hogy ez tényleg nyitott.
-2. **Kapcsolat-megszakadás kezelése**: ha a felhasználó bezárja a böngészőlapot/tabot
-   streamelés közben, vagy megszakad a hálózat, a szerver oldalon ez egy `IOException`-t
-   dob `emitter.send()`-nél (a fenti `sendSafely()` ezt csendben logolja, nem hibáztat) —
-   DE nincs semmilyen "folytasd onnan, ahol abbamaradt" mechanizmus, ha a felhasználó
-   visszatér. Kell-e ilyen resume-funkció, vagy elfogadható, hogy egy megszakadt válasz
-   egyszerűen elveszik, és a felhasználónak újra kell küldenie az üzenetet?
-3. **`extractAction()` prompt szövege (8.3 szakasz) egy első tervezet, NEM tesztelt élő
-   modellel** — a JSON-kinyerés megbízhatósága (hogy a modell tényleg jó minőségű,
-   parse-olható JSON-t ad vissza a kért formában) csak élő iterációval dönthető el, ez
-   architektúra-tervben nem rögzíthető biztosra. Számíts rá, hogy ezt a promptot
-   implementáció közben, élő teszteléssel finomítani kell.
-4. **Egyidejű üzenetküldés**: ha a felhasználó (elméletileg, a `loading` guard megkerülésével,
-   vagy több böngészőfülben) egyszerre két streamelést indítana, nincs a tervben semmilyen
-   "az előző stream-et szakítsd meg" logika — jelenleg mindkettő egymástól függetlenül,
-   párhuzamosan futna le a `chatStreamExecutor`-on. Ez elfogadható a jelenlegi léptéken,
-   vagy legyen egy explicit "csak egy aktív stream userenként" korlátozás?
+1. ~~`SseEmitter` timeout~~ — **ELDÖNTVE (2026-08-25): megnövelve 300 000 ms-re (5 perc),
+   ÉS konfigurálhatóvá téve** (`chat.stream.timeout-ms` / `CHAT_STREAM_TIMEOUT_MS` env-
+   változó, ld. 8.2 szakasz) — nem kell hozzá újrafordítás, ha élesben módosítani kell.
+2. ~~Kapcsolat-megszakadás kezelése~~ — **ELDÖNTVE (2026-08-25): NINCS resume-funkció
+   ebben a körben.** Ha megszakad a stream, a válasz elvész, a felhasználónak újra kell
+   küldenie az üzenetet — ez elfogadható, a "folytasd onnan, ahol abbamaradt" esetleg egy
+   jövőbeli, külön kör tárgya lehet, ha valaha tényleg felmerül rá igény.
+3. **MÉG NYITOTT — `extractAction()` prompt szövege (8.3 szakasz) egy első tervezet, NEM
+   tesztelt élő modellel.** A JSON-kinyerés megbízhatósága csak élő iterációval dönthető
+   el. **Norbert kérésére ez explicit bekerül a PR leírásának kézi teszt-listájába is**,
+   hogy implementáció után ne maradjon ki a tesztelésből — ld. `ai_chatbot_upgrade_2026.md`
+   "Ellenőrzés / verifikáció összefoglalva" szakasza, ahova ez a tétel bekerül.
+4. ~~Egyidejű üzenetküldés~~ — **ELDÖNTVE (2026-08-25): igen, legyen "csak egy aktív
+   stream/felhasználó" korlátozás.** Norbert indoklása: erőforrás-spórolás — implementáció
+   ld. 8.2 szakasz (`activeStreamsByUsername` map, az új stream indulásakor a régi
+   emitter lezárva, NEM elutasítva az újat).
