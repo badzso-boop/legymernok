@@ -766,8 +766,9 @@ soronkénti `eval_progress` sorokat, ahogy a futás a háttérben halad.
    `DELETE /api/admin/eval/runs/{id}` (`eval:write`), `RUNNING` státuszú run-t nem lehet
    törölni (`409 Conflict`, ld. 6.1 szakasz), a frontend törlés-ikonnal + megerősítő
    dialógussal a "Korábbi futások" listában (7. szakasz).
-4. **`STAR_SYSTEM` mint `expected_source_type`** — én vezettem be ezt az értéket a CHECK-
-   constraint-be (a fő terv nem sorolja fel explicit az `expected_source_type` lehetséges
-   értékeit), mert enélkül a golden set nem tudna a RÉGI, csillagrendszer-szintű flat
-   embedding retrieval-útvonalra vonatkozó teszteket tartalmazni, csak a PR #1-es
-   misszió-chunk retrieval-re. Egyetértesz ezzel a bővítéssel?
+4. ~~`STAR_SYSTEM` mint `expected_source_type`~~ — **JÓVÁHAGYVA (2026-08-25).** Marad a
+   4-elemű CHECK-constraint (`STAR_SYSTEM`, `MISSION`, `MISSION_FILL_IN_BLANK`,
+   `MISSION_CODE_FILE`), hogy a golden set mindkét retrieval-útvonalat (régi
+   csillagrendszer-keresés + PR #1-es misszió-chunk keresés) le tudja fedni.
+
+**Ezzel a PR #4 összes nyitott kérdése lezárva (2026-08-25).**
