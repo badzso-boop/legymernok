@@ -20,7 +20,11 @@ backend/src/main/java/com/legymernok/backend/
 ├── repository/eval/
 │   ├── EvalGoldenEntryRepository.java  (ÚJ, JpaRepository)
 │   ├── EvalRunRepository.java          (ÚJ, JpaRepository)
-│   └── EvalRunResultRepository.java    (ÚJ, JpaRepository)
+│   └── EvalRunResultRepository.java    (ÚJ, JpaRepository — + egy `@Modifying @Query`
+│       metódus: `void updateLlmJudgeScore(UUID runId, UUID goldenEntryId, double score)`,
+│       mert a `runLlmJudge()` (5.2 szakasz) egy MÁR elmentett `EvalRunResult` sort frissít
+│       utólag, nem egy új sort szúr be — a determinisztikus hit-rate-mentés (5.1, 3. lépés)
+│       és a judge-pontszám mentése két külön időpontban történik)
 ├── dto/eval/
 │   ├── CreateGoldenEntryRequest.java
 │   ├── EvalGoldenEntryResponse.java
@@ -85,7 +89,10 @@ CREATE TABLE eval_run_results (
     hit_at_5         BOOLEAN NOT NULL,
     top_result_name  VARCHAR(255),
     latency_ms       INT NOT NULL,
-    CONSTRAINT eval_run_results_unique UNIQUE (run_id, golden_entry_id)
+    llm_judge_score  DOUBLE PRECISION,
+    CONSTRAINT eval_run_results_unique UNIQUE (run_id, golden_entry_id),
+    CONSTRAINT eval_run_results_llm_judge_score_range
+        CHECK (llm_judge_score IS NULL OR llm_judge_score BETWEEN 0 AND 10)
 );
 
 CREATE INDEX idx_eval_run_results_run_id ON eval_run_results (run_id);
@@ -105,6 +112,11 @@ CREATE INDEX idx_eval_run_results_run_id ON eval_run_results (run_id);
   eredmény összehasonlíthatóságát két futás között).
 - `eval_run_results_unique` — egy golden entry egy run-on belül csak egyszer szerepelhet
   (véd egy esetleges hibás, kétszer-lefuttatott ciklus ellen).
+- `eval_run_results.llm_judge_score` — **ELDÖNTVE Norberttel (2026-08-25)**: az LLM-judge
+  KIZÁRÓLAG a retrieveelt (top eredmény) chunkok relevanciáját ítéli meg a kérdéshez képest
+  (NEM a teljes generált választ), 0-10 skálán, ugyanazzal a promptmintával, mint a PR #2
+  reranking-je. `NULL`, ha az adott futásnál nem volt bekapcsolva a judge
+  (`eval_runs.llm_judge_used = false`) vagy ha `llmJudge=false` paraméterrel futott.
 
 ## 3. Permission-seed (`DataInitializer.java`)
 
@@ -182,6 +194,8 @@ public class EvalRunResult {
     private String topResultName;
     @Column(name = "latency_ms", nullable = false)
     private int latencyMs;
+    @Column(name = "llm_judge_score")
+    private Double llmJudgeScore;  // 0-10, NULL ha nem volt bekapcsolva a judge
 }
 ```
 
@@ -279,13 +293,49 @@ PR #2 hibrid retrieval-jénél; egy pontos szó-egyezés túl törékeny lenne e
 rendszer eval-jéhez, ahol a cél a "megtalálta-e a releváns forrást", nem a szó szerinti
 egyezés.)
 
-### 5.2 Az LLM-judge lépés — **NYITOTT KÉRDÉS, nem specifikálható a fő tervből**
+### 5.2 Az LLM-judge lépés — **ELDÖNTVE Norberttel (2026-08-25)**
 
-A fő terv csak ennyit mond: *"Opcionális LLM-judge lépés (checkbox a UI-n) — újrahasznosítja
-a PR #2 `AiServiceClient.generateJson()`-t, nincs hozzá új infrastruktúra."* — ez NEM elég
-információ ahhoz, hogy a `runLlmJudge()` metódust pontosan megtervezzem, és a hiányzó
-részletek **DB-séma-kérdést** is felvetnek (ld. lent). Nem találgatok tovább, ld. a 9.
-szakasz nyitott kérdéseit.
+A fő terv csak ennyit mondott: *"Opcionális LLM-judge lépés (checkbox a UI-n) —
+újrahasznosítja a PR #2 `AiServiceClient.generateJson()`-t, nincs hozzá új
+infrastruktúra."* Norbert pontosította: **kizárólag a retrieveelt (top) chunkok
+relevanciáját ítéli meg a kérdéshez képest**, 0-10 skálán — NEM a teljes generált választ
+(ahhoz egy "ideális válasz" referencia-mező kellene a golden setben, ami most nincs
+megtervezve, külön kör lenne).
+
+```
+runLlmJudge(entry, results):
+    if results.isEmpty():
+        return   # nincs mit megítélni, a llm_judge_score NULL marad ennél a sornál
+
+    topResult = results.get(0)   # csak a #1 találatot ítéli meg — ugyanaz a lépték,
+                                  # mint a hit@3/hit@5 (a "legjobbnak vélt" eredmény minőségét
+                                  # nézzük, nem az összes visszaadott chunkot egyenként)
+
+    prompt = """
+    Kérdés: "{entry.getQuery()}"
+    Talált szövegrészlet: "{topResult.getChunkText()}"
+
+    0-10 skálán, mennyire releváns ez a szövegrészlet a kérdés megválaszolásához?
+    Csak egy JSON objektumot adj vissza: {"score": <szám 0 és 10 között>}
+    """
+    result = aiServiceClient.generateJson(prompt, null)   # ugyanaz a hívás-forma, mint a
+                                                            # PR #2 RerankingService-ében
+    if not result.success():
+        log.warn("LLM-judge hívás sikertelen, entry={}, score NULL marad", entry.getId())
+        return
+
+    score = parseScoreOrNull(result.raw())   # ObjectMapper, hibatűrő parse — sikertelen
+                                              # parse esetén is NULL marad, nem dob kivételt
+    if score != null:
+        evalRunResultRepository.updateLlmJudgeScore(run.getId(), entry.getId(), score)
+```
+
+**Fontos, indoklással**: a judge-hívás **entry-nkénti, szinkron, plusz LLM-hívás** — ha
+`llmJudge=true`, a teljes `runEval()` futásideje kb. **megduplázódik** (minden golden
+entry-nél egy plusz Ollama-hívás a retrieval mellett). Ez az oka, hogy ez explicit
+opcionális (checkbox), NEM az alapértelmezett viselkedés — a hit-rate@3/@5 önmagában is
+egy teljesen működő, gyors mérőszám, a judge csak egy mélyebb, drágább kiegészítés, amikor
+tényleg minőségi visszajelzés kell, nem csak "megtalálta-e".
 
 ## 6. `EvalController` — végpontok
 
@@ -530,15 +580,10 @@ sequenceDiagram
 
 ## 12. Nyitott kérdések Norbertnek
 
-1. **Az LLM-judge lépés pontos viselkedése tisztázatlan** (ld. 5.2 szakasz) — a fő terv csak
-   annyit mond, hogy "újrahasznosítja a `generateJson()`-t", de nem specifikálja: (a) MIT
-   ítél meg az LLM — a retrieveelt chunkok relevanciáját a kérdéshez képest, vagy egy teljes
-   generált válasz minőségét? (b) milyen skálán (0-10 pontszám, mint a rerankingnél, vagy
-   igen/nem)? (c) **hova mentődik az eredménye** — a jelenlegi `eval_run_results` séma
-   (`hit_at_3`/`hit_at_5`/`top_result_name`/`latency_ms`) NEM tartalmaz erre mezőt, tehát
-   vagy egy új oszlopot kell hozzáadni (pl. `llm_judge_score FLOAT`), vagy külön táblát
-   kell nyitni. Ezt nem tudom kitalálni a fő tervből — kérlek pontosítsd, mielőtt a `V11`
-   migráció végleges lesz.
+1. ~~Az LLM-judge lépés pontos viselkedése~~ — **ELDÖNTVE (2026-08-25)**: kizárólag a
+   retrieveelt (top) chunkok relevanciáját ítéli meg a kérdéshez képest (NEM a teljes
+   generált választ), 0-10 skálán, `llm_judge_score DOUBLE PRECISION` oszlop az
+   `eval_run_results`-ban (NULL, ha nem volt bekapcsolva). Részletek: 2. és 5.2 szakasz.
 2. **A golden-set méretének felső korlátja** — a fő terv szerint "15-20 golden entry-nél ez
    néhány másodperc, nem indokol async/polling bonyodalmat", és a `runEval()` terve ennek
    megfelelően **szinkron, blokkoló** HTTP-hívás. Ha a golden set idővel jelentősen nő (pl.
