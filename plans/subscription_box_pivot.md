@@ -1,49 +1,51 @@
-# LegyMernok.hu - Finomított Pivot Stratégia (2026)
+# LegyMernok.hu - Refined Pivot Strategy (2026)
 
-## 1. Technikai és Gyártási Alapok
-*Fókusz: Skálázhatóság és egyszerűség.*
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-06-20 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-### Gyártás (3D helyett Karton)
-- [ ] **Prototípus:** 3D nyomtatás csak a prototípushoz és az univerzális "Power Module" belső vázához.
-- [ ] **Sorozatgyártás:** 
-    * A külső vázak (Oroszlán, Robot, stb.) 250-300g-os kartonból készülnek.
-    * A gyerekek ragasztópisztollyal vagy kétoldalú ragasztóval szerelik össze (DIY élmény).
-    * Ez 100+ darabnál is gyorsan előállítható egy vágógéppel (pl. Cricut) vagy lézerrel.
+## 1. Technical and manufacturing foundations
+*Focus: scalability and simplicity.*
 
-### Árazás és Margin (Becsült)
-- [ ] **Célár:** 7.990 Ft / hó (Hűségidővel: 6.990 Ft).
-- [ ] **Cél:** Minimum 3.500 - 4.000 Ft bruttó profit / doboz az adók és rezsi után.
+### Manufacturing (cardboard instead of 3D printing)
+- [ ] **Prototype:** 3D printing only for the prototype and the universal "Power Module" internal frame.
+- [ ] **Series production:**
+    * The outer shells (Lion, Robot, etc.) are made of 250-300g cardboard.
+    * Kids assemble them with a glue gun or double-sided tape (DIY experience).
+    * This can be produced quickly even at 100+ units with a cutting machine (e.g. Cricut) or a laser.
 
----
-
-## 2. A 6 Hónapos Tanulási Ív (Curriculum)
-*Hogy ne mondják le az előfizetést.*
-
-1. **Hónap:** *Az áramkör lelke* - Egyszerű zárt áramkör, LED, elem, kapcsoló (Oroszlán).
-2. **Hónap:** *Vezetők és szigetelők* - Ismerkedés az anyagokkal, grafitos ceruzával rajzolt áramkör.
-3. **Hónap:** *Ellenállás és fényerő* - Ohm törvénye gyakorlatban, szabályozható lámpa.
-4. **Hónap:** *Párhuzamos kapcsolás* - Egy autó két fényszóróval (ha az egyik kiég, a másik világít).
-5. **Hónap:** *Érzékelés* - Fényérzékeny ellenállás (LDR) használata, sötétedő lámpa.
-6. **Hónap:** *Mozgás* - Rezgőmotoros "Bogár-robot" építése.
+### Pricing and margin (estimated)
+- [ ] **Target price:** 7,990 HUF/month (with a commitment period: 6,990 HUF).
+- [ ] **Goal:** at least 3,500-4,000 HUF gross profit per box after taxes and overhead.
 
 ---
 
-## 3. Jogi és Biztonsági Kockázatok
-*Ezeket kötelező feltüntetni és kezelni.*
+## 2. The 6-month learning arc (curriculum)
+*So subscribers don't cancel.*
 
-- [ ] **Fulladásveszély:** Apró alkatrészek (LED-ek, ellenállások).
-- [ ] **Gombelem (CR2032):** Rendkívül veszélyes lenyelve! 
-    * *Megoldás:* A tápmodul házát úgy kell tervezni, hogy az elemrekesz csak szerszámmal (vagy erős fizikai behatással) legyen nyitható.
-- [ ] **CE Jelölés:** Mivel oktatási csomagnak minősül, meg kell felelni a biztonsági előírásoknak.
-- [ ] **Korhatár:** Hivatalosan 14+ év ajánlott, vagy "Szülői felügyelet mellett 8 éves kortól".
-- [ ] **Vállalkozás:** Számlaképesség (EV) és a "Csomagküldő kereskedelem" bejelentése a helyi jegyzőnél.
+1. **Month:** *The soul of the circuit* - simple closed circuit, LED, battery, switch (Lion).
+2. **Month:** *Conductors and insulators* - getting to know materials, a circuit drawn with a graphite pencil.
+3. **Month:** *Resistance and brightness* - Ohm's law in practice, a dimmable lamp.
+4. **Month:** *Parallel wiring* - a car with two headlights (if one burns out, the other still lights up).
+5. **Month:** *Sensing* - using a light-dependent resistor (LDR), a lamp that turns on in the dark.
+6. **Month:** *Motion* - building a vibration-motor "bug robot".
 
 ---
 
-## 4. Marketing és Time-Management
-- [ ] **Batch Processing:** 
-    * Hétfő/Kedd: Tartalomgyártás (TikTok/Reels).
-    * Szerda: Backend/Frontend fejlesztés.
-    * Csütörtök: Tervezés/Prototípus.
-    * Péntek: Adminisztráció és jogi utánajárás.
-- [ ] **Személyes Márka:** Az arcod adja el a terméket. Te vagy a "Mérnök Mentor".
+## 3. Legal and safety risks
+*These must be disclosed and managed.*
+
+- [ ] **Choking hazard:** small components (LEDs, resistors).
+- [ ] **Coin cell battery (CR2032):** extremely dangerous if swallowed!
+    * *Solution:* the power module's housing must be designed so the battery compartment can only be opened with a tool (or significant physical force).
+- [ ] **CE marking:** since this qualifies as an educational kit, it must meet the relevant safety regulations.
+- [ ] **Age rating:** officially recommended for 14+, or "from age 8 with parental supervision."
+- [ ] **Business registration:** invoicing capability (sole trader) and registering "mail-order retail" with the local municipal clerk.
+
+---
+
+## 4. Marketing and time management
+- [ ] **Batch processing:**
+    * Monday/Tuesday: content production (TikTok/Reels).
+    * Wednesday: backend/frontend development.
+    * Thursday: design/prototyping.
+    * Friday: administration and legal research.
+- [ ] **Personal brand:** your face sells the product. You are the "Engineer Mentor."

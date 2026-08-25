@@ -1,65 +1,67 @@
-# Mobile-Friendly Platform — Tervezési Dokumentum
+# Mobile-Friendly Platform — Design Document
 
-## Vízió
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-04-14 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-A LégyMérnök.hu célja egy TikTok-helyettesítő tanulási platform, ahol a felhasználó rövid, 3–5 perces sessionökben tanul programozást, matematikát, fizikát és más tudományokat. A platform mobilon is teljesen használható, a tanulás lépésenként épül fel: olvas → gyakorol → csinál → ellenőriz.
+## Vision
 
----
-
-## Jelenlegi helyzet és hiányosságok
-
-- A meglévő CODING mission Monaco Editort használ, ami mobilon használhatatlan
-- Nincs "olvasnivaló" mission típus — a tananyag szöveg nem jelenik meg strukturáltan
-- Nincs fill-in-blank interakció
-- A CODING mission user oldala nincs kész: nincs fájl létrehozás, törlés, teljes flow hiányzik
-- A missziók egymástól független egységek, nem lehet őket logikai csoportba fűzni
-- Nincs mobilbarát kódolási alternatíva kezdőknek
-- Admin oldal: StarSystemEdit-ből nem lehet közvetlenül missionre navigálni
-- Admin oldal: direkt axios hívások az `api/client.ts` helyett, hardkódolt URL-ek
+LégyMérnök.hu aims to be a TikTok-style learning platform where users learn programming, math, physics, and other sciences in short, 3–5 minute sessions. The platform is fully usable on mobile, and learning builds step by step: read → practice → do → check.
 
 ---
 
-## Stage 1 — Tartalom és interakció (új branch, main-ről)
+## Current state and gaps
 
-### Mission Group koncepció
+- The existing CODING mission uses the Monaco Editor, which is unusable on mobile
+- There's no "reading" mission type — course text isn't rendered in a structured way
+- There's no fill-in-the-blank interaction
+- The user-facing side of CODING missions isn't finished: no file creation/deletion, the full flow is missing
+- Missions are independent units — they can't be grouped into a logical sequence
+- There's no mobile-friendly coding alternative for beginners
+- Admin side: you can't navigate directly from StarSystemEdit to a mission
+- Admin side: direct axios calls instead of using `api/client.ts`, hardcoded URLs
 
-A missziók **csoportosíthatók** lesznek. Az admin létrehoz egy Mission Groupot (pl. "JavaScript Változók"), és belerak több al-missziót meghatározott sorrendben. A user szemszögéből ez **egyetlen nagy misszió**, belül lapozható al-lépésekkel. A háttérben minden al-misszió külön entitás.
+---
 
-**Példa felépítés:**
+## Stage 1 — Content and interaction (new branch off main)
+
+### Mission Group concept
+
+Missions will be **groupable**. The admin creates a Mission Group (e.g. "JavaScript Variables") and adds several sub-missions to it in a defined order. From the user's perspective this is **one large mission**, with sub-steps you can page through internally. Under the hood, every sub-mission is still a separate entity.
+
+**Example structure:**
 ```
-[Mission Group] JavaScript Változók
-  ├── [CONTENT]       Változók leírása (let, var, const)
-  ├── [FILL_IN_BLANK] Egészítsd ki a mondatokat
-  └── [QUIZ]          Rövid ellenőrző kvíz
+[Mission Group] JavaScript Variables
+  ├── [CONTENT]       Description of variables (let, var, const)
+  ├── [FILL_IN_BLANK] Fill in the sentences
+  └── [QUIZ]          Short check-in quiz
 ```
 
 ---
 
-### Sorrend kezelés szabályai (EGYSÉGESÍTVE)
+### Ordering rules (UNIFIED)
 
-A Star Systemen belül minden elem (legyen az standalone mission vagy mission group) egy közös `orderIndex` alapján rendeződik.
+Within a Star System, every item (whether a standalone mission or a mission group) is ordered by a shared `orderIndex`.
 
-- **Standalone Mission**: Az `orderIndex` határozza meg a helyét a Star System listájában. `groupId` = NULL.
-- **Mission Group**: Az `orderIndex` határozza meg a csoport helyét a listában.
-- **Mission a Group-ban**: `groupId` NOT NULL. A sorrendet a csoporton belül a `groupOrder` mező határozza meg. Az `orderIndex` ilyenkor NULL.
+- **Standalone Mission**: `orderIndex` determines its place in the Star System's list. `groupId` = NULL.
+- **Mission Group**: `orderIndex` determines the group's place in the list.
+- **Mission inside a Group**: `groupId` NOT NULL. Its order within the group is determined by `groupOrder`. `orderIndex` is NULL in this case.
 
-**Megjelenítés:**
-A backend egyetlen rendezett `items[]` tömbben adja vissza a star system tartalmát — groups és standalone missionök vegyesen, `orderIndex` szerint rendezve, `type: "GROUP" | "MISSION"` discriminatorral. A frontendnek nem kell merge logikát implementálnia.
+**Rendering:**
+The backend returns the Star System's content as a single, sorted `items[]` array — groups and standalone missions mixed together, sorted by `orderIndex`, with a `type: "GROUP" | "MISSION"` discriminator. The frontend doesn't need to implement any merge logic.
 
 ---
 
-### Új mission típusok
+### New mission types
 
 #### CONTENT mission
-- Az admin egy nagy markdown textareában írja a tartalmat
-- Frontend élő preview-val rendereli a markdownt
-- A user csak olvassa — nincs interakció, "Következő" gomb visz tovább
-- Képeket, kódblokkokat, táblázatokat is támogat
-- **Lehet standalone misszió is** — route: `/play/content/:id`
+- The admin writes the content in one large markdown textarea
+- The frontend renders the markdown with a live preview
+- The user only reads — no interaction, a "Next" button moves them forward
+- Supports images, code blocks, and tables
+- **Can also be a standalone mission** — route: `/play/content/:id`
 
-**Content pagination (hosszú tartalom kezelése):**
+**Content pagination (handling long content):**
 
-A `content` TEXT mező akár több száz sort is tartalmazhat. Egyszerre az egész betöltése pazarló és lassú mobilon. A backend 100 soros oldalakra osztja a tartalmat.
+The `content` TEXT field can hold several hundred lines. Loading it all at once is wasteful and slow on mobile. The backend splits the content into 100-line pages.
 
 Backend endpoint: `GET /api/missions/{id}/content?page=0&size=100`
 
@@ -67,8 +69,8 @@ Backend endpoint: `GET /api/missions/{id}/content?page=0&size=100`
 // Response 200
 {
   "missionId": "uuid",
-  "missionName": "Változók leírása",
-  "content": "## Bevezetés\n\nA változók...",
+  "missionName": "Description of variables",
+  "content": "## Introduction\n\nVariables...",
   "page": 0,
   "pageSize": 100,
   "totalLines": 247,
@@ -78,458 +80,458 @@ Backend endpoint: `GET /api/missions/{id}/content?page=0&size=100`
 }
 ```
 
-**Backend paginálási logika:**
-1. Betölti a teljes `content` TEXT mezőt az adatbázisból
-2. `String[] lines = content.split("\n", -1)` — `-1` flaggel az üres sorok megmaradnak
+**Backend pagination logic:**
+1. Loads the full `content` TEXT field from the database
+2. `String[] lines = content.split("\n", -1)` — with the `-1` flag empty lines are preserved
 3. `totalPages = (int) Math.ceil((double) lines.length / pageSize)`
-4. Adott oldal: `Arrays.copyOfRange(lines, page * pageSize, Math.min((page + 1) * pageSize, lines.length))`
-5. Összefűzi: `String.join("\n", slice)` → visszaadja
+4. Given page: `Arrays.copyOfRange(lines, page * pageSize, Math.min((page + 1) * pageSize, lines.length))`
+5. Joins it back: `String.join("\n", slice)` → returns it
 
-**Megjegyzés:** MVP korlát — ha egy code block vagy táblázat a 100. sornál vágódik szét, a frontend markdown rendererben törött lehet a blokk. A "Load More" összefűzés után regenerálódik. Stage 2-ban javítható okosabb törési logikával.
+**Note:** MVP limitation — if a code block or table gets cut at line 100, the frontend markdown renderer may show a broken block. It re-renders correctly once "Load More" has concatenated the rest. Can be improved in Stage 2 with smarter break logic.
 
-**Frontend ContentMissionView logika:**
+**Frontend ContentMissionView logic:**
 ```typescript
 const [loadedContent, setLoadedContent] = useState<string>("");
 const [currentPage, setCurrentPage] = useState<number>(0);
 const [hasMore, setHasMore] = useState<boolean>(false);
 const [loadingMore, setLoadingMore] = useState<boolean>(false);
 
-// Első betöltés: fetchPage(0) → setLoadedContent(resp.content), setHasMore(resp.hasNextPage)
-// "Load More" kattintás: fetchPage(currentPage + 1) →
+// Initial load: fetchPage(0) → setLoadedContent(resp.content), setHasMore(resp.hasNextPage)
+// "Load More" click: fetchPage(currentPage + 1) →
 //   setLoadedContent(prev => prev + "\n" + resp.content)
 //   setCurrentPage(p => p + 1)
 //   setHasMore(resp.hasNextPage)
-// A react-markdown az összefűzött loadedContent-et rendereli
-// "Load More" gomb csak ha hasMore === true
-// "Következő" gomb viselkedése: ld. alább (standalone vs. group mode)
+// react-markdown renders the concatenated loadedContent
+// "Load More" button only shown if hasMore === true
+// "Next" button behavior: see below (standalone vs. group mode)
 ```
 
 **ContentMissionView — standalone vs. group mode:**
 
-A `ContentMissionView` kétféle kontextusban jelenik meg — ezt a komponens egy `onComplete?: () => void` opcionális prop-on keresztül kezeli:
+`ContentMissionView` appears in two different contexts — handled via an optional `onComplete?: () => void` prop:
 
-- **Group mode** (`onComplete` prop megadva): a "Következő" gomb megnyomásakor `onComplete()` hívódik → a Group Player elvégzi a `complete-step` API hívást és a következő al-missziót tölti be. A "Következő" gomb **mindig aktív** (az olvasó dönt, nem kell minden oldalt betölteni).
+- **Group mode** (`onComplete` prop provided): pressing "Next" calls `onComplete()` → the Group Player performs the `complete-step` API call and loads the next sub-mission. The "Next" button is **always enabled** (the reader decides — not every page has to be loaded first).
 
-- **Standalone mode** (`onComplete` prop nincs): a komponens `missionId` és `starSystemId` prop-ot kap. A "Következő" gomb megnyomásakor:
-  1. `GET /api/star-systems/{starSystemId}/with-missions` — betölti a star system items tömbjét (vagy ez már megvan a navigation state-ben)
-  2. Megkeresi az aktuális `missionId`-hez tartozó `orderIndex`-et
-  3. Megkeresi a következő standalone mission-t (`orderIndex > aktuális`, `type: "MISSION"`)
-  4. Ha van → `navigate("/play/content/{nextMissionId}")` (vagy a típusától függő route-ra)
-  5. Ha nincs több elem → **Teljesítés képernyő**: "Megvizsgáltad az összes anyagot ebben a csillagrendszerben!" felirat + "Vissza a csillagrendszerhez" gomb (`navigate("/star-systems/{starSystemId}")`)
+- **Standalone mode** (no `onComplete` prop): the component receives `missionId` and `starSystemId` props. Pressing "Next":
+  1. `GET /api/star-systems/{starSystemId}/with-missions` — loads the star system's items array (or this may already be available in navigation state)
+  2. Finds the `orderIndex` for the current `missionId`
+  3. Finds the next standalone mission (`orderIndex > current`, `type: "MISSION"`)
+  4. If found → `navigate("/play/content/{nextMissionId}")` (or the route matching its type)
+  5. If no more items → **Completion screen**: "You've explored all content in this star system!" + a "Back to star system" button (`navigate("/star-systems/{starSystemId}")`)
 
-  > **MVP egyszerűsítés**: A standalone CONTENT misszión a "következő" navigáció csak akkor müxik ha a star system már be van töltve (pl. a `navigation state`-ben átadva). Ha nem, csak a "Vissza" gomb jelenik meg.
+  > **MVP simplification**: on a standalone CONTENT mission, "next" navigation only works if the star system has already been loaded (e.g. passed via `navigation state`). If not, only the "Back" button is shown.
 
 ---
 
 #### FILL_IN_BLANK mission
 
-- **Csak group-ban lehet** — standalone FILL_IN_BLANK nem megengedett
-- A backend 400-at ad vissza ha a mission-nek nincs `groupId`-ja mentéskor
+- **Group-only** — a standalone FILL_IN_BLANK is not allowed
+- The backend returns 400 if the mission has no `groupId` at save time
 
-**Fill-in-blank adatmodellje: saját entitások, nem JSON TEXT**
+**Fill-in-blank data model: dedicated entities, not JSON TEXT**
 
-A fill-in-blank tartalom külön entitásokban tárolódik. Ez biztosítja:
-- A `isCorrect` mező **szerkezetileg lehetetlen** user-facing DTO-ba kerülni (nem kézi szűrés, hanem külön DTO osztály)
-- Statisztikák lekérdezhetők Stage 2-ben (melyik opciót választják, hibaarány per blank)
-- Nincs JSON parse/serialize bonyodalom, nincs race condition szöveg szintű frissítésnél
-- A definíció módosítása tranzakcionálisan kezelhető (blank/option entitások törlése + újraírása `@Transactional`-ban)
+Fill-in-blank content is stored in dedicated entities. This guarantees:
+- The `isCorrect` field is **structurally impossible** to leak into a user-facing DTO (not manual filtering, but a separate DTO class)
+- Statistics can be queried in Stage 2 (which option is chosen, error rate per blank)
+- No JSON parse/serialize headaches, no race conditions at the text level when updating
+- Editing the definition can be handled transactionally (deleting + rewriting blank/option entities inside `@Transactional`)
 
-**Entitások:**
-- `FillInBlankDefinition` — a teljes feladat: template szöveg, passThreshold, FK a missionre (OneToOne)
-- `FillInBlankBlank` — egy `{kulcs}` helyőrző: key, orderIndex, FK a definícióra
-- `FillInBlankOption` — egy opciólehetőség: optionText, **isCorrect** (ez a mező soha nem kerül user DTO-ba), orderIndex, FK a blank-re
-- `FillInBlankAttempt` — egy beküldési kísérlet: cadet, mission, score, passed, submittedAt
-- `FillInBlankAnswerDetail` — egy blank kiértékelésének részlete: attempt, blank, selectedOption, correct
+**Entities:**
+- `FillInBlankDefinition` — the full exercise: template text, passThreshold, FK to the mission (OneToOne)
+- `FillInBlankBlank` — one `{key}` placeholder: key, orderIndex, FK to the definition
+- `FillInBlankOption` — one option: optionText, **isCorrect** (this field never reaches a user-facing DTO), orderIndex, FK to the blank
+- `FillInBlankAttempt` — one submission attempt: cadet, mission, score, passed, submittedAt
+- `FillInBlankAnswerDetail` — the detail of one blank's evaluation: attempt, blank, selectedOption, correct
 
-**Blank jelölő karakter — `[[blank_N]]` szintaxis:**
+**Blank marker character — `[[blank_N]]` syntax:**
 
-A `{blank_N}` szintaxis helyett `[[blank_N]]` (dupla szögletes zárójel) kerül alkalmazásra. Indok: ha az admin programozást tanít és kódot ír a szövegbe (pl. JavaScript: `const x = {value: 1}`), a kapcsos zárójel ütközik a blank jelölővel. A dupla szögletes zárójel (`[[...]]`) nem jelenik meg normál programozási kódban sem JavaScript-ben, sem Java-ban, sem Python-ban.
+Instead of `{blank_N}` syntax, `[[blank_N]]` (double square brackets) is used. Reason: if the admin is teaching programming and writes code into the text (e.g. JavaScript: `const x = {value: 1}`), curly braces would collide with the blank marker. Double square brackets (`[[...]]`) don't naturally occur in normal programming code, whether JavaScript, Java, or Python.
 
-Regex detekcióhoz: `/\[\[(\w+)\]\]/g`
+For regex detection: `/\[\[(\w+)\]\]/g`
 
-Példa templateText: `"A const változó [[blank_1]] kaphat értéket. A let változó [[blank_2]] kaphat értéket."`
+Example templateText: `"A const variable can be assigned [[blank_1]]. A let variable can be assigned [[blank_2]]."`
 
 **Admin UI flow:**
-1. Admin textarea-ba írja a szöveget. A **"Blank hozzáadása" gomb** a szöveg végéhez fűzi a következő sorszámú `[[blank_N]]` jelölőt (maximum 5 blank engedélyezett) — az admin manuálisan is begépelheti bárhova
-2. A frontend folyamatosan figyeli a textarea tartalmát (`onChange`), és minden detektált `[[blank_N]]` mintához automatikusan megjelenik egy szerkesztő panel a textarea alatt:
-   - A panel fejlécén a blank neve (pl. `blank_1`)
-   - Az opciók bevitele: **automatikus üres input mező** jelenik meg mindig a már kitöltött opciók után — ha az admin beírja és elhagyja (onBlur), az opció mentésre kerül a lokális state-be és megjelenik egy új üres input mező a következőhöz. Ha már 5 opció van, az üres input nem jelenik meg
-   - Minden kitöltött opció sorában: a szöveg, pipa checkbox (helyes-e) + törlés ikon (X gomb)
-   - A helyes jelölés: egy blank-ben több opció is lehet helyes (pl. `[[blank_2]]` ahol "egyszer" is helyes, "többször" is)
-3. Ha az admin **törli a `[[blank_N]]` szöveget** a textarea-ból, az ahhoz tartozó szerkesztő panel és az összes opciója eltűnik — az admin felelőssége, nincs warning dialog
-4. Ha az admin **átnevezi a blank kulcsát** (pl. `[[blank_1]]` → `[[blank_a]]`), az új kulcs új üres panelként jelenik meg; az eredeti `blank_1` panel és opcióinak state-je elvész
-5. Az egész alján: `passThreshold` mező (0–100, null = nincs küszöb)
-6. Mentéskor a frontend **csak azokat a blank-eket küldi el**, amelyek jelenleg detektálhatók a textarea-ban — törölt/átnevezett blank-ek nem kerülnek a request-be
+1. The admin writes text into a textarea. The **"Add blank" button** appends the next-numbered `[[blank_N]]` marker to the end of the text (max 5 blanks allowed) — the admin can also type it manually anywhere
+2. The frontend continuously watches the textarea contents (`onChange`), and for every detected `[[blank_N]]` pattern automatically shows an editor panel below the textarea:
+   - Panel header shows the blank's name (e.g. `blank_1`)
+   - Option entry: an **automatic empty input field** always appears after the already-filled options — when the admin types into it and leaves the field (onBlur), the option is saved to local state and a new empty input appears for the next one. Once there are 5 options, no empty input is shown
+   - Every filled-in option row shows: the text, a checkbox (is it correct?), and a delete icon (X button)
+   - Marking correctness: a blank can have more than one correct option (e.g. `[[blank_2]]` where both "once" and "multiple times" are correct)
+3. If the admin **deletes the `[[blank_N]]` text** from the textarea, the corresponding editor panel and all its options disappear — this is the admin's responsibility, no warning dialog
+4. If the admin **renames a blank's key** (e.g. `[[blank_1]]` → `[[blank_a]]`), the new key appears as a fresh, empty panel; the original `blank_1` panel and its option state are lost
+5. At the bottom: a `passThreshold` field (0–100, null = no threshold)
+6. On save, the frontend **only sends the blanks currently detectable in the textarea** — deleted/renamed blanks are not included in the request
 
-**`POST /api/missions/{missionId}/fill-in-blank` request (admin, új definíció):**
+**`POST /api/missions/{missionId}/fill-in-blank` request (admin, new definition):**
 ```json
 {
-  "templateText": "A const változó [[blank_1]] kaphat értéket. A let változó [[blank_2]] kaphat értéket.",
+  "templateText": "A const variable can be assigned [[blank_1]]. A let variable can be assigned [[blank_2]].",
   "passThreshold": 70,
   "blanks": [
     {
       "key": "blank_1",
       "orderIndex": 0,
       "options": [
-        { "optionText": "egyszer",  "isCorrect": true,  "orderIndex": 0 },
-        { "optionText": "többször", "isCorrect": false, "orderIndex": 1 },
-        { "optionText": "soha",     "isCorrect": false, "orderIndex": 2 }
+        { "optionText": "once",      "isCorrect": true,  "orderIndex": 0 },
+        { "optionText": "many times","isCorrect": false, "orderIndex": 1 },
+        { "optionText": "never",     "isCorrect": false, "orderIndex": 2 }
       ]
     },
     {
       "key": "blank_2",
       "orderIndex": 1,
       "options": [
-        { "optionText": "egyszer",  "isCorrect": true,  "orderIndex": 0 },
-        { "optionText": "többször", "isCorrect": true,  "orderIndex": 1 },
-        { "optionText": "soha",     "isCorrect": false, "orderIndex": 2 }
+        { "optionText": "once",      "isCorrect": true,  "orderIndex": 0 },
+        { "optionText": "many times","isCorrect": true,  "orderIndex": 1 },
+        { "optionText": "never",     "isCorrect": false, "orderIndex": 2 }
       ]
     }
   ]
 }
 ```
 
-Ha már létezik definíció: `PUT /api/missions/{missionId}/fill-in-blank` — teljes felülírás, törli a meglévő blank/option entitásokat `@Transactional`-ban.
+If a definition already exists: `PUT /api/missions/{missionId}/fill-in-blank` — full overwrite, deletes the existing blank/option entities inside `@Transactional`.
 
-**User oldali UX — Mixed Pool megközelítés:**
+**User-side UX — mixed pool approach:**
 
-A user a szöveget látja `[___]` blank slot-okkal (a `{blank_N}` jelölők helyén), alatta az összes opció minden blank-ből **összekeverve, véletlenszerű sorrendben**, kattintható chip/gomb formátumban.
+The user sees the text with `[___]` blank slots (in place of the `{blank_N}` markers), and below it all options from every blank **shuffled together, in random order**, as clickable chip/button elements.
 
-- **Opció kiválasztása (automatikus cél):** User rákattint egy pool chip-re → az beugrik a szövegben az első üres blank slot-ba (balról jobbra). Az opció eltűnik a pool-ból.
-- **Opció kiválasztása (célzott):** User előbb rákattint egy üres blank slot-ra a szövegben (a slot kiemelődik), majd rákattint egy pool chip-re → az a kiemelt slot-ba kerül.
-- **Opció visszahelyezése:** User rákattint egy már kitöltött blank slot-ra → az opció visszakerül a pool aljára, a slot ismét üres lesz.
-- **Opciók az adatmodellben blank-specifikusak**, de a user felé **közös pool-ként jelennek meg** — a user nem tudja melyik opció melyik blank-hez tartozik. A beküldéskor a backend bármely optionId-t elfogad bármely blank-hez; cross-blank beküldés `correct: false` eredményt kap (nem 400 hibát).
-- **Submit:** "Beküldés" gomb aktív ha minden blank ki van töltve. Request: `{ "answers": { "blank_1": "uuid-opt-X", "blank_2": "uuid-opt-Y" } }` — optionId-k bármely blank-ből valók lehetnek.
-- **Visszajelzés submit után:** Minden blank slot-on zöld ✓ / piros ✗ megjelenik; helytelen blank-eknél megjelennek a helyes opciók nevei.
-- **Újrapróbálás:** Ha `passed: false` (és van `passThreshold`) → "Újra" gomb → blank slot-ok kiürülnek, opciók visszakerülnek a pool-ba véletlenszerű sorrendben.
-- Ha nincs küszöb (`passThreshold: null`): mindig `passed: true`.
+- **Selecting an option (automatic target):** the user clicks a pool chip → it jumps into the first empty blank slot in the text (left to right). The option disappears from the pool.
+- **Selecting an option (targeted):** the user first clicks an empty blank slot in the text (the slot gets highlighted), then clicks a pool chip → it goes into the highlighted slot.
+- **Returning an option:** the user clicks an already-filled blank slot → the option goes back to the bottom of the pool, and the slot becomes empty again.
+- **Options are blank-specific in the data model**, but shown to the user **as a shared pool** — the user can't tell which option belongs to which blank. On submit, the backend accepts any optionId for any blank; a cross-blank submission gets a `correct: false` result (not a 400 error).
+- **Submit:** the "Submit" button is enabled once every blank is filled. Request: `{ "answers": { "blank_1": "uuid-opt-X", "blank_2": "uuid-opt-Y" } }` — the optionIds can come from any blank.
+- **Feedback after submit:** every blank slot shows a green ✓ / red ✗; incorrect blanks also show the names of the correct options.
+- **Retry:** if `passed: false` (and there is a `passThreshold`) → a "Retry" button → blank slots are cleared, options go back to the pool in a new random order.
+- If there's no threshold (`passThreshold: null`): always `passed: true`.
 
 ---
 
 #### QUIZ mission
-- Marad a jelenlegi implementáció
-- **Refaktor szükséges**: a jelenlegi `QuizPlayer` két részre válik:
-  - `QuizPlayerPage` — marad a meglévő standalone route-on (`/play/quiz/:id`)
-  - `QuizPlayerComponent` — beilleszthető komponens, `missionId` + `onComplete(result)` callback propokkal
-- A Group Player a `QuizPlayerComponent`-et használja
+- The current implementation stays as-is
+- **Refactor needed**: the current `QuizPlayer` splits into two parts:
+  - `QuizPlayerPage` — stays on the existing standalone route (`/play/quiz/:id`)
+  - `QuizPlayerComponent` — an embeddable component with `missionId` + `onComplete(result)` callback props
+- The Group Player uses `QuizPlayerComponent`
 
 #### CODING mission
-- Marad a jelenlegi implementáció (Stage 2-ben lesz teljesen kidolgozva)
-- A group rendszerbe berakható
+- The current implementation stays as-is (fully fleshed out in Stage 2)
+- Can be added to the group system
 
 ---
 
-### Admin UX — Star System szerkesztő (átdolgozva)
+### Admin UX — Star System editor (reworked)
 
 **Navigation flow:**
-1. `/admin/star-systems` → lista
-2. Kattint egy star systemre → `/admin/star-systems/:id` — star system adatok + fa struktúra
-3. "Mission szerkesztése" → `/admin/missions/:id` — mission edit oldal
-4. Mentés / törlés után visszanavigál a star systemre:
-   - Ha a mission group-ban van (`mission.groupId != null`): a backend a `MissionResponse`-ban visszaadja a `starSystemId`-t közvetlenül (denormalizálva), a frontend `navigate(/admin/star-systems/${mission.starSystemId})` hívással visszamegy — nem kell a `group.starSystem` láncon végigmenni
+1. `/admin/star-systems` → list
+2. Click a star system → `/admin/star-systems/:id` — star system data + tree structure
+3. "Edit mission" → `/admin/missions/:id` — mission edit page
+4. After save/delete, navigate back to the star system:
+   - If the mission is in a group (`mission.groupId != null`): the backend returns `starSystemId` directly in the `MissionResponse` (denormalized), so the frontend can `navigate(/admin/star-systems/${mission.starSystemId})` — no need to walk through the `group.starSystem` chain
 
-**Fa struktúra a star system edit oldalon:**
+**Tree structure on the star system edit page:**
 ```
-[Star System: JavaScript Alapjai]
-  ├── [Group] Változók                          [↑][↓] [szerkeszt] [töröl]
-  │     ├── CONTENT: Változók leírása     [↑][↓] [→] [szerkeszt] [töröl]
-  │     ├── FILL_IN_BLANK: Kitöltős       [↑][↓] [→] [szerkeszt] [töröl]
-  │     └── QUIZ: Ellenőrző kvíz          [↑][↓] [→] [szerkeszt] [töröl]
-  │     └── [+ Hozzáadás]
-  ├── [Group] String műveletek            [↑][↓] [szerkeszt] [töröl]
+[Star System: JavaScript Fundamentals]
+  ├── [Group] Variables                          [↑][↓] [edit] [delete]
+  │     ├── CONTENT: Description of variables    [↑][↓] [→] [edit] [delete]
+  │     ├── FILL_IN_BLANK: Fill in the blanks     [↑][↓] [→] [edit] [delete]
+  │     └── QUIZ: Check-in quiz                   [↑][↓] [→] [edit] [delete]
+  │     └── [+ Add]
+  ├── [Group] String operations                   [↑][↓] [edit] [delete]
   │     └── ...
-  ├── CODING: Standalone misszió          [↑][↓] [←] [szerkeszt] [töröl]
-  └── [+ Új group létrehozása]
+  ├── CODING: Standalone mission                   [↑][↓] [←] [edit] [delete]
+  └── [+ Create new group]
 ```
 
-**Sorrend kezelés:**
-- `[↑][↓]` nyilak: elem fel/le mozgatása (`orderIndex` swap a star systemben; `groupOrder` swap a group-on belül)
-- `[→]` gomb group-on belüli misszión: kiveszi → standalone lesz (`groupOrder` null, `orderIndex` beállítva); FILL_IN_BLANK esetén backend `400` → snackbar hiba
-- `[←]` gomb standalone misszión: felugró ablak → melyik group-ba kerüljön
+**Order management:**
+- `[↑][↓]` arrows: move an item up/down (`orderIndex` swap within the star system; `groupOrder` swap within the group)
+- `[→]` button on a mission inside a group: takes it out → it becomes standalone (`groupOrder` null, `orderIndex` set); for FILL_IN_BLANK the backend returns `400` → snackbar error
+- `[←]` button on a standalone mission: opens a dialog → pick which group it should join
 
-**Reorder response — minimális payload:**
-A sorrend-csere endpoint **csak az érintett két elem új orderIndex értékét** adja vissza. A backend elvégezte a swap-ot, a frontendnek csak a lokális state-t kell frissítenie:
+**Reorder response — minimal payload:**
+The reorder endpoint returns **only the new orderIndex values of the two affected items**. The backend has already performed the swap, so the frontend only needs to update its local state:
 ```json
-// PUT /api/mission-groups/{id}/reorder vagy PUT /api/missions/{id}/group-order
+// PUT /api/mission-groups/{id}/reorder or PUT /api/missions/{id}/group-order
 { "updated": [ { "id": "uuid1", "orderIndex": 0 }, { "id": "uuid2", "orderIndex": 1 } ] }
 ```
-Nem kell újratölteni az egész star systemet — a frontend az `updated[]` tömb alapján patcheli a saját state-jét.
+No need to reload the whole star system — the frontend patches its own state based on the `updated[]` array.
 
-**Group törlése:**
-- Ha a group-ban FILL_IN_BLANK típusú misszió van: törlés **megtagadva `400 Bad Request`** — az admin a group törlése előtt manuálisan törölje a FILL_IN_BLANK missziót. Frontend snackbar: `"A csoport FILL_IN_BLANK missziót tartalmaz — töröld előbb."`
-- CONTENT, QUIZ, CODING missionök standalone missionökké válnak. **OrderIndex kiosztás szabályai** (backend, egy tranzakcióban):
-  1. A group `orderIndex` pozíciójától kezdve a missions csoporton belüli `groupOrder` sorrendje szerint kapnak sorszámot: első misszió `= group.orderIndex`, második `= group.orderIndex + 1`, stb.
-  2. Minden eddig a group után álló standalone mission és group (amelynek `orderIndex > group.orderIndex`) eltolódik `+N`-nel (ahol N = a standalone-vá vált missziók száma)
-  - **Példa:** group `orderIndex: 2`, benne 3 misszió (groupOrder 0, 1, 2). Törlés után: 3 új standalone misszió kapja az `orderIndex` 2, 3, 4 értékeket. Minden elem, amelynek korábban `orderIndex ≥ 3` volt, kap +3-at → az egész rendezett lista konzisztens marad
+**Deleting a group:**
+- If the group contains a FILL_IN_BLANK mission: deletion is **refused with `400 Bad Request`** — the admin must delete the FILL_IN_BLANK mission manually before deleting the group. Frontend snackbar: `"This group contains a FILL_IN_BLANK mission — delete it first."`
+- CONTENT, QUIZ, CODING missions become standalone missions. **OrderIndex assignment rules** (backend, in one transaction):
+  1. Starting from the group's `orderIndex` position, missions get numbered according to their `groupOrder` within the group: the first mission gets `= group.orderIndex`, the second `= group.orderIndex + 1`, and so on.
+  2. Every standalone mission and group that was previously positioned after the group (`orderIndex > group.orderIndex`) shifts by `+N` (where N = the number of missions that became standalone)
+  - **Example:** group at `orderIndex: 2`, containing 3 missions (groupOrder 0, 1, 2). After deletion: the 3 new standalone missions get `orderIndex` values 2, 3, 4. Every item that previously had `orderIndex ≥ 3` gets +3 → the whole ordered list stays consistent
 
-**Mission hozzáadása group-hoz — conflict kezelés:**
-Ha a kiválasztott mission már másik group-ban van, a backend `ResourceConflictException`-t dob (409), amelynek `data` mezője tartalmazza az ütköző group nevét és ID-ját:
+**Adding a mission to a group — conflict handling:**
+If the selected mission is already in another group, the backend throws `ResourceConflictException` (409), whose `data` field contains the conflicting group's name and ID:
 ```json
 {
   "status": 409, "error": "Conflict",
-  "message": "A misszió már hozzá van rendelve egy másik csoporthoz",
-  "data": { "conflictingGroupId": "uuid", "conflictingGroupName": "String műveletek" }
+  "message": "This mission is already assigned to another group",
+  "data": { "conflictingGroupId": "uuid", "conflictingGroupName": "String operations" }
 }
 ```
-A frontend snackbar-ban mutatja: `"Ez a misszió már a 'String műveletek' csoporthoz tartozik."`
+The frontend shows in a snackbar: `"This mission already belongs to the 'String operations' group."`
 
 ---
 
-### User oldal — Star System Detail (átdolgozva)
+### User side — Star System Detail (reworked)
 
-**Progress-aware betöltés:**
+**Progress-aware loading:**
 
-A `StarSystemDetailPage` betöltésekor két párhuzamos kérés indul:
-1. `GET /api/star-systems/{id}/with-missions` — items[] tömb
-2. A kapott items-ből kinyert összes `GROUP` elem ID-ja → `Promise.all` párhuzamos `GET /api/group-progress/{groupId}` hívások — minden group-ra külön
+When `StarSystemDetailPage` loads, two parallel requests fire:
+1. `GET /api/star-systems/{id}/with-missions` — the items[] array
+2. From the returned items, all `GROUP` item IDs → `Promise.all` of parallel `GET /api/group-progress/{groupId}` calls — one per group
 
-A progress eredmények egy `Map<groupId, GroupProgressResponse | "NOT_STARTED">` state-ben tárolódnak. A group-on belüli missziókon (FillInBlank, Content, Quiz) nincs külön progress állapot — ezek a Group Player-en belül kezeltek.
+The progress results are stored in a `Map<groupId, GroupProgressResponse | "NOT_STARTED">` state. Missions inside a group (FillInBlank, Content, Quiz) don't have their own separate progress state — they're managed within the Group Player.
 
-**Lista:** A backend `items[]` tömbje alapján, sorrendben, **progress badge-dzsel**:
-- `type: "GROUP"` → group neve + missionök száma + progress badge + akciógomb:
-  - `NOT_STARTED` (404 a progress GET-nél): "Kezdd el" gomb (kék) → `/play/group/:groupId`
-  - `IN_PROGRESS` (`completed: false`): "Folytatás" gomb (sárga) + `"N / M lépés"` indicator (ahol N = `completedMissionIds.length`, M = `totalMissions`)
-  - `COMPLETED` (`completed: true`): zöld ✓ badge + "Újra" gomb (szürke) → `/play/group/:groupId`
-- `type: "MISSION"` standalone → neve + típus ikon + "Start" gomb (progress tracking nélkül — Stage 2-ban bővíthető)
+**List:** based on the backend's `items[]` array, in order, **with a progress badge**:
+- `type: "GROUP"` → group name + number of missions + progress badge + action button:
+  - `NOT_STARTED` (404 on the progress GET): "Start" button (blue) → `/play/group/:groupId`
+  - `IN_PROGRESS` (`completed: false`): "Continue" button (yellow) + a `"N / M steps"` indicator (where N = `completedMissionIds.length`, M = `totalMissions`)
+  - `COMPLETED` (`completed: true`): green ✓ badge + "Replay" button (gray) → `/play/group/:groupId`
+- `type: "MISSION"` standalone → name + type icon + "Start" button (no progress tracking — extendable in Stage 2)
 
 **Routing:**
-- Group indítás/folytatás: `/play/group/:groupId`
+- Starting/continuing a group: `/play/group/:groupId`
 - Standalone CONTENT: `/play/content/:missionId`
-- Standalone QUIZ: `/play/quiz/:missionId` (meglévő)
+- Standalone QUIZ: `/play/quiz/:missionId` (existing)
 - Standalone CODING: Stage 2
 
-**TypeScript kiegészítés (`types/groupProgress.ts`):**
+**TypeScript addition (`types/groupProgress.ts`):**
 ```typescript
 type GroupProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"
 
-// Derived type a megjelenítéshez
+// Derived type for display
 interface GroupDisplayProgress {
   status: GroupProgressStatus;
-  completedCount: number;   // 0 ha NOT_STARTED
-  totalCount: number;       // a group missionjeinek száma (items[].missions.length)
+  completedCount: number;   // 0 if NOT_STARTED
+  totalCount: number;       // number of missions in the group (items[].missions.length)
 }
 ```
 
 ---
 
-### User oldal — Group Player (`/play/group/:groupId`)
+### User side — Group Player (`/play/group/:groupId`)
 
-**Első betöltés:**
-1. `GET /api/mission-groups/{groupId}/missions` — betölti a group missziólistáját (a `starSystemId` is benne van a response-ban, a back navigációhoz)
-2. `GET /api/group-progress/{groupId}` — progress lekérése
-   - Ha `404 ResourceNotFoundException`: `POST /api/group-progress/{groupId}/start` → létrehozza a rekordot → újra GET (vagy a POST válasza elég)
-   - Ha `409 ResourceConflictException` a POST-nál: GET-tel olvassa be a meglévőt
+**Initial load:**
+1. `GET /api/mission-groups/{groupId}/missions` — loads the group's mission list (the response also includes `starSystemId`, for back navigation)
+2. `GET /api/group-progress/{groupId}` — fetch progress
+   - If `404 ResourceNotFoundException`: `POST /api/group-progress/{groupId}/start` → creates the record → GET again (or the POST response is enough)
+   - If `409 ResourceConflictException` on the POST: read the existing one via GET
 
-**Al-misszió léptetés (ID alapú, robusztus):**
-- Lépésjelző a tetején (pl. `2 / 4`) — `completedMissionIds.length + 1 / missions.length`
-- A Group Player a `nextMissionId` alapján rendeli hozzá a renderelendő komponenst
-- "Következő" gomb → `POST /api/group-progress/{groupId}/complete-step` → backend visszaadja a frissített progresst `nextMissionId`-val → frontend lép
-- **Robusztusság:** Az ID-alapú progress nem törik ha az admin módosít a csoporton (pl. új misszió a végére), mert a már teljesített lépések UUID-k maradnak érvényesek
+**Sub-mission stepping (ID-based, robust):**
+- A step indicator at the top (e.g. `2 / 4`) — `completedMissionIds.length + 1 / missions.length`
+- The Group Player picks the component to render based on `nextMissionId`
+- "Next" button → `POST /api/group-progress/{groupId}/complete-step` → the backend returns the updated progress with `nextMissionId` → the frontend advances
+- **Robustness:** ID-based progress doesn't break if the admin modifies the group (e.g. adds a new mission at the end), because already-completed steps stay valid UUIDs
 
 **Back navigation:**
-- "Vissza" gomb: `navigate(/star-systems/${groupMissions.starSystemId})` — a group missions response tartalmazza a `starSystemId`-t
+- "Back" button: `navigate(/star-systems/${groupMissions.starSystemId})` — the group missions response includes `starSystemId`
 
-**CONTENT:** markdown megjelenítés oldalazással (Load More), "Következő" = `complete-step` hívás
-**FILL_IN_BLANK:** kitöltés, submit → ha `passed: true` → `complete-step` hívás; ha `passed: false` → hibajelzés, újrapróbálás
-**QUIZ:** `QuizPlayerComponent` renderelése, `onComplete` callback → `complete-step` hívás
+**CONTENT:** markdown display with pagination (Load More), "Next" = `complete-step` call
+**FILL_IN_BLANK:** fill it in, submit → if `passed: true` → `complete-step` call; if `passed: false` → error feedback, retry
+**QUIZ:** renders `QuizPlayerComponent`, `onComplete` callback → `complete-step` call
 
-**Browser Back gomb viselkedése — elvárt és dokumentált:**
+**Browser Back button behavior — expected and documented:**
 
-Ha a user a böngésző vissza gombjával navigál ki a Group Player-ből:
+If the user navigates away from the Group Player using the browser's Back button:
 
-1. A React komponens unmount-ol, a memóriában lévő state elvész
-2. A progress **megmarad az adatbázisban** — a `MissionGroupStepCompletion` rekordok érvényesek
-3. Ha a user visszatér a `/play/group/:groupId` route-ra:
-   - `GET /group-progress/{groupId}` → visszaadja a legutóbbi állapotot `nextMissionId`-val
-   - A Group Player ugyanattól a lépéstől folytatódik ahol abbahagyta — **ez a helyes viselkedés, nem kell "session resume" logika**
+1. The React component unmounts, in-memory state is lost
+2. Progress **persists in the database** — the `MissionGroupStepCompletion` records remain valid
+3. If the user returns to the `/play/group/:groupId` route:
+   - `GET /group-progress/{groupId}` → returns the latest state with `nextMissionId`
+   - The Group Player resumes from the exact step where the user left off — **this is the correct behavior, no "session resume" logic is needed**
 
-4. **FILL_IN_BLANK speciális eset** — a user kitöltötte a feladatot (`passed: true` attempt létrejött az adatbázisban), visszanavigált, majd visszatért:
-   - A `FillInBlankAttempt` táblában él a `passed: true` rekord
-   - A Group Player visszatéréskor újra a FILL_IN_BLANK lépésnél nyílik meg
-   - A `FillInBlankView` betöltéskor lekérdezi az utolsó attempt-et: `GET /api/missions/{missionId}/fill-in-blank/last-attempt`
-   - Ha a legutóbbi attempt `passed: true` → megjelenik egy banner: **"Ezt a feladatot már sikeresen teljesítetted."** + "Következő →" gomb (amely meghívja a `complete-step`-et)
-   - Ha nincs attempt vagy `passed: false` → a feladatot újra el kell végezni
-   - Ez az extra endpoint (`GET .../last-attempt`) **MVP szükséglet**, mert visszanavigálás után különben mindig újra kellene tölteni a feladatot
+4. **FILL_IN_BLANK special case** — the user completed the exercise (`passed: true` attempt was created in the database), navigated away, then returned:
+   - The `FillInBlankAttempt` table holds the `passed: true` record
+   - On return, the Group Player reopens at the FILL_IN_BLANK step
+   - `FillInBlankView` queries the latest attempt on load: `GET /api/missions/{missionId}/fill-in-blank/last-attempt`
+   - If the latest attempt is `passed: true` → a banner is shown: **"You've already completed this task successfully."** + a "Next →" button (which calls `complete-step`)
+   - If there's no attempt, or `passed: false` → the exercise must be redone
+   - This extra endpoint (`GET .../last-attempt`) is an **MVP necessity** — otherwise, after navigating back, the exercise would always have to be redone
 
-   > **Backend endpoint:** `GET /api/missions/{missionId}/fill-in-blank/last-attempt` — `mission:start` permission. Response: `{ "passed": boolean, "percentage": number, "submittedAt": string }` vagy 404 ha nincs attempt
+   > **Backend endpoint:** `GET /api/missions/{missionId}/fill-in-blank/last-attempt` — `mission:start` permission. Response: `{ "passed": boolean, "percentage": number, "submittedAt": string }` or 404 if there's no attempt
 
 ---
 
-### Content Creator szerepkör
+### Content Creator role
 
-**Backend role:** `ROLE_CONTENT_CREATOR` — seed-elve a DataInitializerben
+**Backend role:** `ROLE_CONTENT_CREATOR` — seeded in DataInitializer
 
 **Permissions:**
 `starsystem:create`, `starsystem:edit`, `starsystem:read`,
 `mission:create`, `mission:edit`, `mission:read`,
 `group:create`, `group:edit`, `group:delete`, `group:read`
 
-**Megjegyzés:** A `StarSystem`, `Mission` és `MissionGroup` entitáson van `owner` (Cadet) mező. A content creator saját tartalmait az `/api/star-systems/my-systems`, `/api/missions/my-missions`, `/api/mission-groups/my-groups` endpointokon éri el. Az ownership ellenőrzés a service rétegben történik.
+**Note:** the `StarSystem`, `Mission`, and `MissionGroup` entities all have an `owner` (Cadet) field. A content creator can reach their own content via the `/api/star-systems/my-systems`, `/api/missions/my-missions`, and `/api/mission-groups/my-groups` endpoints. Ownership checks happen at the service layer.
 
-**Frontend:** Admin sidebar permission-aware. Content creator csak "Csillagrendszerek", "Missziók" és "Csoportok" tab-ot lát.
-
----
-
-## Stage 2 — Fejlettebb funkciók (külön PR, később)
-
-### CODING mission teljes user flow
-- Fájl létrehozás, törlés, átnevezés az editorban
-- Admin előre beállíthatja a fájlstruktúrát
-
-### Mobile Coding mission (új típus)
-- Kártyaalapú kódírás, drag-and-drop mobilon
-
-### Blockly / Vizuális programozás
-- Google Blockly integrálása, Scratch-szerű blokkok
-
-### Fill-in-blank statisztikák (admin dashboard)
-- Melyik opciót választják leggyakrabban
-- Hibaarány per blank, per misszió (FillInBlankAnswerDetail alapján lekérdezhető)
+**Frontend:** the admin sidebar is permission-aware. A content creator only sees the "Star Systems", "Missions", and "Groups" tabs.
 
 ---
 
-## Architekturális terv — Stage 1
+## Stage 2 — More advanced features (separate PR, later)
 
-### Backend — Entitások
+### Full user-side CODING mission flow
+- Create/delete/rename files in the editor
+- The admin can pre-configure the file structure
+
+### Mobile Coding mission (new type)
+- Card-based, drag-and-drop coding on mobile
+
+### Blockly / visual programming
+- Integrating Google Blockly, Scratch-style blocks
+
+### Fill-in-blank statistics (admin dashboard)
+- Which option is chosen most often
+- Error rate per blank, per mission (queryable from FillInBlankAnswerDetail)
+
+---
+
+## Architecture plan — Stage 1
+
+### Backend — entities
 
 ---
 
 #### `MissionGroup`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
-| `name` | String | Group neve |
-| `description` | String (nullable) | Rövid leírás |
+| `name` | String | Group name |
+| `description` | String (nullable) | Short description |
 | `starSystem` | ManyToOne → StarSystem | FK |
-| `owner` | ManyToOne → Cadet | Létrehozó — egyben a `createdBy` (content creator szűréshez) |
-| `updatedBy` | ManyToOne → Cadet (nullable) | Utolsó módosítást végző cadet |
-| `orderIndex` | int | Sorrend a star systemben (közös a standalone missziókkal) |
+| `owner` | ManyToOne → Cadet | Creator — also the `createdBy` (for content-creator filtering) |
+| `updatedBy` | ManyToOne → Cadet (nullable) | Cadet who last modified it |
+| `orderIndex` | int | Order within the star system (shared with standalone missions) |
 | `createdAt` | Instant | `@CreationTimestamp` |
 | `updatedAt` | Instant | `@UpdateTimestamp` |
 
 ---
 
-#### `Mission` — módosított/új mezők
-| Mező | Típus | Leírás |
+#### `Mission` — modified/new fields
+| Field | Type | Description |
 |---|---|---|
-| `group` | ManyToOne → MissionGroup **(nullable)** | Melyik group-hoz tartozik |
-| `groupOrder` | Integer **(nullable)** | Sorrend a group-on belül; ha NULL → standalone |
-| `orderIndex` | Integer **(nullable, egységesítve)** | Sorrend a star systemben; ha NULL → group-ban van |
-| `content` | TEXT **(nullable)** | Markdown szöveg CONTENT típusnál |
+| `group` | ManyToOne → MissionGroup **(nullable)** | Which group it belongs to |
+| `groupOrder` | Integer **(nullable)** | Order within the group; NULL → standalone |
+| `orderIndex` | Integer **(nullable, unified)** | Order within the star system; NULL → inside a group |
+| `content` | TEXT **(nullable)** | Markdown text for CONTENT type |
 
-> **Megjegyzés:** A `fillInBlankData` TEXT mező **törlendő** — a fill-in-blank adatokat külön entitások tárolják (ld. lent).
-> A `MissionResponse` DTO tartalmaz `starSystemId`-t **közvetlenül** (denormalizálva), hogy a navigáció ne igényeljen láncos lekérdezést.
+> **Note:** the `fillInBlankData` TEXT field **should be removed** — fill-in-blank data is stored in dedicated entities instead (see below).
+> The `MissionResponse` DTO includes `starSystemId` **directly** (denormalized), so navigation doesn't need to walk a chain of queries.
 
 ---
 
 #### `FillInBlankDefinition`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `mission` | OneToOne → Mission | FK, unique |
-| `templateText` | TEXT | A szöveg `{kulcs}` jelöléssel |
-| `passThreshold` | Integer (nullable) | 0–100, null = nincs küszöb |
+| `templateText` | TEXT | The text with `{key}` markers |
+| `passThreshold` | Integer (nullable) | 0–100, null = no threshold |
 | `createdAt` | Instant | `@CreationTimestamp` |
 | `updatedAt` | Instant | `@UpdateTimestamp` |
 
 #### `FillInBlankBlank`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `definition` | ManyToOne → FillInBlankDefinition | FK |
-| `blanksKey` | String | A template kulcs (pl. `"blank_1"`) |
-| `orderIndex` | int | Megjelenítési sorrend |
+| `blanksKey` | String | The template key (e.g. `"blank_1"`) |
+| `orderIndex` | int | Display order |
 
 #### `FillInBlankOption`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `blank` | ManyToOne → FillInBlankBlank | FK |
-| `optionText` | String | Az opció szövege |
-| `isCorrect` | boolean | **Kizárólag ebben az entitásban él. User DTO-ba soha nem kerül.** |
-| `orderIndex` | int | Megjelenítési sorrend |
+| `optionText` | String | The option's text |
+| `isCorrect` | boolean | **Lives only in this entity. Never reaches a user-facing DTO.** |
+| `orderIndex` | int | Display order |
 
 #### `FillInBlankAttempt`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `cadet` | ManyToOne → Cadet | FK |
 | `mission` | ManyToOne → Mission | FK |
-| `score` | int | Helyes válaszok száma |
-| `maxScore` | int | Összes blank száma |
+| `score` | int | Number of correct answers |
+| `maxScore` | int | Total number of blanks |
 | `percentage` | int | 0–100 |
-| `passed` | boolean | `percentage >= passThreshold` (vagy ha threshold null, mindig true) |
-| `submittedAt` | Instant | Beküldés időpontja |
+| `passed` | boolean | `percentage >= passThreshold` (or always true if threshold is null) |
+| `submittedAt` | Instant | Submission time |
 
 #### `FillInBlankAnswerDetail`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `attempt` | ManyToOne → FillInBlankAttempt | FK |
 | `blank` | ManyToOne → FillInBlankBlank | FK |
-| `selectedOption` | ManyToOne → FillInBlankOption **(nullable)** | Amit a user választott (null ha üresen hagyta) |
-| `correct` | boolean | A választott opció helyes volt-e |
+| `selectedOption` | ManyToOne → FillInBlankOption **(nullable)** | What the user chose (null if left empty) |
+| `correct` | boolean | Whether the chosen option was correct |
 
 ---
 
 #### `MissionGroupProgress`
-| Mező | Típus | Leírás |
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `cadet` | ManyToOne → Cadet | FK |
 | `group` | ManyToOne → MissionGroup | FK |
-| `nextMissionId` | UUID (nullable) | A következő elvégzendő misszió ID-ja; null ha a group teljesítve |
-| `completed` | boolean | Az egész group teljesítve |
-| `startedAt` | Instant | Első megnyitás |
-| `lastUpdatedAt` | Instant | Utolsó lépés időpontja |
-| `completedAt` | Instant (nullable) | Teljesítés időpontja |
+| `nextMissionId` | UUID (nullable) | ID of the next mission to complete; null if the group is done |
+| `completed` | boolean | Whether the whole group is completed |
+| `startedAt` | Instant | First opened |
+| `lastUpdatedAt` | Instant | Time of the last step |
+| `completedAt` | Instant (nullable) | Completion time |
 
-> **Unique constraint:** `(cadet_id, group_id)` — egy usernek egy group-ra csak egy progress rekord lehet
+> **Unique constraint:** `(cadet_id, group_id)` — a user can only have one progress record per group
 
-#### `MissionGroupStepCompletion` (join tábla a completedMissionIds helyett)
-| Mező | Típus | Leírás |
+#### `MissionGroupStepCompletion` (join table instead of a completedMissionIds field)
+| Field | Type | Description |
 |---|---|---|
 | `id` | UUID | PK |
 | `progress` | ManyToOne → MissionGroupProgress | FK |
 | `mission` | ManyToOne → Mission | FK |
-| `completedAt` | Instant | Lépés teljesítésének időpontja |
+| `completedAt` | Instant | Time the step was completed |
 
-> **Unique constraint:** `(progress_id, mission_id)` — idempotens: kétszeri "Következő" kattintás sem hoz létre duplikált rekordot, az adatbázis szinten ki van zárva.
+> **Unique constraint:** `(progress_id, mission_id)` — idempotent: clicking "Next" twice in a row won't create a duplicate record, enforced at the database level.
 
-**Miért join tábla a JSON TEXT helyett:**
-- **Race condition eliminálva:** két párhuzamos `complete-step` request `INSERT INTO ... ON CONFLICT DO NOTHING` — az egyik sikeres, a másik némán eldobódik, adat nem vész el és nem duplikálódik
-- **Statisztika Stage 2-ben:** `SELECT mission_id, COUNT(*) FROM step_completions GROUP BY mission_id` — megmondja melyik lépésnél hagyják abba legtöbben
-- **Rendezés törésállósága:** ha az admin átrendezi a group missionjeit, a UUID-alapú step completion rekordok érvényesek maradnak
-- **`nextMissionId` kiszámítása:** a service betölti a group misszióit groupOrder szerint, az első amelynek id-ja NEM szerepel a step_completions-ben — ez az aktuális lépés
+**Why a join table instead of JSON TEXT:**
+- **Race condition eliminated:** two concurrent `complete-step` requests do `INSERT INTO ... ON CONFLICT DO NOTHING` — one succeeds, the other is silently dropped, no data is lost or duplicated
+- **Stage 2 statistics:** `SELECT mission_id, COUNT(*) FROM step_completions GROUP BY mission_id` — shows which step has the most drop-off
+- **Resilient to reordering:** if the admin reorders the group's missions, the UUID-based step completion records remain valid
+- **Computing `nextMissionId`:** the service loads the group's missions sorted by groupOrder, and picks the first one whose id is NOT in step_completions — that's the current step
 
 ---
 
-### Backend — Új MissionType értékek
+### Backend — new MissionType values
 - `CONTENT`
 - `FILL_IN_BLANK`
 
 ---
 
-### Backend — Permission rendszer (group:* kategória)
+### Backend — permission system (the `group:*` category)
 
-Az eddigi `mission:*` kategória nem fedi le a `MissionGroup` entitást — az önálló entitás, önálló permission kategóriát kap.
+The existing `mission:*` category doesn't cover the `MissionGroup` entity — as its own entity, it gets its own permission category.
 
-**Új permissionök (DataInitializerben seed-elni):**
-| Permission | Leírás |
+**New permissions (seeded in DataInitializer):**
+| Permission | Description |
 |---|---|
-| `group:create` | MissionGroup létrehozása |
-| `group:edit` | MissionGroup szerkesztése, sorrend módosítása, mission hozzáadás/eltávolítás |
-| `group:delete` | MissionGroup törlése |
-| `group:read` | MissionGroup és tartalmának olvasása |
+| `group:create` | Create a MissionGroup |
+| `group:edit` | Edit a MissionGroup, change order, add/remove missions |
+| `group:delete` | Delete a MissionGroup |
+| `group:read` | Read a MissionGroup and its contents |
 
-**Hozzárendelés szerepkörökhöz (DataInitializer):**
-| Role | group permissionök |
+**Assignment to roles (DataInitializer):**
+| Role | group permissions |
 |---|---|
 | `ROLE_ADMIN` | `group:create`, `group:edit`, `group:delete`, `group:read` |
-| `ROLE_CONTENT_CREATOR` | `group:create`, `group:edit`, `group:delete`, `group:read` (saját group-jain, service szintű ownership check) |
+| `ROLE_CONTENT_CREATOR` | `group:create`, `group:edit`, `group:delete`, `group:read` (on their own groups, service-level ownership check) |
 | `ROLE_CADET` | `group:read` |
 
-**Kontroller annotáció minta:**
+**Controller annotation pattern:**
 ```java
 @PreAuthorize("hasAuthority('group:create')")
 @PreAuthorize("hasAuthority('group:edit')")
@@ -539,20 +541,20 @@ Az eddigi `mission:*` kategória nem fedi le a `MissionGroup` entitást — az �
 
 **Frontend sidebar permission check:**
 ```typescript
-// AdminLayout sidebar renderelési feltétel
+// AdminLayout sidebar render condition
 const canManageGroups = permissions.includes("group:create") || permissions.includes("group:read");
-// Ha true → "Csoportok" menüpont megjelenik
+// If true → the "Groups" menu item is shown
 ```
 
 ---
 
-### DB Migration stratégia (Flyway)
+### DB migration strategy (Flyway)
 
-A projekt jelenleg `spring.jpa.hibernate.ddl-auto=update`-et (vagy `create-drop`-ot) használhat. Ez fejlesztésre elfogadható, de production-ban nem biztonságos: `NOT NULL → nullable` oszlopváltozás nem végrehajtható automatikusan meglévő adatokon, tábla törlés sincs automatikusan, és a schema divergencia nyomon nem követhető.
+The project currently uses `spring.jpa.hibernate.ddl-auto=update` (or `create-drop`). That's acceptable for development, but not safe for production: a `NOT NULL → nullable` column change can't be applied automatically to existing data, tables aren't dropped automatically either, and schema drift can't be tracked.
 
-A Stage 1 változtatások érintik a meglévő sémát (pl. `orderInSystem` → `orderIndex` nullable, `fillInBlankData` eltávolítása), ezért Flyway bevezetése szükséges.
+The Stage 1 changes touch the existing schema (e.g. `orderInSystem` → nullable `orderIndex`, removing `fillInBlankData`), so introducing Flyway is necessary.
 
-**Bevezetés lépései:**
+**Steps to introduce it:**
 
 **1. `pom.xml` dependency:**
 ```xml
@@ -565,42 +567,42 @@ A Stage 1 változtatások érintik a meglévő sémát (pl. `orderInSystem` → 
     <artifactId>flyway-database-postgresql</artifactId>
 </dependency>
 ```
-Spring Boot automatikusan lefuttatja Flyway-t induláskor ha `flyway-core` a classpath-on van.
+Spring Boot automatically runs Flyway on startup once `flyway-core` is on the classpath.
 
-**2. `application.properties` módosítás:**
+**2. `application.properties` change:**
 ```properties
-# Flyway bevezetése után ddl-auto=validate: Hibernate ellenőrzi de nem módosítja a sémát
+# After introducing Flyway, ddl-auto=validate: Hibernate checks but doesn't modify the schema
 spring.jpa.hibernate.ddl-auto=validate
 spring.flyway.enabled=true
 spring.flyway.locations=classpath:db/migration
 ```
 
-**3. Migration fájlok helye:**
+**3. Migration file location:**
 ```
 backend/src/main/resources/db/migration/
-├── V1__baseline.sql          ← meglévő séma (manuálisan leírva, ha az adatbázis már tartalmaz adatot)
-└── V2__stage1_mobile.sql     ← Stage 1 változtatások
+├── V1__baseline.sql          ← existing schema (written by hand, if the database already has data)
+└── V2__stage1_mobile.sql     ← Stage 1 changes
 ```
 
-**V1 (baseline) kezelési stratégiák:**
-- Ha a fejlesztői adatbázis **docker compose-zal minden indulásnál újraépül** (nincs perzisztens volume): V1 nem szükséges, a Hibernate `create-drop` elegendő fejlesztésre, Flyway csak production-ban fut → `spring.flyway.baseline-on-migrate=true` a production properties-ben
-- Ha **perzisztens fejlesztői adatbázis** van: V1__baseline.sql létrehozása szükséges a meglévő táblák leírásával, `flyway baseline` parancs futtatása egyszer, ezután Flyway trackeli a változásokat
+**V1 (baseline) handling strategies:**
+- If the dev database **is rebuilt from scratch by docker compose on every startup** (no persistent volume): V1 isn't needed, Hibernate's `create-drop` is sufficient for development, Flyway only runs in production → `spring.flyway.baseline-on-migrate=true` in the production properties
+- If there's a **persistent dev database**: `V1__baseline.sql` needs to be created describing the existing tables, run the `flyway baseline` command once, after which Flyway tracks changes
 
-**V2__stage1_mobile.sql tartalma (mintavázlat):**
+**V2__stage1_mobile.sql contents (draft sketch):**
 ```sql
--- orderInSystem átnevezése orderIndex-re és nullable-vé tétel
+-- Rename orderInSystem to orderIndex and make it nullable
 ALTER TABLE missions RENAME COLUMN order_in_system TO order_index;
 ALTER TABLE missions ALTER COLUMN order_index DROP NOT NULL;
 
--- fillInBlankData törlése (új entitások váltják fel)
+-- Remove fillInBlankData (replaced by new entities)
 ALTER TABLE missions DROP COLUMN IF EXISTS fill_in_blank_data;
 
--- group FK és groupOrder hozzáadása
+-- Add group FK and groupOrder
 ALTER TABLE missions ADD COLUMN group_id UUID REFERENCES mission_groups(id);
 ALTER TABLE missions ADD COLUMN group_order INTEGER;
 ALTER TABLE missions ADD COLUMN content TEXT;
 
--- MissionGroup tábla
+-- MissionGroup table
 CREATE TABLE mission_groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
@@ -613,14 +615,14 @@ CREATE TABLE mission_groups (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
--- Fill-in-blank entitások
+-- Fill-in-blank entities
 CREATE TABLE fill_in_blank_definitions ( ... );
 CREATE TABLE fill_in_blank_blanks ( ... );
 CREATE TABLE fill_in_blank_options ( ... );
 CREATE TABLE fill_in_blank_attempts ( ... );
 CREATE TABLE fill_in_blank_answer_details ( ... );
 
--- Group progress entitások
+-- Group progress entities
 CREATE TABLE mission_group_progresses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cadet_id UUID NOT NULL REFERENCES cadets(id),
@@ -644,18 +646,18 @@ CREATE TABLE mission_group_step_completions (
 
 ---
 
-### Backend — `GET /api/auth/me` bővítés (generikus profil endpoint)
+### Backend — `GET /api/auth/me` extension (generic profile endpoint)
 
-A jelenlegi `/api/auth/me` csak `username` és `roles` mezőket ad vissza. A permission-aware frontend sidebar és jövőbeli feature gating miatt a válasz bővítendő.
+The current `/api/auth/me` only returns `username` and `roles`. Because of the permission-aware frontend sidebar and future feature gating, the response needs to be extended.
 
-**`GET /api/auth/me`** — Bearer token szükséges
+**`GET /api/auth/me`** — requires Bearer token
 ```json
-// Response 200 — UserProfileResponse (ÚJ DTO)
+// Response 200 — UserProfileResponse (NEW DTO)
 {
   "id": "uuid",
   "username": "badzso",
   "email": "norbert@example.com",
-  "fullName": "Ujj Norbert",
+  "fullName": "Norbert Ujj",
   "avatarUrl": null,
   "roles": ["ROLE_ADMIN"],
   "permissions": [
@@ -679,19 +681,19 @@ public class UserProfileResponse {
     private String fullName;
     private String avatarUrl;
     private List<String> roles;
-    private List<String> permissions;  // flat lista: minden role összes permissionje, deduplikálva
+    private List<String> permissions;  // flat list: every role's permissions combined, deduplicated
 }
 ```
 
-**Backend service logika** (`AuthService.getMe()`):
+**Backend service logic** (`AuthService.getMe()`):
 ```java
 public UserProfileResponse getMe(String username) {
     Cadet cadet = cadetRepository.findByUsername(username).orElseThrow(...);
     Set<String> permissions = cadet.getRoles().stream()
         .flatMap(role -> role.getPermissions().stream())
         .map(Permission::getName)
-        .collect(Collectors.toSet());  // Set → deduplikálás automatikus
-    
+        .collect(Collectors.toSet());  // Set → automatic dedup
+
     return UserProfileResponse.builder()
         .id(cadet.getId())
         .username(cadet.getUsername())
@@ -704,7 +706,7 @@ public UserProfileResponse getMe(String username) {
 }
 ```
 
-**Frontend — `types/auth.ts` módosítás:**
+**Frontend — `types/auth.ts` change:**
 ```typescript
 export interface User {
   id: string;
@@ -713,12 +715,12 @@ export interface User {
   fullName?: string;
   avatarUrl?: string | null;
   roles: string[];
-  permissions: string[];  // ← ÚJ, /auth/me-ből töltődik fel
+  permissions: string[];  // ← NEW, populated from /auth/me
   exp?: number;
 }
 ```
 
-**Frontend — `AuthContext.tsx` módosítás (a setState blokkban):**
+**Frontend — `AuthContext.tsx` change (in the setState block):**
 ```typescript
 setState(prev => ({
   ...prev,
@@ -730,31 +732,31 @@ setState(prev => ({
     fullName: response.data.fullName,
     avatarUrl: response.data.avatarUrl,
     roles: response.data.roles,
-    permissions: response.data.permissions,  // ← ÚJ
+    permissions: response.data.permissions,  // ← NEW
   },
   isLoading: false,
 }));
 ```
 
-**Generikus frontend használat — `hasPermission` minden feature gating-hez:**
+**Generic frontend usage — `hasPermission` for all feature gating:**
 ```typescript
-// AuthContextType-ban:
+// In AuthContextType:
 hasPermission: (permission: string) => boolean
-// Implementáció:
+// Implementation:
 const hasPermission = (p: string) => state.user?.permissions.includes(p) ?? false
 
-// Használat a komponensekben:
+// Usage in components:
 const { hasPermission } = useAuth()
 if (hasPermission("group:create")) { ... }
 if (hasPermission("mission:edit")) { ... }
-// Soha ne role-check: user?.roles.includes("ROLE_ADMIN") — ezt CSAK auth guard-okhoz használjuk
+// Never role-check directly: user?.roles.includes("ROLE_ADMIN") — reserve that ONLY for auth guards
 ```
 
-> **Elv:** UI elemek láthatóságát mindig `hasPermission()` dönti el, nem role. Így a `ROLE_CONTENT_CREATOR` automatikusan a saját permission-set alapján látja a megfelelő menüpontokat, és ha jövőben egy új role-t hozunk létre, nem kell a frontend kódot módosítani.
+> **Principle:** UI element visibility should always be decided by `hasPermission()`, not by role. That way `ROLE_CONTENT_CREATOR` automatically sees the right menu items based on its own permission set, and when a new role is introduced in the future, the frontend code doesn't need to change.
 
 ---
 
-### Backend — Összes új endpoint + DTO-k
+### Backend — all new endpoints + DTOs
 
 ---
 
@@ -763,10 +765,10 @@ if (hasPermission("mission:edit")) { ... }
 **`POST /api/mission-groups`** — `group:create`
 ```json
 // Request
-{ "name": "JavaScript Változók", "description": "...", "starSystemId": "uuid", "orderIndex": 1 }
+{ "name": "JavaScript Variables", "description": "...", "starSystemId": "uuid", "orderIndex": 1 }
 
 // Response 201
-{ "id": "uuid", "name": "JavaScript Változók", "description": "...", "starSystemId": "uuid",
+{ "id": "uuid", "name": "JavaScript Variables", "description": "...", "starSystemId": "uuid",
   "orderIndex": 1, "missions": [], "createdAt": "...", "updatedAt": "...",
   "ownerId": "uuid", "updatedById": null }
 ```
@@ -786,59 +788,59 @@ if (hasPermission("mission:edit")) { ... }
 **`PUT /api/mission-groups/{id}`** — `group:edit`
 ```json
 // Request
-{ "name": "Új név", "description": "..." }
-// Response 200 — MissionGroupResponse (mint fent, updatedById frissítve)
+{ "name": "New name", "description": "..." }
+// Response 200 — MissionGroupResponse (as above, updatedById refreshed)
 ```
 
 **`DELETE /api/mission-groups/{id}`** — `group:delete`
 ```
-// Response 204 — CONTENT/QUIZ/CODING missionök standalone-ná válnak
-// Response 400 — ha FILL_IN_BLANK misszió van:
-{ "error": "GROUP_HAS_FILL_IN_BLANK", "message": "Előbb mozgasd vagy töröld a fill-in-blank missiont" }
+// Response 204 — CONTENT/QUIZ/CODING missions become standalone
+// Response 400 — if there's a FILL_IN_BLANK mission in the group:
+{ "error": "GROUP_HAS_FILL_IN_BLANK", "message": "Move or delete the fill-in-blank mission first" }
 ```
 
-**`POST /api/mission-groups/{id}/missions`** — `group:edit` — mission hozzáadása
+**`POST /api/mission-groups/{id}/missions`** — `group:edit` — add a mission
 ```json
 // Request
 { "missionId": "uuid", "groupOrder": 2 }
 // Response 200 — MissionGroupResponse
-// Response 409 (ResourceConflictException) — ha a mission már másik group-ban van:
+// Response 409 (ResourceConflictException) — if the mission already belongs to another group:
 { "status": 409, "error": "Conflict",
-  "message": "A misszió már hozzá van rendelve egy másik csoporthoz",
-  "data": { "conflictingGroupId": "uuid", "conflictingGroupName": "String műveletek" } }
+  "message": "This mission is already assigned to another group",
+  "data": { "conflictingGroupId": "uuid", "conflictingGroupName": "String operations" } }
 ```
 
-**`DELETE /api/mission-groups/{id}/missions/{missionId}`** — `group:edit` — mission eltávolítása (standalone lesz)
+**`DELETE /api/mission-groups/{id}/missions/{missionId}`** — `group:edit` — remove a mission (becomes standalone)
 ```
-// Response 204 — mission orderIndex értéket kap, groupOrder null lesz, group FK null lesz
-// Response 400 — ha FILL_IN_BLANK:
-{ "error": "FILL_IN_BLANK_REQUIRES_GROUP", "message": "A fill-in-blank misszió nem lehet standalone" }
+// Response 204 — mission gets an orderIndex, groupOrder becomes null, group FK becomes null
+// Response 400 — if FILL_IN_BLANK:
+{ "error": "FILL_IN_BLANK_REQUIRES_GROUP", "message": "A fill-in-blank mission cannot be standalone" }
 ```
 
-**`PUT /api/mission-groups/{id}/reorder`** — `group:edit` — group sorrendje a star systemben
+**`PUT /api/mission-groups/{id}/reorder`** — `group:edit` — group's order within the star system
 ```json
-// Request: { "direction": "up" }  // vagy "down"
-// Response 200 — csak az érintett két elem:
+// Request: { "direction": "up" }  // or "down"
+// Response 200 — only the two affected items:
 { "updated": [ { "id": "uuid1", "orderIndex": 0 }, { "id": "uuid2", "orderIndex": 1 } ] }
 ```
 
-**`PUT /api/missions/{id}/group-order`** — `group:edit` — misszió sorrendje group-on belül
+**`PUT /api/missions/{id}/group-order`** — `group:edit` — mission's order within a group
 ```json
-// Request: { "direction": "up" }  // vagy "down"
-// Response 200 — csak az érintett két elem:
+// Request: { "direction": "up" }  // or "down"
+// Response 200 — only the two affected items:
 { "updated": [ { "id": "uuid1", "groupOrder": 0 }, { "id": "uuid2", "groupOrder": 1 } ] }
 ```
 
-**`PUT /api/missions/{id}/reorder`** — `mission:edit` — standalone misszió sorrendje a star systemben
+**`PUT /api/missions/{id}/reorder`** — `mission:edit` — standalone mission's order within the star system
 ```json
-// Request: { "direction": "up" }  // vagy "down"
-// Response 200 — csak az érintett két elem (mindkét standalone mission vagy group):
+// Request: { "direction": "up" }  // or "down"
+// Response 200 — only the two affected items (either standalone mission or group):
 { "updated": [ { "id": "uuid1", "orderIndex": 0 }, { "id": "uuid2", "orderIndex": 1 } ] }
-// Response 400 — ha a mission group-ban van (groupId != null)
+// Response 400 — if the mission is inside a group (groupId != null)
 ```
-> **Megjegyzés:** Ez az endpoint a star systemen belüli standalone missziók és group-ok közötti sorrend kezeléséhez szükséges. Az orderIndex-ek a star systemben lévő összes elem (group + standalone) között értelmezendők. A swap logika: megkeresi a szomszédos elemet (group vagy standalone mission) a `orderIndex ± 1` pozícióban, majd felcseréli a két elem orderIndex értékét.
+> **Note:** this endpoint handles order management between standalone missions and groups within a star system. The orderIndex values are interpreted across every item in the star system (groups + standalone). Swap logic: finds the neighboring item (group or standalone mission) at the `orderIndex ± 1` position, then swaps the two items' orderIndex values.
 
-**`GET /api/mission-groups/my-groups`** — `group:read` — saját group-ok (content creator)
+**`GET /api/mission-groups/my-groups`** — `group:read` — own groups (content creator)
 ```json
 // Response 200
 [{ "id": "uuid", "name": "...", "starSystemId": "uuid", "orderIndex": 0, "missions": [...] }]
@@ -848,23 +850,23 @@ if (hasPermission("mission:edit")) { ... }
 
 #### Fill-in-blank (admin)
 
-**`POST /api/missions/{missionId}/fill-in-blank`** — `mission:edit` — definíció létrehozása
+**`POST /api/missions/{missionId}/fill-in-blank`** — `mission:edit` — create the definition
 ```
-// Request: ld. fentebb (blanks tömb, templateText, passThreshold)
-// Response 201 — FillInBlankAdminResponse (isCorrect benne van)
-// Response 400 — ha a mission nem FILL_IN_BLANK típus
-// Response 409 — ha már létezik definíció a missionhöz (használd PUT-ot)
+// Request: see above (blanks array, templateText, passThreshold)
+// Response 201 — FillInBlankAdminResponse (includes isCorrect)
+// Response 400 — if the mission isn't of type FILL_IN_BLANK
+// Response 409 — if a definition already exists for this mission (use PUT instead)
 ```
 
-**`PUT /api/missions/{missionId}/fill-in-blank`** — `mission:edit` — teljes felülírás
+**`PUT /api/missions/{missionId}/fill-in-blank`** — `mission:edit` — full overwrite
 ```
-// Request: azonos a POST-tal
+// Request: same as POST
 // Response 200 — FillInBlankAdminResponse
-// Logika: @Transactional — törli az összes meglévő FillInBlankBlank + FillInBlankOption entitást,
-//         majd újraírja az egészet a kért adatokkal
+// Logic: @Transactional — deletes all existing FillInBlankBlank + FillInBlankOption entities,
+//        then rewrites everything from the request
 ```
 
-**`GET /api/missions/{missionId}/fill-in-blank/admin`** — `mission:edit` — admin nézet
+**`GET /api/missions/{missionId}/fill-in-blank/admin`** — `mission:edit` — admin view
 ```json
 // Response 200
 {
@@ -872,29 +874,29 @@ if (hasPermission("mission:edit")) { ... }
   "blanks": [
     { "id": "uuid-blank-1", "key": "blank_1", "orderIndex": 0,
       "options": [
-        { "id": "uuid-opt-1", "optionText": "egyszer",  "isCorrect": true,  "orderIndex": 0 },
-        { "id": "uuid-opt-2", "optionText": "többször", "isCorrect": false, "orderIndex": 1 }
+        { "id": "uuid-opt-1", "optionText": "once",       "isCorrect": true,  "orderIndex": 0 },
+        { "id": "uuid-opt-2", "optionText": "many times", "isCorrect": false, "orderIndex": 1 }
       ]
     }
   ]
 }
-// Response 404 — ha nincs definíció
+// Response 404 — if there's no definition
 ```
 
 ---
 
 #### Fill-in-blank (user)
 
-**`GET /api/missions/{missionId}/fill-in-blank`** — `mission:read` — user nézet
+**`GET /api/missions/{missionId}/fill-in-blank`** — `mission:read` — user view
 ```json
-// Response 200 — isCorrect NÉLKÜL
+// Response 200 — WITHOUT isCorrect
 {
   "missionId": "uuid", "templateText": "...", "passThreshold": 70,
   "blanks": [
     { "id": "uuid-blank-1", "key": "blank_1", "orderIndex": 0,
       "options": [
-        { "id": "uuid-opt-1", "optionText": "egyszer",  "orderIndex": 0 },
-        { "id": "uuid-opt-2", "optionText": "többször", "orderIndex": 1 }
+        { "id": "uuid-opt-1", "optionText": "once",       "orderIndex": 0 },
+        { "id": "uuid-opt-2", "optionText": "many times", "orderIndex": 1 }
       ]
     }
   ]
@@ -903,7 +905,7 @@ if (hasPermission("mission:edit")) { ... }
 
 **`POST /api/missions/{missionId}/submit-fill-blank`** — `mission:start`
 ```json
-// Request — optionId-kat küld, nem szövegeket (manipuláció ellen)
+// Request — sends optionIds, not text (to prevent manipulation)
 {
   "answers": {
     "blank_1": "uuid-opt-1",
@@ -917,23 +919,23 @@ if (hasPermission("mission:edit")) { ... }
   "score": 1, "maxScore": 2, "percentage": 50,
   "passed": false, "passThreshold": 70,
   "results": [
-    { "blankKey": "blank_1", "correct": true,  "selectedOptionText": "egyszer",   "correctOptionTexts": ["egyszer"] },
-    { "blankKey": "blank_2", "correct": false, "selectedOptionText": "egyszer",   "correctOptionTexts": ["egyszer", "többször"] }
+    { "blankKey": "blank_1", "correct": true,  "selectedOptionText": "once", "correctOptionTexts": ["once"] },
+    { "blankKey": "blank_2", "correct": false, "selectedOptionText": "once", "correctOptionTexts": ["once", "many times"] }
   ]
 }
 
-// Response 400 — ha a mission nem FILL_IN_BLANK típus
-// Response 400 — ha optionId egyáltalán nem létezik az adatbázisban (teljesen ismeretlen UUID)
-// FONTOS: cross-blank beküldés (pl. blank_2 opciója kerül blank_1-hez) NEM 400, hanem correct: false
+// Response 400 — if the mission isn't of type FILL_IN_BLANK
+// Response 400 — if an optionId doesn't exist in the database at all (completely unknown UUID)
+// IMPORTANT: a cross-blank submission (e.g. blank_2's option submitted for blank_1) is NOT a 400, just correct: false
 ```
 
 ---
 
 #### Group Progress (user)
 
-**`GET /api/group-progress/{groupId}`** — `mission:start` — progress lekérése
+**`GET /api/group-progress/{groupId}`** — `mission:start` — fetch progress
 ```json
-// Response 200 — ha létezik progress rekord
+// Response 200 — if a progress record exists
 {
   "groupId": "uuid",
   "nextMissionId": "uuid-mission-1",
@@ -945,37 +947,37 @@ if (hasPermission("mission:edit")) { ... }
   "totalMissions": 3
 }
 
-// Response 404 (ResourceNotFoundException) — ha nincs progress rekord
-// Frontend reagálás: POST /api/group-progress/{groupId}/start
+// Response 404 (ResourceNotFoundException) — if there's no progress record
+// Frontend response: POST /api/group-progress/{groupId}/start
 ```
 
-**`POST /api/group-progress/{groupId}/start`** — `mission:start` — progress rekord létrehozása
+**`POST /api/group-progress/{groupId}/start`** — `mission:start` — create the progress record
 ```json
-// Request — üres body
-// Response 201 — GroupProgressResponse (nextMissionId = az első misszió id-ja, completedMissionIds=[])
-// Response 409 (ResourceConflictException) — ha már létezik progress rekord
-// Frontend reagálás 409-re: GET-tel olvassa be a meglévőt
+// Request — empty body
+// Response 201 — GroupProgressResponse (nextMissionId = the first mission's id, completedMissionIds=[])
+// Response 409 (ResourceConflictException) — if a progress record already exists
+// Frontend response to 409: read the existing one via GET
 ```
 
 **`POST /api/group-progress/{groupId}/complete-step`** — `mission:start`
 ```json
-// Request — üres body
+// Request — empty body
 
-// Backend logika:
-// 1. Betölti a progress rekordot (404 ha nincs)
-// 2. Meghatározza az aktuális missziót a nextMissionId alapján
-// 3. Ha missionType == FILL_IN_BLANK:
-//      Ellenőrzi: van-e FillInBlankAttempt ahol cadet=current AND mission=current AND passed=true
-//      Ha nincs → 400 Bad Request
+// Backend logic:
+// 1. Loads the progress record (404 if none)
+// 2. Determines the current mission based on nextMissionId
+// 3. If missionType == FILL_IN_BLANK:
+//      Checks whether a FillInBlankAttempt exists where cadet=current AND mission=current AND passed=true
+//      If not → 400 Bad Request
 // 4. INSERT INTO mission_group_step_completions (progress_id, mission_id) ON CONFLICT DO NOTHING
-// 5. Kiszámolja az új nextMissionId-t: group missionjei groupOrder szerint,
-//    az első amelynek id-ja NEM szerepel a step_completions-ben
-// 6. Ha nincs ilyen → completed=true, completedAt=now(), nextMissionId=null
-// 7. Menti és visszaadja a frissített progress rekordot
+// 5. Computes the new nextMissionId: the group's missions sorted by groupOrder,
+//    the first one whose id is NOT in step_completions
+// 6. If there's no such one → completed=true, completedAt=now(), nextMissionId=null
+// 7. Saves and returns the updated progress record
 
-// Response 200 — GroupProgressResponse frissített állapottal
+// Response 200 — GroupProgressResponse with the updated state
 // Response 400 — { "error": "FILL_IN_BLANK_NOT_PASSED",
-//                   "message": "Ezt a feladatot még nem teljesítetted sikeresen." }
+//                   "message": "You haven't completed this task successfully yet." }
 ```
 
 ---
@@ -984,13 +986,13 @@ if (hasPermission("mission:edit")) { ... }
 
 **`GET /api/missions/{id}/content`** — `mission:read`
 
-Query paraméterek: `page` (default: 0), `size` (default: 100, max: 500)
+Query params: `page` (default: 0), `size` (default: 100, max: 500)
 ```json
 // Response 200
 {
   "missionId": "uuid",
-  "missionName": "Változók leírása",
-  "content": "## Bevezetés\n\nA változók...",
+  "missionName": "Description of variables",
+  "content": "## Introduction\n\nVariables...",
   "page": 0,
   "pageSize": 100,
   "totalLines": 247,
@@ -998,32 +1000,32 @@ Query paraméterek: `page` (default: 0), `size` (default: 100, max: 500)
   "hasNextPage": true,
   "hasPreviousPage": false
 }
-// Response 400 — ha a mission nem CONTENT típus
-// Response 404 — ha a mission nem létezik
+// Response 400 — if the mission isn't of type CONTENT
+// Response 404 — if the mission doesn't exist
 ```
 
 ---
 
-#### Star System with-missions bővítés
+#### Star System with-missions extension
 
-**`GET /api/star-systems/{id}/with-missions`** — `starsystem:read` — **rendezett items tömb**
+**`GET /api/star-systems/{id}/with-missions`** — `starsystem:read` — **sorted items array**
 ```json
 // Response 200
 {
   "id": "uuid",
-  "name": "JavaScript Alapjai",
+  "name": "JavaScript Fundamentals",
   "description": "...",
   "iconUrl": "...",
   "items": [
     {
       "type": "GROUP",
       "id": "uuid-group-1",
-      "name": "Változók",
+      "name": "Variables",
       "orderIndex": 0,
       "missions": [
-        { "id": "uuid", "name": "Változók leírása",  "missionType": "CONTENT",       "groupOrder": 0 },
-        { "id": "uuid", "name": "Kitöltős feladat",  "missionType": "FILL_IN_BLANK", "groupOrder": 1 },
-        { "id": "uuid", "name": "Kvíz",              "missionType": "QUIZ",          "groupOrder": 2 }
+        { "id": "uuid", "name": "Description of variables", "missionType": "CONTENT",       "groupOrder": 0 },
+        { "id": "uuid", "name": "Fill-in-the-blank exercise", "missionType": "FILL_IN_BLANK", "groupOrder": 1 },
+        { "id": "uuid", "name": "Quiz",                       "missionType": "QUIZ",          "groupOrder": 2 }
       ]
     },
     {
@@ -1037,12 +1039,12 @@ Query paraméterek: `page` (default: 0), `size` (default: 100, max: 500)
   ]
 }
 ```
-A backend az összes group és standalone mission `orderIndex` alapján rendezve adja vissza. A frontend TypeScript-ben discriminated union-nal (`type: "GROUP" | "MISSION"`) kezeli.
+The backend returns every group and standalone mission sorted by `orderIndex`. The frontend handles this in TypeScript via a discriminated union (`type: "GROUP" | "MISSION"`).
 
-**Backend DTO osztályok (Jackson polimorfizmus):**
+**Backend DTO classes (Jackson polymorphism):**
 
 ```java
-// Alap interface — Jackson tudja szétválasztani type mező alapján
+// Base interface — Jackson can distinguish based on the type field
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
     @JsonSubTypes.Type(value = StarSystemGroupItemDTO.class,   name = "GROUP"),
@@ -1060,7 +1062,7 @@ public class StarSystemGroupItemDTO extends StarSystemItemDTO {
     private String name;
     private int orderIndex;
     private List<MissionInGroupResponse> missions;
-    // type = "GROUP" — Jackson automatikusan beírja
+    // type = "GROUP" — Jackson fills this in automatically
 }
 
 @Data @Builder
@@ -1079,26 +1081,26 @@ public class StarSystemDetailResponse {
     private String name;
     private String description;
     private String iconUrl;
-    private List<StarSystemItemDTO> items;  // vegyes lista, rendezve orderIndex szerint
+    private List<StarSystemItemDTO> items;  // mixed list, sorted by orderIndex
 }
 ```
 
-**Backend service metódus (`StarSystemService.getWithMissions`):**
+**Backend service method (`StarSystemService.getWithMissions`):**
 
 ```java
 public StarSystemDetailResponse getWithMissions(UUID starSystemId) {
     StarSystem ss = starSystemRepository.findById(starSystemId)
         .orElseThrow(() -> new ResourceNotFoundException("StarSystem", "id", starSystemId));
 
-    // 1. Összes csoport a star systemhez (eagerly fetch-eli a missions listát)
+    // 1. All groups for the star system (eagerly fetches the missions list)
     List<MissionGroup> groups = missionGroupRepository
         .findByStarSystemIdOrderByOrderIndex(starSystemId);
 
-    // 2. Standalone missziók (groupId IS NULL), rendezve
+    // 2. Standalone missions (groupId IS NULL), sorted
     List<Mission> standalone = missionRepository
         .findByStarSystemIdAndGroupIsNullOrderByOrderIndex(starSystemId);
 
-    // 3. Merge + rendezés
+    // 3. Merge + sort
     List<StarSystemItemDTO> items = new ArrayList<>();
     for (MissionGroup g : groups) {
         List<MissionInGroupResponse> mInGroup = g.getMissions().stream()
@@ -1133,16 +1135,16 @@ public StarSystemDetailResponse getWithMissions(UUID starSystemId) {
 }
 ```
 
-**Repository metódusok szükségesek:**
+**Required repository methods:**
 ```java
 // MissionGroupRepository:
 List<MissionGroup> findByStarSystemIdOrderByOrderIndex(UUID starSystemId);
 
-// MissionRepository (már létezhet részben, de ez az új sor):
+// MissionRepository (may partly already exist, but this is the new one):
 List<Mission> findByStarSystemIdAndGroupIsNullOrderByOrderIndex(UUID starSystemId);
 ```
 
-> **N+1 elkerülése:** A `findByStarSystemId...` query-nél a `MissionGroup.missions` lista `@OneToMany(fetch = LAZY)` → a service metódusban `JOIN FETCH` szükséges vagy `@EntityGraph`. Javasolt: `@EntityGraph(attributePaths = {"missions"})` a repository metóduson, így egy queryben jön le az összes csoport és a bennük lévő missziók.
+> **Avoiding N+1:** for the `findByStarSystemId...` query, `MissionGroup.missions` is `@OneToMany(fetch = LAZY)` → the service method needs a `JOIN FETCH` or `@EntityGraph`. Recommended: `@EntityGraph(attributePaths = {"missions"})` on the repository method, so every group and its missions come back in a single query.
 
 ---
 
@@ -1153,35 +1155,35 @@ List<Mission> findByStarSystemIdAndGroupIsNullOrderByOrderIndex(UUID starSystemI
 // Response 200
 {
   "groupId": "uuid",
-  "groupName": "Változók",
+  "groupName": "Variables",
   "starSystemId": "uuid",
   "missions": [
-    { "id": "uuid", "name": "Változók leírása",  "missionType": "CONTENT",       "groupOrder": 0 },
-    { "id": "uuid", "name": "Kitöltős feladat",  "missionType": "FILL_IN_BLANK", "groupOrder": 1 },
-    { "id": "uuid", "name": "Kvíz",              "missionType": "QUIZ",          "groupOrder": 2 }
+    { "id": "uuid", "name": "Description of variables", "missionType": "CONTENT",       "groupOrder": 0 },
+    { "id": "uuid", "name": "Fill-in-the-blank exercise", "missionType": "FILL_IN_BLANK", "groupOrder": 1 },
+    { "id": "uuid", "name": "Quiz",                       "missionType": "QUIZ",          "groupOrder": 2 }
   ]
 }
-// fillInBlankData NEM szerepel itt — Group Player külön GET /fill-in-blank hívással tölti be
+// fillInBlankData is NOT included here — the Group Player loads it separately via GET /fill-in-blank
 ```
 
 ---
 
-### Frontend — TypeScript típusok
+### Frontend — TypeScript types
 
-**`types/mission.ts` bővítése:**
+**`types/mission.ts` extension:**
 ```typescript
 type MissionType = "CODING" | "CIRCUIT_SIMULATION" | "QUIZ" | "CONTENT" | "FILL_IN_BLANK"
 
 interface MissionResponse {
-  // ... meglévő mezők ...
-  starSystemId: string          // denormalizálva — közvetlen navigációhoz
+  // ... existing fields ...
+  starSystemId: string          // denormalized — for direct navigation
   groupId?: string | null
   groupOrder?: number | null
   orderIndex?: number | null
   content?: string | null
 }
 
-// Fill-in-blank user DTO (isCorrect NÉLKÜL)
+// Fill-in-blank user DTO (WITHOUT isCorrect)
 interface FillInBlankOptionUser { id: string; optionText: string; orderIndex: number }
 interface FillInBlankBlankUser  { id: string; key: string; orderIndex: number; options: FillInBlankOptionUser[] }
 interface FillInBlankUserResponse {
@@ -1189,7 +1191,7 @@ interface FillInBlankUserResponse {
   blanks: FillInBlankBlankUser[]
 }
 
-// Fill-in-blank admin DTO (isCorrect benne van)
+// Fill-in-blank admin DTO (includes isCorrect)
 interface FillInBlankOptionAdmin { id?: string; optionText: string; isCorrect: boolean; orderIndex: number }
 interface FillInBlankBlankAdmin  { id?: string; key: string; orderIndex: number; options: FillInBlankOptionAdmin[] }
 interface FillInBlankAdminResponse {
@@ -1219,7 +1221,7 @@ interface ContentPageResponse {
 }
 ```
 
-**`types/missionGroup.ts` (új fájl):**
+**`types/missionGroup.ts` (new file):**
 ```typescript
 interface MissionGroupResponse {
   id: string; name: string; description?: string
@@ -1235,7 +1237,7 @@ interface ReorderUpdatedItem { id: string; orderIndex?: number; groupOrder?: num
 interface ReorderResponse { updated: ReorderUpdatedItem[] }
 ```
 
-**`types/groupProgress.ts` (új fájl):**
+**`types/groupProgress.ts` (new file):**
 ```typescript
 interface GroupProgressResponse {
   groupId: string; nextMissionId: string | null
@@ -1244,7 +1246,7 @@ interface GroupProgressResponse {
 }
 ```
 
-**`types/starSystem.ts` bővítése:**
+**`types/starSystem.ts` extension:**
 ```typescript
 interface StarSystemGroupItem {
   type: "GROUP"; id: string; name: string; orderIndex: number; missions: MissionInGroupResponse[]
@@ -1260,140 +1262,55 @@ interface StarSystemDetailResponse {
 
 ---
 
-### Frontend — Fájlstruktúra (Stage 1 változások)
+### Frontend — file structure (Stage 1 changes)
 
-**Új fájlok:**
+**New files:**
 ```
 src/
 ├── types/
-│   ├── missionGroup.ts          # MissionGroupResponse, GroupMissionsResponse, stb.
-│   └── groupProgress.ts         # GroupProgressResponse, GroupDisplayProgress, stb.
+│   ├── missionGroup.ts          # MissionGroupResponse, GroupMissionsResponse, etc.
+│   └── groupProgress.ts         # GroupProgressResponse, GroupDisplayProgress, etc.
 ├── components/
 │   ├── admin/
 │   │   ├── MarkdownEditor.tsx   # Textarea + live react-markdown preview
-│   │   └── FillInBlankEditor.tsx # Blank detektor + opció editor
+│   │   └── FillInBlankEditor.tsx # Blank detector + option editor
 │   └── play/
-│       ├── ContentPlayer.tsx    # Content lejátszó logika (missionId + onComplete prop)
-│       └── FillInBlankView.tsx  # Mixed pool kitöltős feladat
+│       ├── ContentPlayer.tsx    # Content player logic (missionId + onComplete prop)
+│       └── FillInBlankView.tsx  # Mixed pool fill-in-the-blank exercise
 └── pages/
     └── play/
         ├── ContentMissionView.tsx  # Route wrapper: /play/content/:missionId
         └── MissionGroupPlayer.tsx  # Route wrapper: /play/group/:groupId
 ```
 
-**Módosítandó fájlok:**
+**Files to modify:**
 ```
-src/types/auth.ts                    # + permissions: string[] a User-ben
-src/types/mission.ts                 # + CONTENT/FILL_IN_BLANK, + starSystemId stb.
-src/types/starSystem.ts              # Teljes csere: StarSystemDetailResponse + items[]
-src/context/AuthContext.tsx          # + permissions kinyerése /auth/me-ből + hasPermission()
+src/types/auth.ts                    # + permissions: string[] on User
+src/types/mission.ts                 # + CONTENT/FILL_IN_BLANK, + starSystemId etc.
+src/types/starSystem.ts              # Full replacement: StarSystemDetailResponse + items[]
+src/context/AuthContext.tsx          # + extract permissions from /auth/me + hasPermission()
 src/layouts/AdminLayout.tsx          # permission-aware menuItems
-src/router/index.tsx                 # + 2 új play route
-src/api/client.ts                    # + groupApi, groupProgressApi, fillInBlankApi modulok
-src/pages/admin/star-system/StarSystemEdit.tsx    # Teljes újraírás: fa struktúra
+src/router/index.tsx                 # + 2 new play routes
+src/api/client.ts                    # + groupApi, groupProgressApi, fillInBlankApi modules
+src/pages/admin/star-system/StarSystemEdit.tsx    # Full rewrite: tree structure
 src/pages/admin/missions/MissionEdit.tsx          # + MarkdownEditor/FillInBlankEditor
-src/pages/star-system-detail/StarSystemDetailPage.tsx  # Teljes újraírás: items[] + progress
-src/components/forge/quiz/QuizPlayerComponent.tsx # Új komponens (API logika nélküli QuizPlayer page)
-src/pages/mission-forge/QuizPlayerPage.tsx        # Vékony wrapper → QuizPlayerComponent
+src/pages/star-system-detail/StarSystemDetailPage.tsx  # Full rewrite: items[] + progress
+src/components/forge/quiz/QuizPlayerComponent.tsx # New component (QuizPlayer page without the API logic)
+src/pages/mission-forge/QuizPlayerPage.tsx        # Thin wrapper → QuizPlayerComponent
 src/pages/admin/star-system/StarSystemList.tsx    # URL cleanup
 src/pages/admin/missions/MissionList.tsx          # URL cleanup
 ```
 
 ---
 
-## i18n kulcsok — teljes lista (Stage 1 új kulcsok)
+## i18n keys — full list (Stage 1 new keys)
 
-A meglévő `src/i18n/config.ts` fájlban mindkét language objektumba (`en.translation`, `hu.translation`) be kell szúrni az alábbi kulcsokat. A `{{placeholder}}` szintaxis az i18next interpoláció.
-
-```typescript
-// HU fordítások (EN párjuk alább)
-admin: {
-  // Meglévő admin kulcsok megmaradnak, ezek az újak:
-  groups: "Csoportok",
-  group: {
-    createGroup: "Csoport létrehozása",
-    groupName: "Csoport neve",
-    description: "Leírás (opcionális)",
-    noGroups: "Nincsenek csoportok ebben a csillagrendszerben",
-    addMissionToGroup: "Misszió hozzáadása a csoporthoz",
-    selectGroup: "Válassz csoportot",
-    moveToGroup: "Csoportba mozgatás",
-    noGroupsForMove: "Nincs csoport — hozz létre egyet először",
-    deleteConfirm: "Biztosan törlöd ezt a csoportot? A benne lévő missziók standalone-ná válnak.",
-    deleteError_fillInBlank: "A csoport FILL_IN_BLANK missziót tartalmaz — töröld előbb",
-    conflictError: "Ez a misszió már a '{{name}}' csoporthoz tartozik",
-    removeFillInBlankError: "FILL_IN_BLANK misszió nem lehet standalone",
-    reorderError: "Nem sikerült átrendezni",
-    saveSuccess: "Csoport elmentve",
-    deleteSuccess: "Csoport törölve",
-  },
-  mission: {
-    // Meglévő mission kulcsok megmaradnak, ezek az újak:
-    addBlank: "[[Blank]] hozzáadása",
-    passThreshold: "Sikerességi küszöb (%)",
-    passThresholdHelp: "0–100 között. Üresen hagyva mindig sikeresnek számít.",
-    noThreshold: "Nincs küszöb",
-    contentPreview: "Tartalom előnézete",
-    markdownContent: "Markdown tartalom",
-    fillInBlankContent: "Fill-in-blank tartalom",
-    saveFirstForFillInBlank: "Mentsd el a missziót, majd visszatérve szerkesztheted a fill-in-blank tartalmat.",
-    blankLabel: "{{key}} opcióit:",
-    optionCorrect: "Helyes",
-    optionPlaceholder: "Opció szövege...",
-    maxOptionsReached: "Maximum 5 opció érhető el",
-  },
-  starSystem: {
-    // Meglévő star system kulcsok megmaradnak, ezek az újak:
-    items: "{{count}} elem",
-    reorderSuccess: "Sorrend frissítve",
-    groupCreated: "Csoport létrehozva",
-    missionMoved: "Misszió átmozgatva",
-  },
-},
-play: {
-  content: {
-    loadMore: "Több betöltése",
-    next: "Következő →",
-    back: "← Vissza",
-    systemComplete: "Megvizsgáltad az összes anyagot ebben a csillagrendszerben!",
-    backToSystem: "Vissza a csillagrendszerhez",
-  },
-  fillInBlank: {
-    submit: "Beküldés",
-    retry: "Újra",
-    alreadyPassed: "Ezt a feladatot már sikeresen teljesítetted.",
-    nextStep: "Következő lépés →",
-    score: "Eredmény: {{score}} / {{max}} ({{pct}}%)",
-    passed: "Sikeres!",
-    failed: "Nem sikerült. Próbáld újra!",
-    correctAnswers: "Helyes válaszok:",
-    fillAllBlanks: "Töltsd ki az összes mezőt a beküldéshez",
-    optionPool: "Válassz az alábbi lehetőségek közül:",
-  },
-  group: {
-    step: "{{current}} / {{total}} lépés",
-    back: "← Vissza",
-    completed: "Csoport teljesítve!",
-    backToSystem: "Vissza a csillagrendszerhez",
-    loadError: "Nem sikerült betölteni a feladatot.",
-    stepError: "Nem sikerült továbblépni. Próbáld újra.",
-  },
-},
-starSystem: {
-  // Meglévő kulcsok megmaradnak, ezek az újak:
-  startGroup: "Kezdd el",
-  continueGroup: "Folytatás",
-  replayGroup: "Újra",
-  groupCompleted: "Teljesítve",
-  missions: "{{count}} misszió",
-  progress: "{{done}} / {{total}} lépés",
-  loadError: "Nem sikerült betölteni a csillagrendszert.",
-},
-```
+In the existing `src/i18n/config.ts` file, the following keys need to be inserted into both language objects (`en.translation`, `hu.translation`). The `{{placeholder}}` syntax is i18next interpolation.
 
 ```typescript
-// EN fordítások (teljes egyezés HU struktúrával, más szövegekkel)
+// EN translations (HU counterpart below)
 admin: {
+  // Existing admin keys stay, these are the new ones:
   groups: "Groups",
   group: {
     createGroup: "Create Group",
@@ -1413,6 +1330,7 @@ admin: {
     deleteSuccess: "Group deleted",
   },
   mission: {
+    // Existing mission keys stay, these are the new ones:
     addBlank: "Add [[Blank]]",
     passThreshold: "Pass threshold (%)",
     passThresholdHelp: "0–100. Leave empty to always pass.",
@@ -1427,6 +1345,7 @@ admin: {
     maxOptionsReached: "Maximum 5 options allowed",
   },
   starSystem: {
+    // Existing star system keys stay, these are the new ones:
     items: "{{count}} item(s)",
     reorderSuccess: "Order updated",
     groupCreated: "Group created",
@@ -1473,76 +1392,158 @@ starSystem: {
 },
 ```
 
+```typescript
+// HU translations (full match of EN structure, different text)
+admin: {
+  groups: "Csoportok",
+  group: {
+    createGroup: "Csoport létrehozása",
+    groupName: "Csoport neve",
+    description: "Leírás (opcionális)",
+    noGroups: "Nincsenek csoportok ebben a csillagrendszerben",
+    addMissionToGroup: "Misszió hozzáadása a csoporthoz",
+    selectGroup: "Válassz csoportot",
+    moveToGroup: "Csoportba mozgatás",
+    noGroupsForMove: "Nincs csoport — hozz létre egyet először",
+    deleteConfirm: "Biztosan törlöd ezt a csoportot? A benne lévő missziók standalone-ná válnak.",
+    deleteError_fillInBlank: "A csoport FILL_IN_BLANK missziót tartalmaz — töröld előbb",
+    conflictError: "Ez a misszió már a '{{name}}' csoporthoz tartozik",
+    removeFillInBlankError: "FILL_IN_BLANK misszió nem lehet standalone",
+    reorderError: "Nem sikerült átrendezni",
+    saveSuccess: "Csoport elmentve",
+    deleteSuccess: "Csoport törölve",
+  },
+  mission: {
+    addBlank: "[[Blank]] hozzáadása",
+    passThreshold: "Sikerességi küszöb (%)",
+    passThresholdHelp: "0–100 között. Üresen hagyva mindig sikeresnek számít.",
+    noThreshold: "Nincs küszöb",
+    contentPreview: "Tartalom előnézete",
+    markdownContent: "Markdown tartalom",
+    fillInBlankContent: "Fill-in-blank tartalom",
+    saveFirstForFillInBlank: "Mentsd el a missziót, majd visszatérve szerkesztheted a fill-in-blank tartalmat.",
+    blankLabel: "{{key}} opcióit:",
+    optionCorrect: "Helyes",
+    optionPlaceholder: "Opció szövege...",
+    maxOptionsReached: "Maximum 5 opció érhető el",
+  },
+  starSystem: {
+    items: "{{count}} elem",
+    reorderSuccess: "Sorrend frissítve",
+    groupCreated: "Csoport létrehozva",
+    missionMoved: "Misszió átmozgatva",
+  },
+},
+play: {
+  content: {
+    loadMore: "Több betöltése",
+    next: "Következő →",
+    back: "← Vissza",
+    systemComplete: "Megvizsgáltad az összes anyagot ebben a csillagrendszerben!",
+    backToSystem: "Vissza a csillagrendszerhez",
+  },
+  fillInBlank: {
+    submit: "Beküldés",
+    retry: "Újra",
+    alreadyPassed: "Ezt a feladatot már sikeresen teljesítetted.",
+    nextStep: "Következő lépés →",
+    score: "Eredmény: {{score}} / {{max}} ({{pct}}%)",
+    passed: "Sikeres!",
+    failed: "Nem sikerült. Próbáld újra!",
+    correctAnswers: "Helyes válaszok:",
+    fillAllBlanks: "Töltsd ki az összes mezőt a beküldéshez",
+    optionPool: "Válassz az alábbi lehetőségek közül:",
+  },
+  group: {
+    step: "{{current}} / {{total}} lépés",
+    back: "← Vissza",
+    completed: "Csoport teljesítve!",
+    backToSystem: "Vissza a csillagrendszerhez",
+    loadError: "Nem sikerült betölteni a feladatot.",
+    stepError: "Nem sikerült továbblépni. Próbáld újra.",
+  },
+},
+starSystem: {
+  startGroup: "Kezdd el",
+  continueGroup: "Folytatás",
+  replayGroup: "Újra",
+  groupCompleted: "Teljesítve",
+  missions: "{{count}} misszió",
+  progress: "{{done}} / {{total}} lépés",
+  loadError: "Nem sikerült betölteni a csillagrendszert.",
+},
+```
+
 ---
 
-## Megvalósítási lépések (Stage 1)
+## Implementation steps (Stage 1)
 
 ### Backend
 
-0. **`GET /api/auth/me` bővítése** — `UserProfileResponse` DTO létrehozása (`id`, `username`, `email`, `fullName`, `avatarUrl`, `roles`, `permissions`); `AuthService.getMe()` metódus: cadet role-jaiból flat permission lista összegyűjtése (Set → deduplikáció); `AuthController.getMe()` visszaad `UserProfileResponse`-t a régi response helyett. **Ez az első lépés** mert a frontend sidebar az első indulástól fogva elvárja a `permissions` mezőt.
+0. **Extend `GET /api/auth/me`** — create the `UserProfileResponse` DTO (`id`, `username`, `email`, `fullName`, `avatarUrl`, `roles`, `permissions`); `AuthService.getMe()` method: collects a flat permission list from the cadet's roles (Set → dedup); `AuthController.getMe()` returns `UserProfileResponse` instead of the old response. **This is the first step**, because the frontend sidebar expects the `permissions` field from the very first load.
 
-1. **Flyway bevezetése** — `flyway-core` + `flyway-database-postgresql` dependency, `V1__baseline.sql` (ha szükséges), `application.properties` módosítás (`ddl-auto=validate`, `flyway.enabled=true`)
-2. **`group:*` permission seed** — `DataInitializer.java`: 4 új permission létrehozása, ROLE_ADMIN és ROLE_CONTENT_CREATOR hozzárendelés, ROLE_CADET `group:read` kap
-3. **`ROLE_CONTENT_CREATOR` role seed** — `DataInitializer.java`: új role, összes szükséges `starsystem:*`, `mission:*`, `group:*` permission hozzárendelése
-4. **`MissionGroup` entitás + repository** — `owner`, `updatedBy`, `orderIndex`, `createdAt`, `updatedAt` mezőkkel; `MissionGroupRepository` (findByStarSystemId, findByOwnerId, findByStarSystemIdOrderByOrderIndex)
-5. **`Mission` entitás módosítás** — `group` FK (nullable), `groupOrder` (nullable), `orderIndex` (nullable, átnevezve `orderInSystem`-ről), `content` (TEXT nullable); `fillInBlankData` mező törlése; Flyway: `V2__mission_group_fields.sql`
-6. **`MissionType` enum bővítése** — `CONTENT`, `FILL_IN_BLANK` értékek hozzáadása
-7. **Fill-in-blank entitások + repositoryek** — `FillInBlankDefinition`, `FillInBlankBlank`, `FillInBlankOption`, `FillInBlankAttempt`, `FillInBlankAnswerDetail`; Flyway: `V3__fill_in_blank_entities.sql`
-8. **`MissionGroupProgress` + `MissionGroupStepCompletion` entitások + repositoryek** — unique constraintek; `findByCadetIdAndGroupId`; `existsByProgressIdAndMissionId`; Flyway: `V4__group_progress.sql`
-9. **MissionGroup CRUD service + controller** — CRUD, reorder (swap), mission hozzáadás (conflict check), eltávolítás (FILL_IN_BLANK blokk), my-groups, ownership check, `group:*` `@PreAuthorize`; **standalone mission reorder** (`PUT /api/missions/{id}/reorder`) ugyanitt vagy külön `MissionController`-ban: megkeresi a szomszédos elemet a `orderIndex ± 1` pozícióban (group vagy standalone), felcseréli az orderIndex értékeket, visszaadja a `ReorderResponse`-t
-10. **Fill-in-blank service + controller (admin)** — POST (új definíció, 409 ha létezik), PUT (`@Transactional` teljes replace), GET admin nézet (`FillInBlankAdminResponse` — isCorrect benne)
-11. **Fill-in-blank service + controller (user)** — GET user nézet (`FillInBlankUserResponse` — isCorrect nélkül), `submit-fill-blank` (optionId alapú kiértékelés — cross-blank optionId nem 400, hanem `correct: false`; `FillInBlankAttempt` + `FillInBlankAnswerDetail` mentés), `GET .../last-attempt` (legutóbbi attempt passed/percentage/submittedAt — 404 ha nincs; a Group Player visszanavigáláshoz szükséges)
-12. **Group Progress service + controller** — GET (404 ha nincs), POST start (201, 409 ha van), POST complete-step (FILL_IN_BLANK validáció, `MissionGroupStepCompletion` INSERT, `nextMissionId` kiszámítása, completed flag)
-13. **Content pagination endpoint** — `GET /api/missions/{id}/content?page&size`, soros szeletelés, `ContentPageResponse` DTO
-14. **`StarSystemController.getWithMissions` refaktor** — új `StarSystemDetailResponse` DTO, rendezett `items[]` tömb (groups + standalone missions vegyesen, `orderIndex` szerint) — `GroupItem` / `MissionItem` wrapper osztályokkal
-15. **`MissionResponse` DTO bővítése** — `starSystemId` (denormalizálva), `groupId`, `groupOrder`, `orderIndex` (nullable)
+1. **Introduce Flyway** — `flyway-core` + `flyway-database-postgresql` dependency, `V1__baseline.sql` (if needed), `application.properties` change (`ddl-auto=validate`, `flyway.enabled=true`)
+2. **Seed `group:*` permissions** — `DataInitializer.java`: create 4 new permissions, assign to ROLE_ADMIN and ROLE_CONTENT_CREATOR, ROLE_CADET gets `group:read`
+3. **Seed `ROLE_CONTENT_CREATOR` role** — `DataInitializer.java`: new role, assign all the necessary `starsystem:*`, `mission:*`, `group:*` permissions
+4. **`MissionGroup` entity + repository** — with `owner`, `updatedBy`, `orderIndex`, `createdAt`, `updatedAt` fields; `MissionGroupRepository` (findByStarSystemId, findByOwnerId, findByStarSystemIdOrderByOrderIndex)
+5. **`Mission` entity change** — `group` FK (nullable), `groupOrder` (nullable), `orderIndex` (nullable, renamed from `orderInSystem`), `content` (TEXT nullable); remove the `fillInBlankData` field; Flyway: `V2__mission_group_fields.sql`
+6. **Extend `MissionType` enum** — add `CONTENT`, `FILL_IN_BLANK` values
+7. **Fill-in-blank entities + repositories** — `FillInBlankDefinition`, `FillInBlankBlank`, `FillInBlankOption`, `FillInBlankAttempt`, `FillInBlankAnswerDetail`; Flyway: `V3__fill_in_blank_entities.sql`
+8. **`MissionGroupProgress` + `MissionGroupStepCompletion` entities + repositories** — unique constraints; `findByCadetIdAndGroupId`; `existsByProgressIdAndMissionId`; Flyway: `V4__group_progress.sql`
+9. **MissionGroup CRUD service + controller** — CRUD, reorder (swap), add mission (conflict check), remove (FILL_IN_BLANK block), my-groups, ownership check, `group:*` `@PreAuthorize`; **standalone mission reorder** (`PUT /api/missions/{id}/reorder`) here too, or in a separate `MissionController`: finds the neighboring item at the `orderIndex ± 1` position (group or standalone), swaps the orderIndex values, returns the `ReorderResponse`
+10. **Fill-in-blank service + controller (admin)** — POST (new definition, 409 if it exists), PUT (`@Transactional` full replace), GET admin view (`FillInBlankAdminResponse` — includes isCorrect)
+11. **Fill-in-blank service + controller (user)** — GET user view (`FillInBlankUserResponse` — without isCorrect), `submit-fill-blank` (optionId-based grading — a cross-blank optionId isn't a 400, just `correct: false`; saves `FillInBlankAttempt` + `FillInBlankAnswerDetail`), `GET .../last-attempt` (latest attempt's passed/percentage/submittedAt — 404 if none; needed for the Group Player when navigating back)
+12. **Group Progress service + controller** — GET (404 if none), POST start (201, 409 if it exists), POST complete-step (FILL_IN_BLANK validation, `MissionGroupStepCompletion` INSERT, `nextMissionId` computation, completed flag)
+13. **Content pagination endpoint** — `GET /api/missions/{id}/content?page&size`, line-based slicing, `ContentPageResponse` DTO
+14. **`StarSystemController.getWithMissions` refactor** — new `StarSystemDetailResponse` DTO, sorted `items[]` array (groups + standalone missions mixed, sorted by `orderIndex`) — with `GroupItem` / `MissionItem` wrapper classes
+15. **Extend `MissionResponse` DTO** — `starSystemId` (denormalized), `groupId`, `groupOrder`, `orderIndex` (nullable)
 
 ### Frontend — Admin
 
 ---
 
-**16. TypeScript típusok + API client bővítés**
+**16. TypeScript types + API client extension**
 
-**`src/types/auth.ts` módosítás:**
+**`src/types/auth.ts` change:**
 ```typescript
 export interface User {
   username: string;
   roles: string[];
-  permissions: string[];  // ← ÚJ: backend /auth/me-ből jön
+  permissions: string[];  // ← NEW: comes from the backend's /auth/me
   exp?: number;
 }
 ```
 
-**`src/context/AuthContext.tsx` módosítás:**
-- A `/api/auth/me` response-ban a backend mostantól `permissions: string[]` mezőt is küld
-- A setState-ben: `permissions: response.data.permissions || []`
-- Új context függvény: `hasPermission: (p: string) => boolean` → `state.user?.permissions.includes(p) ?? false`
-- `AuthContextType`-ban: `hasPermission: (permission: string) => boolean`
+**`src/context/AuthContext.tsx` change:**
+- In the `/api/auth/me` response, the backend now also sends a `permissions: string[]` field
+- In the setState: `permissions: response.data.permissions || []`
+- New context function: `hasPermission: (p: string) => boolean` → `state.user?.permissions.includes(p) ?? false`
+- In `AuthContextType`: `hasPermission: (permission: string) => boolean`
 
-**`src/types/mission.ts` módosítás:**
+**`src/types/mission.ts` change:**
 ```typescript
-// MissionType bővítés
+// MissionType extension
 type MissionType = "CODING" | "CIRCUIT_SIMULATION" | "QUIZ" | "CONTENT" | "FILL_IN_BLANK"
 
-// MissionResponse bővítés (meglévő mezők megmaradnak, ezek az újak):
+// MissionResponse extension (existing fields stay, these are the new ones):
 interface MissionResponse {
-  // ... meglévő mezők ...
-  starSystemId: string          // denormalizálva a backendtől
+  // ... existing fields ...
+  starSystemId: string          // denormalized from the backend
   groupId: string | null
   groupOrder: number | null
-  orderIndex: number | null     // orderInSystem helyett (régi mező eldobva)
+  orderIndex: number | null     // replaces orderInSystem (old field dropped)
   content: string | null
 }
 ```
 
-**`src/types/starSystem.ts` teljes csere:**
-- Régi `StarSystemWithMissionsResponse` (lapos `missions[]`) helyett a terv TypeScript szekciójában definiált `StarSystemDetailResponse` (items[] discriminated union) kerül
+**`src/types/starSystem.ts` full replacement:**
+- The old `StarSystemWithMissionsResponse` (flat `missions[]`) is replaced by the `StarSystemDetailResponse` (items[] discriminated union) defined in the TypeScript section of this plan
 
-**`src/types/missionGroup.ts`** és **`src/types/groupProgress.ts`**: az "Architekturális terv → TypeScript típusok" szekcióban definiált interfészek alapján, változtatás nélkül
+**`src/types/missionGroup.ts`** and **`src/types/groupProgress.ts`**: based on the interfaces defined in the "Architecture plan → TypeScript types" section, unchanged
 
-**`src/api/client.ts` bővítés — új API modulok hozzáadása:**
+**`src/api/client.ts` extension — new API modules to add:**
 ```typescript
-// Meglévő modul-exportok mellé:
+// Alongside the existing module exports:
 
 export const groupApi = {
   getByStarSystem: (starSystemId: string) =>
@@ -1604,12 +1605,12 @@ export const contentApi = {
 
 **17. `AuthContext.tsx` + `AdminLayout.tsx` — permission-aware sidebar**
 
-**`AdminLayout.tsx` módosítás:**
+**`AdminLayout.tsx` change:**
 
 ```typescript
-// Régi: const menuItems = [...] statikus tömb
+// Old: const menuItems = [...] static array
 
-// Új: dinamikusan a permission alapján
+// New: dynamically based on permissions
 const { user, hasPermission } = useAuth();
 const isAdmin = user?.roles.includes("ROLE_ADMIN") ?? false;
 const canManageGroups = hasPermission("group:create") || hasPermission("group:read");
@@ -1625,38 +1626,38 @@ const menuItems = [
 ].filter(item => item.show);
 ```
 
-Import hozzáadás: `Folder as FolderIcon` from `@mui/icons-material`
-i18n kulcs hozzáadás (`config.ts`): `"groups": "Csoportok"` (HU) / `"Groups"` (EN)
+Add the import: `Folder as FolderIcon` from `@mui/icons-material`
+Add an i18n key (`config.ts`): `"groups": "Groups"` (EN) / `"Csoportok"` (HU)
 
-> **Megjegyzés:** A "Csoportok" admin oldal (`/admin/groups`) egy egyszerű lista a saját group-okról — Stage 1 MVP-ben elegendő ha az admin a StarSystemEdit-ből kezeli a group-okat, ez a menüpont opcionálisan elmaradhat; a `canManageGroups` flag akkor is szükséges a jövőbeli bővíthetőséghez.
+> **Note:** the "Groups" admin page (`/admin/groups`) is a simple list of one's own groups — for the Stage 1 MVP it's enough if the admin manages groups from within StarSystemEdit, so this menu item can optionally be skipped; the `canManageGroups` flag is still needed for future extensibility.
 
 ---
 
 **18. `StarSystemList.tsx` + `MissionList.tsx` + `StarSystemEdit.tsx` URL cleanup**
 
-Mindhárom fájlban:
-- `const API_URL = "http://localhost:8080/api"` → törlés
-- `import axios from "axios"` → törlés (ahol csak URL miatt volt)
-- `import apiClient from "../../../api/client"` hozzáadás
+In all three files:
+- `const API_URL = "http://localhost:8080/api"` → remove
+- `import axios from "axios"` → remove (where it was only there for the URL)
+- add `import apiClient from "../../../api/client"`
 - `axios.get(${API_URL}/...)` → `apiClient.get(/...)`
 - `axios.post(${API_URL}/...)` → `apiClient.post(/...)`
 - `axios.put(${API_URL}/...)` → `apiClient.put(/...)`
 - `axios.delete(${API_URL}/...)` → `apiClient.delete(/...)`
-- Headers `{ Authorization: Bearer ${token} }` → törlés (az apiClient interceptora kezeli)
+- Headers `{ Authorization: Bearer ${token} }` → remove (the apiClient interceptor handles it)
 
-> `MissionEdit.tsx`-ben az `axios` közvetlen import marad a jelenlegi patternnek megfelelően — a cleanup ráér Stage 2-ben.
+> The direct `axios` import in `MissionEdit.tsx` stays, following the current pattern — that cleanup can wait for Stage 2.
 
 ---
 
-**19. `MissionEdit.tsx` bővítés + `MarkdownEditor.tsx` + `FillInBlankEditor.tsx` létrehozása**
+**19. `MissionEdit.tsx` extension + creating `MarkdownEditor.tsx` + `FillInBlankEditor.tsx`**
 
-**`MissionEdit.tsx` változások:**
+**`MissionEdit.tsx` changes:**
 
 ```typescript
-// 1. MISSION_TYPES bővítés
+// 1. MISSION_TYPES extension
 const MISSION_TYPES = ["CODING", "CIRCUIT_SIMULATION", "QUIZ", "CONTENT", "FILL_IN_BLANK"];
 
-// 2. mission state bővítés
+// 2. mission state extension
 const [mission, setMission] = useState({
   name: "",
   descriptionMarkdown: "",
@@ -1664,11 +1665,11 @@ const [mission, setMission] = useState({
   missionType: "CODING",
   orderIndex: 1,           // orderInSystem → orderIndex
   starSystemId: starSystemIdFromQuery || "",
-  content: "",             // ← ÚJ: CONTENT típushoz
-  // starSystemId, groupId, groupOrder szerver által jön vissza, nem szerkeszthetők
+  content: "",             // ← NEW: for the CONTENT type
+  // starSystemId, groupId, groupOrder come back from the server, not editable
 });
 
-// 3. Back navigáció — szerkesztés oldalon mentés/törlés után:
+// 3. Back navigation — on the edit page after save/delete:
 const handleBack = () => {
   if (mission.starSystemId) {
     navigate(`/admin/star-systems/${mission.starSystemId}`);
@@ -1676,9 +1677,9 @@ const handleBack = () => {
     navigate(-1);
   }
 };
-// Ugyanezt a navigate-t hívja a ← gomb is (ne navigate(-1))
+// The ← button calls this same navigate too (not navigate(-1))
 
-// 4. Save payload bővítés
+// 4. Save payload extension
 const payload = {
   name: mission.name,
   descriptionMarkdown: mission.descriptionMarkdown,
@@ -1689,7 +1690,7 @@ const payload = {
   ...(mission.missionType === "CONTENT" && { content: mission.content }),
 };
 
-// 5. Típusfüggő editor — a Form alján, a Save gomb előtt:
+// 5. Type-dependent editor — at the bottom of the form, before the Save button:
 {mission.missionType === "CONTENT" && (
   <MarkdownEditor
     value={mission.content || ""}
@@ -1701,14 +1702,14 @@ const payload = {
 )}
 {mission.missionType === "FILL_IN_BLANK" && isNew && (
   <Alert severity="info">
-    Mentsd el a missziót, majd visszatérve szerkesztheted a fill-in-blank tartalmat.
+    Save the mission first, then you can edit the fill-in-blank content.
   </Alert>
 )}
 ```
 
 ---
 
-**`src/components/admin/MarkdownEditor.tsx` — ÚJ fájl:**
+**`src/components/admin/MarkdownEditor.tsx` — NEW file:**
 
 ```typescript
 interface MarkdownEditorProps {
@@ -1718,23 +1719,23 @@ interface MarkdownEditorProps {
 ```
 
 Layout: `Grid container spacing={2}`:
-- Bal (xs=12, md=6): `<TextField multiline minRows={15} fullWidth value={value} onChange={e => onChange(e.target.value)} label="Markdown tartalom" />`
-- Jobb (xs=12, md=6): Paper alap, "Előnézet" felirat, `<ReactMarkdown>{value}</ReactMarkdown>`
+- Left (xs=12, md=6): `<TextField multiline minRows={15} fullWidth value={value} onChange={e => onChange(e.target.value)} label="Markdown content" />`
+- Right (xs=12, md=6): a Paper base, "Preview" heading, `<ReactMarkdown>{value}</ReactMarkdown>`
 
-Import szükséges: `react-markdown` — ha nincs: `npm install react-markdown`
+Requires importing: `react-markdown` — if missing: `npm install react-markdown`
 
 ---
 
-**`src/components/admin/FillInBlankEditor.tsx` — ÚJ fájl:**
+**`src/components/admin/FillInBlankEditor.tsx` — NEW file:**
 
 ```typescript
 interface FillInBlankEditorProps {
   missionId: string;
 }
 
-// Lokális state típus
+// Local state type
 interface BlankEditorState {
-  key: string;   // pl. "blank_1"
+  key: string;   // e.g. "blank_1"
   options: Array<{ tempId: string; optionText: string; isCorrect: boolean }>
 }
 ```
@@ -1745,58 +1746,58 @@ const [templateText, setTemplateText] = useState("")
 const [blanks, setBlanks] = useState<BlankEditorState[]>([])
 const [passThreshold, setPassThreshold] = useState<number | null>(null)
 const [saving, setSaving] = useState(false)
-const [hasDefinition, setHasDefinition] = useState(false)  // POST vs PUT dönt
+const [hasDefinition, setHasDefinition] = useState(false)  // decides POST vs PUT
 const [saveError, setSaveError] = useState<string | null>(null)
 ```
 
-Logika:
-- **Mount:** `fillInBlankApi.getAdminView(missionId)` → 200: populate state + `setHasDefinition(true)`; 404: üres state
-- **templateText onChange:** regex `/\{(\w+)\}/g` → kinyeri az összes blank kulcsot → frissíti a `blanks` state-et (megtartja a meglévő opciók state-jét az azonos kulcsú blank-eknél, új kulcshoz üres options tömböt ad, törölt kulcsú blank-et eltávolítja)
-- **"Blank hozzáadása" gomb:** `setTemplateText(prev => prev + " {blank_" + (blanks.length + 1) + "}")`
-- **Option input (auto-extend):** minden blank-nél az utolsó kitöltött opció után `TextFiled` jelenik meg (üres, onBlur-ra ha nem üres → opció hozzáadódik + következő üres megjelenik). Max 5 opció/blank
-- **Save:** `SaveFillInBlankRequest` összeállítása → `fillInBlankApi.create` (ha !hasDefinition) vagy `fillInBlankApi.update` (ha hasDefinition)
+Logic:
+- **Mount:** `fillInBlankApi.getAdminView(missionId)` → 200: populate state + `setHasDefinition(true)`; 404: empty state
+- **templateText onChange:** regex `/\{(\w+)\}/g` → extracts all blank keys → updates the `blanks` state (keeps the existing option state for blanks whose key is unchanged, gives an empty options array to new keys, removes deleted keys)
+- **"Add blank" button:** `setTemplateText(prev => prev + " {blank_" + (blanks.length + 1) + "}")`
+- **Option input (auto-extend):** for every blank, a `TextField` appears after the last filled-in option (empty, onBlur if not empty → the option is added + a new empty one appears). Max 5 options/blank
+- **Save:** builds a `SaveFillInBlankRequest` → `fillInBlankApi.create` (if !hasDefinition) or `fillInBlankApi.update` (if hasDefinition)
 
 ---
 
-**20. `StarSystemEdit.tsx` — teljes újraírás**
+**20. `StarSystemEdit.tsx` — full rewrite**
 
 **State:**
 ```typescript
-// Star system metaadatok (szerkeszthető mezők)
+// Star system metadata (editable fields)
 const [meta, setMeta] = useState({ name: "", description: "", iconUrl: "" })
-// A fa (groups + standalone missions rendezve)
+// The tree (groups + standalone missions, sorted)
 const [items, setItems] = useState<StarSystemItem[]>([])
 // Loading / saving / error
 const [loading, setLoading] = useState(!isNew)
 const [saving, setSaving] = useState(false)
 const [error, setError] = useState<string | null>(null)
-// Snackbar (success / error / warning üzenetek)
+// Snackbar (success / error / warning messages)
 const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: "success"|"error"|"warning" }>({ open: false, msg: "", severity: "success" })
-// Group létrehozás dialog
+// Create-group dialog
 const [createGroupOpen, setCreateGroupOpen] = useState(false)
 const [newGroupName, setNewGroupName] = useState("")
 const [creatingGroup, setCreatingGroup] = useState(false)
-// Mission group-ba mozgatás dialog
+// Move-mission-to-group dialog
 const [moveDialog, setMoveDialog] = useState<{ missionId: string } | null>(null)
-// Mission group-hoz adás: célcsoport kiválasztás
+// Adding a mission to a group: target group selection
 const targetGroups = items.filter((item): item is StarSystemGroupItem => item.type === "GROUP")
 ```
 
-**Betöltés:** `GET /api/star-systems/{id}/with-missions` → `setMeta({name, description, iconUrl})` + `setItems(response.items)`
+**Loading:** `GET /api/star-systems/{id}/with-missions` → `setMeta({name, description, iconUrl})` + `setItems(response.items)`
 
 **Reorder state patch helper:**
 ```typescript
 const applyReorder = (updated: ReorderUpdatedItem[], field: "orderIndex" | "groupOrder", groupId?: string) => {
   setItems(prev => {
     const newItems = [...prev]
-    // orderIndex reorder: group vagy standalone mission a top-level listában
+    // orderIndex reorder: a group or standalone mission in the top-level list
     if (field === "orderIndex") {
       return newItems.map(item => {
         const match = updated.find(u => u.id === item.id)
         return match ? { ...item, orderIndex: match.orderIndex! } : item
       }).sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
     }
-    // groupOrder reorder: group-on belüli mission
+    // groupOrder reorder: a mission inside a group
     if (field === "groupOrder" && groupId) {
       return newItems.map(item => {
         if (item.type !== "GROUP" || item.id !== groupId) return item
@@ -1812,61 +1813,61 @@ const applyReorder = (updated: ReorderUpdatedItem[], field: "orderIndex" | "grou
 }
 ```
 
-**Action handlerek (mind axios hívással, loading state + snackbar):**
+**Action handlers (all with axios calls, loading state + snackbar):**
 ```typescript
-// ↑↓ group a star systemben
+// ↑↓ group within the star system
 const handleReorderGroup = async (groupId: string, direction: "up" | "down") => {
   const res = await groupApi.reorder(groupId, direction)
   applyReorder(res.data.updated, "orderIndex")
 }
 
-// ↑↓ standalone mission a star systemben
+// ↑↓ standalone mission within the star system
 const handleReorderMission = async (missionId: string, direction: "up" | "down") => {
   const res = await missionReorderApi.reorderStandalone(missionId, direction)
   applyReorder(res.data.updated, "orderIndex")
 }
 
-// ↑↓ misszió group-on belül
+// ↑↓ mission within a group
 const handleReorderInGroup = async (missionId: string, groupId: string, direction: "up" | "down") => {
   const res = await missionReorderApi.reorderInGroup(missionId, direction)
   applyReorder(res.data.updated, "groupOrder", groupId)
 }
 
-// → misszió kivétele group-ból (standalone lesz)
+// → remove a mission from a group (becomes standalone)
 const handleRemoveFromGroup = async (missionId: string, groupId: string) => {
-  // Ha FILL_IN_BLANK: backend 400-at ad → snackbar warning
+  // If FILL_IN_BLANK: the backend returns 400 → snackbar warning
   try {
     await groupApi.removeMission(groupId, missionId)
-    // state: misszió eltávolítása a group missions tömbből, hozzáadása a top-level items-hez
-    // (legegyszerűbb: teljes újratöltés)
+    // state: remove the mission from the group's missions array, add it to the top-level items
+    // (simplest: full reload)
     await reloadItems()
   } catch (err: any) {
     if (err.response?.status === 400) {
-      setSnackbar({ open: true, msg: "FILL_IN_BLANK misszió nem lehet standalone", severity: "warning" })
+      setSnackbar({ open: true, msg: "FILL_IN_BLANK mission cannot be standalone", severity: "warning" })
     }
   }
 }
 
-// ← standalone misszió group-ba mozgatása (moveDialog alapján)
+// ← move a standalone mission into a group (based on moveDialog)
 const handleMoveToGroup = async (missionId: string, groupId: string) => {
   try {
-    await groupApi.addMission(groupId, missionId, 999) // groupOrder végére kerül
+    await groupApi.addMission(groupId, missionId, 999) // goes to the end of groupOrder
     setMoveDialog(null)
     await reloadItems()
   } catch (err: any) {
     if (err.response?.status === 409) {
-      const name = err.response.data.data?.conflictingGroupName ?? "másik csoport"
-      setSnackbar({ open: true, msg: `Ez a misszió már a '${name}' csoporthoz tartozik`, severity: "warning" })
+      const name = err.response.data.data?.conflictingGroupName ?? "another group"
+      setSnackbar({ open: true, msg: `This mission already belongs to '${name}'`, severity: "warning" })
     }
   }
 }
 
-// Group törlése
+// Delete a group
 const handleDeleteGroup = async (groupId: string) => {
-  // FILL_IN_BLANK ellenőrzés: ha van ilyen misszió a group-ban, snackbar warning
+  // FILL_IN_BLANK check: if there's such a mission in the group, snackbar warning
   const group = items.find(i => i.type === "GROUP" && i.id === groupId) as StarSystemGroupItem
   if (group?.missions.some(m => m.missionType === "FILL_IN_BLANK")) {
-    setSnackbar({ open: true, msg: "A csoport FILL_IN_BLANK missziót tartalmaz — töröld előbb", severity: "warning" })
+    setSnackbar({ open: true, msg: "This group contains a FILL_IN_BLANK mission — delete it first", severity: "warning" })
     return
   }
   try {
@@ -1879,14 +1880,14 @@ const handleDeleteGroup = async (groupId: string) => {
   }
 }
 
-// Segédfüggvény: teljes újratöltés reorderektől eltérő műveletek után
+// Helper: full reload after operations other than reordering
 const reloadItems = async () => {
   const res = await apiClient.get<StarSystemDetailResponse>(`/star-systems/${id}/with-missions`)
   setItems(res.data.items)
 }
 ```
 
-**Render — fa struktúra:**
+**Render — tree structure:**
 ```tsx
 {items.map((item, idx) => (
   item.type === "GROUP" ? (
@@ -1896,7 +1897,7 @@ const reloadItems = async () => {
       isLast={idx === items.length - 1}
       onReorderUp={() => handleReorderGroup(item.id, "up")}
       onReorderDown={() => handleReorderGroup(item.id, "down")}
-      onEdit={() => navigate(`/admin/missions/group/${item.id}`)}  // ha lesz group edit oldal
+      onEdit={() => navigate(`/admin/missions/group/${item.id}`)}  // if a group edit page is added
       onDelete={() => handleDeleteGroup(item.id)}
       onAddMission={() => navigate(`/admin/missions/new?groupId=${item.id}`)}
       onMissionReorderUp={(mId) => handleReorderInGroup(mId, item.id, "up")}
@@ -1918,60 +1919,60 @@ const reloadItems = async () => {
 ))}
 ```
 
-**`GroupRow` és `StandaloneMissionRow` — WordPress-szerű fa UI**
+**`GroupRow` and `StandaloneMissionRow` — a WordPress-style tree UI**
 
-Minden listaelem egy MUI `Paper` div. A group-on belüli missziók `paddingLeft: 32px` behúzással jelennek meg — vizuálisan egyértelmű a hierarchia.
+Every list item is a MUI `Paper` div. Missions inside a group are shown with a `paddingLeft: 32px` indent — visually making the hierarchy clear.
 
-**`GroupRow` render (egy group a listában):**
+**`GroupRow` render (one group in the list):**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [▶] JavaScript Változók                [↑][↓] [szerkeszt] [töröl] │  ← group fejléc sor
+│ [▶] JavaScript Variables               [↑][↓] [edit] [delete] │  ← group header row
 │                                                             │
 │   ┌────────────────────────────────────────────────────┐   │
-│   │ CONTENT  Változók leírása    [↑][↓] [→] [szerkeszt]│   │  ← behúzott mission sor
+│   │ CONTENT  Description of variables  [↑][↓] [→] [edit]│   │  ← indented mission row
 │   └────────────────────────────────────────────────────┘   │
 │   ┌────────────────────────────────────────────────────┐   │
-│   │ FILL_IN_BLANK  Kitöltős  [↑][↓] [→⚠] [szerkeszt] │   │  ← FILL_IN_BLANK: [→] piros !
+│   │ FILL_IN_BLANK  Fill-in-blank  [↑][↓] [→⚠] [edit] │   │  ← FILL_IN_BLANK: [→] shown in red !
 │   └────────────────────────────────────────────────────┘   │
-│   [+ Misszió hozzáadása a csoporthoz]                       │
+│   [+ Add mission to group]                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-A `[→]` gomb (kivétel a group-ból → standalone lesz):
-- CONTENT, QUIZ, CODING esetén: normál gomb, kattintásra `handleRemoveFromGroup` hívódik
-- FILL_IN_BLANK esetén: a `[→]` gomb **helyett** `[→⚠]` piros Tooltip: *"FILL_IN_BLANK misszió nem lehet standalone"* — kattintásra snackbar warning, nem navigál
+The `[→]` button (remove from group → becomes standalone):
+- For CONTENT, QUIZ, CODING: a normal button, click triggers `handleRemoveFromGroup`
+- For FILL_IN_BLANK: **instead of** `[→]`, a red `[→⚠]` with a Tooltip: *"FILL_IN_BLANK mission cannot be standalone"* — clicking it shows a snackbar warning, doesn't navigate
 
-A group fejléc `[töröl]` gomb: ha a group-ban FILL_IN_BLANK van, a gombra kattintva snackbar warning jelenik meg (nem nyílik meg törlés dialog). Ha nincs FILL_IN_BLANK, megerősítő dialog nyílik.
+The group header's `[delete]` button: if the group has a FILL_IN_BLANK mission, clicking it shows a snackbar warning (the delete dialog doesn't open). If there's no FILL_IN_BLANK, a confirmation dialog opens.
 
-**`StandaloneMissionRow` render (standalone mission):**
+**`StandaloneMissionRow` render (a standalone mission):**
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ CODING  Standalone feladat         [↑][↓] [←] [szerkeszt]   │
+│ CODING  Standalone task              [↑][↓] [←] [edit]       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-A `[←]` gomb (group-ba mozgatás): megnyitja a `moveDialog`-ot — `Select` dropdown a rendelkezésre álló group-okkal (`targetGroups` derived state). Ha nincs group a star systemben, a gomb disabled: Tooltip: *"Nincs csoport — hozz létre egyet először"*.
+The `[←]` button (move into a group): opens the `moveDialog` — a `Select` dropdown with the available groups (`targetGroups` derived state). If there's no group in the star system, the button is disabled: Tooltip: *"No groups — create one first"*.
 
-**Ikonok és vizuális jelölők:**
-- Mission típus chip/badge: `CONTENT` → kék, `QUIZ` → lila, `FILL_IN_BLANK` → narancs, `CODING` → zöld, `CIRCUIT_SIMULATION` → szürke
-- `[↑]` disabled ha az elem az első, `[↓]` disabled ha az utolsó (group-on belül a groupOrder alapján, top-level az orderIndex alapján)
-- Gombok jobb oldalon: `IconButton` komponensek (`ArrowUpward`, `ArrowDownward`, `ArrowForward`/`ArrowBack`, `Edit`, `Delete`)
+**Icons and visual markers:**
+- Mission type chip/badge: `CONTENT` → blue, `QUIZ` → purple, `FILL_IN_BLANK` → orange, `CODING` → green, `CIRCUIT_SIMULATION` → gray
+- `[↑]` disabled if the item is first, `[↓]` disabled if last (within a group based on groupOrder, top-level based on orderIndex)
+- Buttons on the right: `IconButton` components (`ArrowUpward`, `ArrowDownward`, `ArrowForward`/`ArrowBack`, `Edit`, `Delete`)
 
-### Frontend — User oldal
+### Frontend — user side
 
 ---
 
-21. **`QuizPlayer` refaktor** → `QuizPlayerPage` + `QuizPlayerComponent`
+21. **`QuizPlayer` refactor** → `QuizPlayerPage` + `QuizPlayerComponent`
 
-   **Jelenlegi állapot elemzése:**
-   - `QuizPlayer.tsx` (`src/components/forge/quiz/QuizPlayer.tsx`) — **tisztán prezentációs**: kapja a `data: QuizDefinition` prop-ot, kezeli a timer-t, navigációt, válasz kiválasztást, hívja az `onSubmit` callback-et
-   - `QuizPlayerPage.tsx` (`src/pages/mission-forge/QuizPlayerPage.tsx`) — **container**: API hívások (`quizApi.startQuiz`, `quizApi.submitQuiz`), loading/error state, eredmény megjelenítés, 409 session kezelés
+   **Analysis of the current state:**
+   - `QuizPlayer.tsx` (`src/components/forge/quiz/QuizPlayer.tsx`) — **purely presentational**: receives the `data: QuizDefinition` prop, handles the timer, navigation, answer selection, calls the `onSubmit` callback
+   - `QuizPlayerPage.tsx` (`src/pages/mission-forge/QuizPlayerPage.tsx`) — **container**: API calls (`quizApi.startQuiz`, `quizApi.submitQuiz`), loading/error state, result display, 409 session handling
 
-   **A refaktor célja:** Olyan `QuizPlayerComponent` létrehozása, amelyet a `MissionGroupPlayer` közvetlenül használhat `missionId` + `onComplete` prop-okkal — az eredménymegjelenítés nélkül.
+   **Goal of the refactor:** create a `QuizPlayerComponent` that `MissionGroupPlayer` can use directly with `missionId` + `onComplete` props — without the result display.
 
    ---
 
-   **Létrehozandó: `src/components/quiz/QuizPlayerComponent.tsx`**
+   **To create: `src/components/quiz/QuizPlayerComponent.tsx`**
 
    ```typescript
    interface QuizPlayerComponentProps {
@@ -1980,18 +1981,18 @@ A `[←]` gomb (group-ba mozgatás): megnyitja a `moveDialog`-ot — `Select` dr
    }
    ```
 
-   Ez a komponens veszi át a `QuizPlayerPage` API logikáját:
-   1. `useQuery(["quiz", missionId], () => quizApi.startQuiz(missionId))` — betölti a `QuizDefinition`-t; loading + error state megjelenítés ugyanúgy mint jelenleg a `QuizPlayerPage`-ben
+   This component takes over `QuizPlayerPage`'s API logic:
+   1. `useQuery(["quiz", missionId], () => quizApi.startQuiz(missionId))` — loads the `QuizDefinition`; loading + error state shown the same way `QuizPlayerPage` does today
    2. `useMutation(quizApi.submitQuiz)`:
-      - `onSuccess(data)`: `onComplete(data)` hívása — **a komponens nem jeleníti meg az eredményt**, a szülő kezeli
-      - `onError 409`: `onComplete(err.response.data.data)` — a régi eredmény átadása a szülőnek
-      - `onError 404` (session expired): `queryClient.resetQueries(["quiz", missionId])` — újratölti a kvízt, majd újra megjeleníti a `QuizPlayer`-t (a user újra játssza)
-   3. A `QuizPlayer` prezentációs komponenst rendereli `data={quiz}` és `onSubmit={submit}` prop-okkal
-   4. **Nem tartalmaz** eredmény megjelenítőt — az `onComplete` callback hívódik és a szülő dönt mit mutat
+      - `onSuccess(data)`: calls `onComplete(data)` — **the component doesn't display the result**, the parent handles that
+      - `onError 409`: `onComplete(err.response.data.data)` — passes the old result to the parent
+      - `onError 404` (session expired): `queryClient.resetQueries(["quiz", missionId])` — reloads the quiz, then renders `QuizPlayer` again (the user plays it again)
+   3. Renders the presentational `QuizPlayer` component with `data={quiz}` and `onSubmit={submit}` props
+   4. **Does not contain** a result display — the `onComplete` callback fires and the parent decides what to show
 
    ---
 
-   **Módosítandó: `QuizPlayerPage.tsx`**
+   **To modify: `QuizPlayerPage.tsx`**
 
    ```tsx
    const QuizPlayerPage: React.FC = () => {
@@ -2000,7 +2001,7 @@ A `[←]` gomb (group-ba mozgatás): megnyitja a `moveDialog`-ot — `Select` dr
      const [result, setResult] = useState<MissionResult | null>(null);
 
      if (result) {
-       // Jelenlegi MISSION_ACCOMPLISHED UI marad itt
+       // The current MISSION_ACCOMPLISHED UI stays here
        return <QuizResultDisplay result={result} onBack={() => navigate(-1)} />;
      }
 
@@ -2015,45 +2016,45 @@ A `[←]` gomb (group-ba mozgatás): megnyitja a `moveDialog`-ot — `Select` dr
    };
    ```
 
-   Az eredmény megjelenítő logika (MISSION_ACCOMPLISHED panel, score, navigate -1 gomb) **marad a `QuizPlayerPage`-ben** — kinyerhető `QuizResultDisplay` saját komponensbe az olvashatóságért, de ez nem kötelező az MVP-hez.
+   The result-display logic (MISSION_ACCOMPLISHED panel, score, navigate -1 button) **stays in `QuizPlayerPage`** — it can be extracted into its own `QuizResultDisplay` component for readability, but this isn't required for the MVP.
 
    ---
 
-   **`MissionGroupPlayer` használat:**
+   **Usage in `MissionGroupPlayer`:**
 
    ```tsx
-   // A Group Player al-misszió renderelő switch-jében:
+   // In the Group Player's sub-mission render switch:
    case "QUIZ":
      return (
        <QuizPlayerComponent
          missionId={currentMission.id}
          onComplete={() => handleCompleteStep()}
-         // A group context-ben az eredményt NEM mutatjuk — completeStep azonnal lép
+         // In the group context we do NOT show the result — completeStep advances immediately
        />
      );
    ```
 
-   A `handleCompleteStep` a Group Player-ben lévő függvény, amely meghívja a `POST /complete-step` endpoint-ot és frissíti a progress state-et.
+   `handleCompleteStep` is the function in the Group Player that calls the `POST /complete-step` endpoint and refreshes the progress state.
 
    ---
 
-   **Tesztelési következmények:**
-   - A meglévő `QuizPlayer.test.tsx` **nem változik** (csak prezentációs, nincs API)
-   - A meglévő `QuizPlayerPage.test.tsx` **nem változik lényegesen** — az API mock-ok ugyanúgy működnek, most a `QuizPlayerComponent`-en keresztül
-   - Új: `QuizPlayerComponent.test.tsx` — API loading/error/submit/409 tesztek (korábban a `QuizPlayerPage.test.tsx`-ből kerülnek ide)
+   **Testing implications:**
+   - The existing `QuizPlayer.test.tsx` **doesn't change** (purely presentational, no API)
+   - The existing `QuizPlayerPage.test.tsx` **doesn't change much** — the API mocks work the same way, now going through `QuizPlayerComponent`
+   - New: `QuizPlayerComponent.test.tsx` — loading/error/submit/409 API tests (moved here from the former `QuizPlayerPage.test.tsx`)
 ---
 
 22. **`ContentPlayer.tsx` + `ContentMissionView.tsx` + route**
 
-> **Dependency:** `npm install react-markdown` szükséges a `MarkdownEditor` és a `ContentPlayer` komponensekhez. Futtasd a frontend könyvtárban mielőtt elkezded implementálni ezt a lépést.
+> **Dependency:** `npm install react-markdown` is required for the `MarkdownEditor` and `ContentPlayer` components. Run it in the frontend directory before starting this step.
 
-**`src/components/play/ContentPlayer.tsx` — ÚJ fájl:**
+**`src/components/play/ContentPlayer.tsx` — NEW file:**
 
 ```typescript
 interface ContentPlayerProps {
   missionId: string;
-  onComplete?: () => void;   // undefined = standalone mód (navigáció self-managed)
-  starSystemId?: string;     // standalone módban szükséges a "Következő" navigációhoz
+  onComplete?: () => void;   // undefined = standalone mode (self-managed navigation)
+  starSystemId?: string;     // needed for "Next" navigation in standalone mode
 }
 ```
 
@@ -2067,12 +2068,12 @@ const [loading, setLoading] = useState(true)
 const [missionName, setMissionName] = useState("")
 ```
 
-Logika:
+Logic:
 - Mount: `contentApi.getPage(missionId, 0)` → `setLoadedContent(resp.content)`, `setMissionName(resp.missionName)`, `setHasMore(resp.hasNextPage)`
-- "Load More" gomb (csak ha `hasMore`): `contentApi.getPage(missionId, currentPage + 1)` → `setLoadedContent(prev => prev + "\n" + resp.content)`, oldal ++ , `setHasMore`
-- "Következő" gomb:
-  - Ha `onComplete` prop van (group mód): `onComplete()` hívás
-  - Ha nincs (standalone mód): ld. ContentMissionView standalone navigáció alább
+- "Load More" button (only if `hasMore`): `contentApi.getPage(missionId, currentPage + 1)` → `setLoadedContent(prev => prev + "\n" + resp.content)`, page ++, `setHasMore`
+- "Next" button:
+  - If the `onComplete` prop is set (group mode): calls `onComplete()`
+  - If not (standalone mode): see the ContentMissionView standalone navigation below
 
 Render:
 ```tsx
@@ -2080,17 +2081,17 @@ Render:
   <Typography variant="h5">{missionName}</Typography>
   <ReactMarkdown>{loadedContent}</ReactMarkdown>
   {hasMore && <Button onClick={handleLoadMore} disabled={loadingMore}>Load More</Button>}
-  <Button variant="contained" onClick={handleNext}>Következő →</Button>
+  <Button variant="contained" onClick={handleNext}>Next →</Button>
 </Box>
 ```
 
 ---
 
-**`src/pages/play/ContentMissionView.tsx` — ÚJ fájl (route wrapper):**
+**`src/pages/play/ContentMissionView.tsx` — NEW file (route wrapper):**
 
 ```typescript
 // Route: /play/content/:missionId
-// Navigation state-ből (StarSystemDetailPage-től kapott): { starSystemId, nextItem: { id, missionType } | null }
+// From navigation state (passed in by StarSystemDetailPage): { starSystemId, nextItem: { id, missionType } | null }
 ```
 
 State:
@@ -2101,19 +2102,19 @@ const location = useLocation()
 const navState = location.state as { starSystemId?: string; nextItem?: { id: string; missionType: MissionType } | null } | null
 ```
 
-Standalone navigáció (`handleNext`):
+Standalone navigation (`handleNext`):
 ```typescript
 const handleNext = () => {
   if (navState?.nextItem) {
-    // Navigál a következő mission-re típus alapján
+    // Navigate to the next mission based on its type
     const { id, missionType } = navState.nextItem
     if (missionType === "CONTENT") navigate(`/play/content/${id}`, { state: { starSystemId: navState.starSystemId, nextItem: null } })
     else if (missionType === "QUIZ") navigate(`/play/quiz/${id}`)
     else if (missionType === "GROUP") navigate(`/play/group/${id}`)
   } else {
-    // Nincs következő → teljesítési képernyő
+    // No next item → completion screen
     navigate(`/star-systems/${navState?.starSystemId}`, {
-      state: { completionMessage: "Megvizsgáltad az összes anyagot!" }
+      state: { completionMessage: "You've explored all content!" }
     })
   }
 }
@@ -2122,21 +2123,21 @@ const handleNext = () => {
 Render:
 ```tsx
 return <ContentPlayer missionId={missionId!} onComplete={undefined} starSystemId={navState?.starSystemId} />
-// A ContentPlayer handleNext-je a fenti függvényre callback-el visszahív — ehhez a ContentPlayer egy `onStandaloneNext` prop-ot kap
+// The ContentPlayer's handleNext calls back into the function above — for this, ContentPlayer takes an `onStandaloneNext` prop
 ```
 
-> **Egyszerűbb alternatíva MVP-re:** A ContentMissionView nem kapja meg a `nextItem`-t navigation state-ben, csak `starSystemId`-t. A "Következő" gomb mindig visszanavigál a star systemre. A true "next mission" navigáció Stage 2-re halasztható.
+> **Simpler MVP alternative:** ContentMissionView doesn't receive `nextItem` in navigation state, only `starSystemId`. The "Next" button always navigates back to the star system. True "next mission" navigation can be pushed to Stage 2.
 
-**Router bővítés (`router/index.tsx`):**
+**Router extension (`router/index.tsx`):**
 ```typescript
 { path: "play/content/:missionId", element: <ContentMissionView /> },
 ```
 
 ---
 
-23. **`FillInBlankView.tsx` — ÚJ fájl**
+23. **`FillInBlankView.tsx` — NEW file**
 
-Fájl: `src/components/play/FillInBlankView.tsx`
+File: `src/components/play/FillInBlankView.tsx`
 
 ```typescript
 interface FillInBlankViewProps {
@@ -2149,30 +2150,30 @@ State:
 ```typescript
 const [definition, setDefinition] = useState<FillInBlankUserResponse | null>(null)
 const [loading, setLoading] = useState(true)
-// Pool: minden opció az összes blank-ből összekeverve
+// Pool: every option from every blank, shuffled together
 const [pool, setPool] = useState<Array<FillInBlankOptionUser & { blankKey: string }>>([])
 // Slots: blankKey → optionId | null
 const [slots, setSlots] = useState<Record<string, string | null>>({})
-// Kiemelt blank slot (célzott kitöltéshez)
+// Highlighted blank slot (for targeted filling)
 const [activeSlot, setActiveSlot] = useState<string | null>(null)
-// Eredmény submit után
+// Result after submit
 const [result, setResult] = useState<FillInBlankSubmitResponse | null>(null)
 const [submitting, setSubmitting] = useState(false)
-// Ha már van passed attempt (back button recovery)
+// If there's already a passed attempt (back button recovery)
 const [alreadyPassed, setAlreadyPassed] = useState(false)
 ```
 
-Betöltés (mount, párhuzamosan):
+Loading (on mount, in parallel):
 ```typescript
 const [defResp, lastAttemptResp] = await Promise.allSettled([
   fillInBlankApi.getUserView(missionId),
   fillInBlankApi.getLastAttempt(missionId),
 ])
-// lastAttempt: ha fulfilled és passed → setAlreadyPassed(true)
+// lastAttempt: if fulfilled and passed → setAlreadyPassed(true)
 // def: setDefinition, initializeSlotsAndPool
 ```
 
-Pool inicializálás:
+Pool initialization:
 ```typescript
 const initPool = (def: FillInBlankUserResponse) => {
   const allOptions = def.blanks.flatMap(blank =>
@@ -2188,15 +2189,15 @@ const initPool = (def: FillInBlankUserResponse) => {
 }
 ```
 
-Interakció logika:
+Interaction logic:
 ```typescript
 const handlePoolClick = (optId: string) => {
   if (activeSlot) {
-    // Célzott: az activeSlot-ba kerül
+    // Targeted: goes into activeSlot
     placeOption(activeSlot, optId)
     setActiveSlot(null)
   } else {
-    // Automatikus: első üres slot
+    // Automatic: first empty slot
     const firstEmpty = definition!.blanks
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .find(b => slots[b.key] === null)
@@ -2210,7 +2211,7 @@ const placeOption = (blankKey: string, optId: string) => {
   setPool(prev => {
     const withoutNew = prev.filter(o => o.id !== optId)
     if (prevOptId) {
-      // Az előző opció visszakerül a pool végére
+      // The previous option returns to the end of the pool
       const prev2 = definition!.blanks.flatMap(b => b.options).find(o => o.id === prevOptId)
       if (prev2) return [...withoutNew, { ...prev2, blankKey: definition!.blanks.find(b => b.options.some(o => o.id === prevOptId))!.key }]
     }
@@ -2220,7 +2221,7 @@ const placeOption = (blankKey: string, optId: string) => {
 
 const handleSlotClick = (blankKey: string) => {
   if (slots[blankKey]) {
-    // Visszahelyez a pool-ba
+    // Return it to the pool
     const optId = slots[blankKey]!
     setSlots(prev => ({ ...prev, [blankKey]: null }))
     const opt = definition!.blanks.flatMap(b => b.options).find(o => o.id === optId)!
@@ -2245,7 +2246,7 @@ const handleSubmit = async () => {
     })
     setResult(res.data)
     if (res.data.passed) {
-      // auto complete-step-et a szülő (Group Player) hívja az onComplete-n keresztül
+      // auto complete-step is called by the parent (Group Player) via onComplete
       onComplete()
     }
   } finally {
@@ -2254,35 +2255,35 @@ const handleSubmit = async () => {
 }
 ```
 
-**Render struktúra:**
+**Render structure:**
 
-Ha `alreadyPassed`: Banner: "Ezt a feladatot már sikeresen teljesítetted." + "Következő →" gomb (`onComplete()`)
+If `alreadyPassed`: Banner: "You've already completed this task successfully." + "Next →" button (`onComplete()`)
 
-Ha `result` és `!result.passed`: visszajelzés + "Újra" gomb (→ `setResult(null)`, `initPool(definition!)`, `setSlots(...)`)
+If `result` and `!result.passed`: feedback + "Retry" button (→ `setResult(null)`, `initPool(definition!)`, `setSlots(...)`)
 
-Ha `result` és `result.passed`: ez az ág nem jelenik meg (onComplete már hívva volt)
+If `result` and `result.passed`: this branch isn't shown (onComplete has already been called)
 
-Fő render: a `definition.templateText` alapján renderelt szöveg inline blank slot-okkal, alatta pool chip-ek.
+Main render: the text rendered from `definition.templateText` with inline blank slots, options pool below.
 
-**A templateText renderelése — `[[blank_N]]` szintaxis, inline BlankSlot:**
+**Rendering the templateText — `[[blank_N]]` syntax, inline BlankSlot:**
 
-A templateText feldarabolása: szöveg részek és blank slot-ok váltakozva.
+Splitting the templateText: alternating text segments and blank slots.
 
-Regex: `/\[\[(\w+)\]\]/g` — minden `[[kulcsnev]]` mintát megtalál, a match[1] a kulcs neve (pl. `blank_1`).
+Regex: `/\[\[(\w+)\]\]/g` — finds every `[[keyname]]` pattern, match[1] is the key's name (e.g. `blank_1`).
 
-Algoritmus: a regex matchek között lévő szöveg `type: "text"` részként, a matchek `type: "blank"` részként kerülnek egy `parts[]` tömbbe. A `parts[]` React elemekre képezve: szöveg → `<span>`, blank → `<BlankSlot blankKey={...} />`.
+Algorithm: the text between regex matches goes into a `parts[]` array as `type: "text"` segments, the matches as `type: "blank"` segments. The `parts[]` array is mapped to React elements: text → `<span>`, blank → `<BlankSlot blankKey={...} />`.
 
-`BlankSlot` renderelési állapotok (inline `<Box component="span">`):
-- **Üres, nem aktív:** aláhúzott téglaszerű box, `"___"` placeholder, szürke szegély, `cursor: pointer`
-- **Üres, aktív** (user rákattintott, várja az opciót): kék szegély + kék háttér kiemelés
-- **Kitöltött:** az opció szövege belül, sárga/warning háttér — kattintásra visszakerül a pool-ba
-- **Kitöltött, result megjelenítés után:** zöld (`correct: true`) vagy piros (`correct: false`) + ikon
+`BlankSlot` render states (inline `<Box component="span">`):
+- **Empty, not active:** an underlined box shape, `"___"` placeholder, gray border, `cursor: pointer`
+- **Empty, active** (user clicked it, awaiting an option): blue border + blue background highlight
+- **Filled:** the option's text inside, yellow/warning background — clicking returns it to the pool
+- **Filled, after result is shown:** green (`correct: true`) or red (`correct: false`) + an icon
 
 ---
 
-24. **`MissionGroupPlayer.tsx` + route — ÚJ fájl**
+24. **`MissionGroupPlayer.tsx` + route — NEW file**
 
-Fájl: `src/pages/play/MissionGroupPlayer.tsx`
+File: `src/pages/play/MissionGroupPlayer.tsx`
 
 ```typescript
 // Route: /play/group/:groupId
@@ -2313,32 +2314,32 @@ const stepNumber = useMemo(() => {
 }, [progress])
 ```
 
-Betöltési szekvencia (mount):
+Loading sequence (on mount):
 ```typescript
 useEffect(() => {
   const load = async () => {
     try {
-      // 1. Group missions betöltése
-      const missionsResp = await groupProgressApi.get... // wait, ez groupApi
+      // 1. Load the group's missions
+      const missionsResp = await groupProgressApi.get... // wait, that's groupApi
       const [missionsResp] = await Promise.all([
         groupApi.getMissions(groupId!)
       ])
       setGroupMissions(missionsResp.data)
 
-      // 2. Progress betöltése
+      // 2. Load progress
       let prog: GroupProgressResponse
       try {
         const progResp = await groupProgressApi.get(groupId!)
         prog = progResp.data
       } catch (err: any) {
         if (err.response?.status === 404) {
-          // Nincs progress → létrehozás
+          // No progress yet → create it
           try {
             const startResp = await groupProgressApi.start(groupId!)
             prog = startResp.data
           } catch (startErr: any) {
             if (startErr.response?.status === 409) {
-              // Versenyhelyzet: valaki már elindította → GET újra
+              // Race condition: someone else already started it → GET again
               const retryResp = await groupProgressApi.get(groupId!)
               prog = retryResp.data
             } else throw startErr
@@ -2347,7 +2348,7 @@ useEffect(() => {
       }
       setProgress(prog)
     } catch (e) {
-      setError("Nem sikerült betölteni a feladatot.")
+      setError("Failed to load the task.")
     } finally {
       setLoading(false)
     }
@@ -2365,8 +2366,8 @@ const handleCompleteStep = async () => {
     const res = await groupProgressApi.completeStep(groupId)
     setProgress(res.data)
   } catch (err: any) {
-    // 400 FILL_IN_BLANK_NOT_PASSED: nem jelenítünk meg snackbárt, mert ez nem kéne megtörténjen
-    // (a FillInBlankView csak passed=true esetén hívja)
+    // 400 FILL_IN_BLANK_NOT_PASSED: no snackbar shown, because this shouldn't happen
+    // (FillInBlankView only calls this when passed=true)
     console.error("complete-step failed", err)
   } finally {
     setCompleting(false)
@@ -2376,13 +2377,13 @@ const handleCompleteStep = async () => {
 
 Render:
 ```tsx
-// Header: lépésjelző + vissza gomb
+// Header: step indicator + back button
 <Box sx={{ display: "flex", justifyContent: "space-between", p: 2 }}>
-  <Button onClick={() => navigate(`/star-systems/${groupMissions.starSystemId}`)}>← Vissza</Button>
-  <Typography>{groupMissions.groupName} — {stepNumber} / {groupMissions.missions.length} lépés</Typography>
+  <Button onClick={() => navigate(`/star-systems/${groupMissions.starSystemId}`)}>← Back</Button>
+  <Typography>{groupMissions.groupName} — Step {stepNumber} / {groupMissions.missions.length}</Typography>
 </Box>
 
-// Tartalom: al-misszió típus alapján
+// Content: based on the sub-mission's type
 {progress.completed ? (
   <CompletionScreen
     groupName={groupMissions.groupName}
@@ -2403,18 +2404,18 @@ Render:
 ) : null}
 ```
 
-`CompletionScreen`: egyszerű komponens — group neve + "Group teljesítve!" üzenet + "Vissza a csillagrendszerhez" gomb.
+`CompletionScreen`: a simple component — group name + "Group completed!" message + "Back to star system" button.
 
-**Router bővítés (`router/index.tsx`):**
+**Router extension (`router/index.tsx`):**
 ```typescript
 { path: "play/group/:groupId", element: <MissionGroupPlayer /> },
 ```
 
 ---
 
-25. **`StarSystemDetailPage.tsx` — teljes újraírás**
+25. **`StarSystemDetailPage.tsx` — full rewrite**
 
-Fájl: `src/pages/star-system-detail/StarSystemDetailPage.tsx`
+File: `src/pages/star-system-detail/StarSystemDetailPage.tsx`
 
 State:
 ```typescript
@@ -2426,7 +2427,7 @@ const [loading, setLoading] = useState(true)
 const [error, setError] = useState<string | null>(null)
 ```
 
-Betöltés:
+Loading:
 ```typescript
 useEffect(() => {
   const load = async () => {
@@ -2434,7 +2435,7 @@ useEffect(() => {
       const resp = await apiClient.get<StarSystemDetailResponse>(`/star-systems/${id}/with-missions`)
       setData(resp.data)
 
-      // Párhuzamos progress betöltés minden group-ra
+      // Parallel progress loading for every group
       const groupItems = resp.data.items.filter((i): i is StarSystemGroupItem => i.type === "GROUP")
       const progressResults = await Promise.allSettled(
         groupItems.map(g => groupProgressApi.get(g.id))
@@ -2457,7 +2458,7 @@ useEffect(() => {
       })
       setProgressMap(map)
     } catch {
-      setError("Nem sikerült betölteni a csillagrendszert.")
+      setError("Failed to load star system.")
     } finally {
       setLoading(false)
     }
@@ -2466,10 +2467,10 @@ useEffect(() => {
 }, [id])
 ```
 
-Render (megtartja a retro UI keretet — csak a misszió lista belseje változik):
+Render (keeps the retro UI frame — only the mission list's inner content changes):
 ```tsx
-// Régi: data.missions.map(mission => ...)
-// Új:
+// Old: data.missions.map(mission => ...)
+// New:
 {data.items.map((item) => (
   item.type === "GROUP" ? (
     <GroupCard
@@ -2493,14 +2494,14 @@ Render (megtartja a retro UI keretet — csak a misszió lista belseje változik
 ```
 
 `GroupCard` render:
-- Group neve + "(N misszió)"
-- Badge/chip alapján progress state:
-  - `NOT_STARTED`: kék "Kezdd el" gomb
-  - `IN_PROGRESS`: sárga "Folytatás" gomb + `"{completedCount}/{totalCount}"` szöveg
-  - `COMPLETED`: zöld ✓ + szürke "Újra" gomb
+- Group name + "(N missions)"
+- Badge/chip based on progress state:
+  - `NOT_STARTED`: blue "Start" button
+  - `IN_PROGRESS`: yellow "Continue" button + `"{completedCount}/{totalCount}"` text
+  - `COMPLETED`: green ✓ + gray "Replay" button
 
-Régi `data.missions.length` count → `data.items.length` (items include both groups and standalone missions)
+Old `data.missions.length` count → `data.items.length` (items include both groups and standalone missions)
 
-### Lezárás
+### Wrap-up
 
-26. **Teljes flow teszt:** admin létrehoz star system-et → group-ot CONTENT + FILL_IN_BLANK + QUIZ missionnel → user megnyitja → Group Player indul → CONTENT olvas (Load More teszt hosszú tartalommal) → FILL_IN_BLANK kitölt (nem sikerül → újra → sikerül) → QUIZ elvégez → group teljesítve → visszatér a star systemre → újra belép → progress megmarad → folytatás a helyes lépéstől
+26. **Full flow test:** admin creates a star system → a group with a CONTENT + FILL_IN_BLANK + QUIZ mission → the user opens it → the Group Player starts → reads CONTENT (test Load More with long content) → fills in FILL_IN_BLANK (fails → retries → succeeds) → completes the QUIZ → group completed → returns to the star system → re-enters → progress is retained → resumes from the correct step
