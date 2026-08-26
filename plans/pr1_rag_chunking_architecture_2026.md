@@ -20,11 +20,12 @@ tartható, ha a sorrend fordított: **előbb minden új chunk sikeresen embedel�
 ha MINDEGYIK sikerült, akkor töröljük a régiket és írjuk be az újakat** egyetlen
 tranzakcióban. Ez a dokumentum ezt a (helyes) sorrendet tervezi meg — lásd 4.2 szakasz.
 
-**Kérdés hozzád**: egyetértesz ezzel a javított sorrenddel (embed-first, majd
-delete+insert csak teljes sikeren), vagy inkább az legyen a szabály, hogy egy részlegesen
-sikerült chunkolás is felülírja a régit (csak a sikeres chunkokkal)? Az utóbbi egyszerűbb,
-de akkor a misszió tartalma részlegesen indexelt maradhat egy átmeneti ai-service-kiesés
-után, amíg valaki újra nem futtatja a reindexet.
+**~~Kérdés hozzád~~ — ELDÖNTVE (2026-08-26): igen, embed-first.** Norbert egyetértett a
+javított sorrenddel: előbb minden chunk sikeresen embedelődik, és csak teljes sikeren
+történik a delete+insert. Az alternatíva (részlegesen sikerült chunkolás is felülírja a
+régit) egyszerűbb lett volna, de akkor egy átmeneti ai-service-kiesés után a misszió
+tartalma **csendben, részlegesen indexelt** maradna, amíg valaki újra nem futtatja a
+reindexet — a hiba pedig semmiben nem látszana, csak rosszabb chat-válaszokban.
 
 ## 2. Új komponensek — csomag-elhelyezés
 
@@ -446,9 +447,10 @@ tudatosan KIZÁRÓLAG az admin saját, Forge-ban szerkesztett repóját indexeli
 forrás, aminek van értelme a "segíts megérteni ezt a missziót" RAG-kontextusban. A kadétok
 saját beadásainak indexelése (ha valaha felmerülne, pl. "nézd meg a saját korábbi
 megoldásomat") **egy teljesen más, sokkal nagyobb, önálló feature lenne** — ez a PR nem
-foglalkozik vele. **Kérlek erősítsd meg, hogy ez a scope helyes** — ha tévedek, és mégis a
-kadét-repókra gondoltál, szólj, mert az a tervezést gyökeresen máshogy kellene felépítse
-(adatvédelem, méretezés, per-kadét retrieval-szűrés).
+foglalkozik vele. **~~Kérlek erősítsd meg~~ — MEGERŐSÍTVE (2026-08-26): igen, kizárólag az admin
+Forge-repója.** Norbert megerősítette a scope-ot. Ez nem csak méretezési, hanem biztonsági
+döntés is: a kadét-repók indexelése minden kadét megoldását bevinné egy közös keresőtérbe.
+Ld. [`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 3.5 szakasz.
 
 ### 12.3 Új komponensek
 
@@ -709,6 +711,31 @@ missionId)` + batch insert, a `file_path` oszlopot is kitöltve.
 
 **Új konstruktor-függőség**: `GiteaService` bekerül a `ContentChunkingService`
 konstruktorába (csak a `reindexCodingMissionFilesFromGitea` úton használt).
+
+### 12.7.1 A `visibility` beállítása indexeléskor (2026-08-26, biztonsági követelmény)
+
+Minden beszúrt chunk kap egy `visibility` értéket, ami **indexeléskor dől el**:
+
+```
+MISSION_CODE_FILE chunk, aminek a file_path-ja illeszkedik MissionFilePatterns.SOLUTION-re
+    -> 'AUTHOR_ONLY'
+minden más chunk (MISSION, MISSION_FILL_IN_BLANK, és a nem-solution kódfájlok)
+    -> 'PUBLIC'
+```
+
+**A mintát NEM írjuk újra**: a `GiteaService.SOLUTION_FILE_PATTERN`
+(`^solution\.(js|ts|py)$`) kikerül egy közös `service/mission/MissionFilePatterns.java`
+osztályba (PR #0), és onnan használja a `GiteaService.transformForCadetCopy()` ÉS a
+`CodeFileChunker` is. Ha valaha bővül a minta, egy helyen bővül — két külön lista
+szétcsúszása **csendes** hiba lenne: a kadét-másolat helyes maradna, miközben az index
+elkezdené kiadni a referencia megoldást.
+
+**A `starter.js` `PUBLIC` marad** — azt a kadét amúgy is megkapja a saját munkarepójában
+(`transformForCadetCopy` a `starter.<ext>`-et másolja `solution.<ext>` néven), tehát nem
+titok.
+
+Teljes indoklás és a „mit soha ne indexeljünk" lista (quiz.json, fill-in-blank opciók):
+[`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 3. szakasz.
 
 ### 12.8 Hook-pont kiegészítés
 

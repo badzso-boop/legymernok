@@ -398,13 +398,20 @@ ez a doksi eddig csak ígért („nem kell egy második, lereplikált verziót k
 ```
 runEvalAsync ciklusa, a módosított rész:
 
-    preRerank  = retrievalPipeline.retrieve(entry.getQuery(), RetrievalScope.forEval())
+    preRerank  = retrievalPipeline.retrieve(entry.getQuery(), RetrievalScope.forCadet(null))
     postRerank = rerankingService.rerank(entry.getQuery(), preRerank, RERANK_KEEP_TOP)
 
     hit3         = matchesAny(preRerank.subList(0, min(3, preRerank.size())), entry)
     hit5         = matchesAny(preRerank, entry)                      // TOP_K = 5
     hit3Reranked = matchesAny(postRerank, entry)                     // RERANK_KEEP_TOP = 3
 ```
+
+**Miért kadét-scope**: az eval azt méri, amit a **termék** csinál a felhasználók túlnyomó
+többségének. Admin scope-pal olyan találatokra is pontot adna, amiket egy kadét sosem kap meg
+— és pont a referencia-megoldás chunkjai lennének a legrelevánsabbnak tűnő találatok egy
+„hogyan oldjam meg" kérdésre, tehát az eval hamis biztonságérzetet adna. Következmény: a
+golden set kérdései sem hivatkozhatnak `AUTHOR_ONLY` tartalomra elvárt találatként. Ld.
+[`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 5. szakasz.
 
 **Miért két mérési pont**: `RERANK_KEEP_TOP = 3`, tehát a rerank kimenete 3 elem — ott a
 `hit@5` matematikailag azonos a `hit@3`-mal, két oszlopot töltöttünk volna ugyanazzal az

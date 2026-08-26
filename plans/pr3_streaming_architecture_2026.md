@@ -822,11 +822,12 @@ ellenőrizve, hogy a tokenek folyamatosan, nem "egyszerre kupacban" jelennek-e m
    ebben a körben.** Ha megszakad a stream, a válasz elvész, a felhasználónak újra kell
    küldenie az üzenetet — ez elfogadható, a "folytasd onnan, ahol abbamaradt" esetleg egy
    jövőbeli, külön kör tárgya lehet, ha valaha tényleg felmerül rá igény.
-3. **MÉG NYITOTT — `extractAction()` prompt szövege (8.3 szakasz) egy első tervezet, NEM
-   tesztelt élő modellel.** A JSON-kinyerés megbízhatósága csak élő iterációval dönthető
-   el. **Norbert kérésére ez explicit bekerül a PR leírásának kézi teszt-listájába is**,
-   hogy implementáció után ne maradjon ki a tesztelésből — ld. `ai_chatbot_upgrade_2026.md`
-   "Ellenőrzés / verifikáció összefoglalva" szakasza, ahova ez a tétel bekerül.
+3. ~~`extractAction()` prompt szövege~~ — **LEZÁRVA (2026-08-26): Norbert élő modellel
+   teszteli implementáció után.** A 8.3 szakasz prompt-szövege továbbra is egy első
+   tervezet, és a JSON-kinyerés megbízhatósága csak élő iterációval dönthető el — ez nem
+   tervezési hiányosság, hanem a feladat természete. A tétel a kézi teszt-listán marad
+   (`ai_chatbot_upgrade_2026.md` "Ellenőrzés / verifikáció összefoglalva"), tehát nem
+   maradhat ki; **tervezési döntést viszont nem blokkol, az implementáció elindulhat.**
 4. ~~Egyidejű üzenetküldés~~ — **ELDÖNTVE (2026-08-25): igen, legyen "csak egy aktív
    stream/felhasználó" korlátozás.** Norbert indoklása: erőforrás-spórolás — implementáció
    ld. 8.2 szakasz (`activeStreamsByUsername` map, az új stream indulásakor a régi

@@ -122,8 +122,8 @@ kellene).
 | Metódus | Szignatúra | Mit csinál |
 |---|---|---|
 | `retrieveMissionChunks` | `List<RetrievedItem> retrieveMissionChunks(String query, int topK)` | A fő belépési pont — embedeli a query-t, lefuttatja a két keresést, `rrfMerge()`-dzsel egyesíti. Ld. 4.1. |
-| `vectorSearch` | `private List<RetrievedItem> vectorSearch(String vectorStr, int limit)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
-| `fullTextSearch` | `private List<RetrievedItem> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
+| `vectorSearch` | `List<RetrievedItem> vectorSearch(String vectorStr, int limit, RetrievalScope scope)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
+| `fullTextSearch` | `List<RetrievedItem> fullTextSearch(String query, int limit, RetrievalScope scope)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
 | `rrfMerge` | `static List<RetrievedItem> rrfMerge(List<List<RetrievedItem>> rankedLists, int topK)` | **Pure static function** — a fő unit-teszt célpont, nincs szüksége semmilyen mockra. Ld. 4.3. |
 | `mapRow` | `private RetrievedItem mapRow(ResultSet rs)` | Közös `RowMapper`-logika a két keresési metódushoz (ne duplikálódjon a mezőkiolvasás). |
 
@@ -152,7 +152,7 @@ folytatja üres eredménnyel.
 ### 4.2 `vectorSearch()` / `fullTextSearch()` — pontos SQL
 
 ```java
-private List<RetrievedItem> vectorSearch(String vectorStr, int limit) {
+List<RetrievedItem> vectorSearch(String vectorStr, int limit, RetrievalScope scope) {
     return jdbcTemplate.query(
         """
         SELECT cc.id, cc.source_type, cc.source_id, m.name AS source_name,
@@ -160,15 +160,16 @@ private List<RetrievedItem> vectorSearch(String vectorStr, int limit) {
                1 - (cc.content_embedding <=> ?::vector) AS score
         FROM content_chunks cc
         JOIN missions m ON m.id = cc.source_id
+        WHERE (cc.visibility = 'PUBLIC' OR ? = TRUE OR m.owner_id = ?)
         ORDER BY cc.content_embedding <=> ?::vector
         LIMIT ?
         """,
         (rs, i) -> mapRow(rs),
-        vectorStr, vectorStr, limit
+        vectorStr, scope.canSeeAllAuthorContent(), scope.cadetId(), vectorStr, limit
     );
 }
 
-private List<RetrievedItem> fullTextSearch(String query, int limit) {
+List<RetrievedItem> fullTextSearch(String query, int limit, RetrievalScope scope) {
     return jdbcTemplate.query(
         """
         SELECT cc.id, cc.source_type, cc.source_id, m.name AS source_name,
@@ -177,11 +178,12 @@ private List<RetrievedItem> fullTextSearch(String query, int limit) {
         FROM content_chunks cc
         JOIN missions m ON m.id = cc.source_id
         WHERE cc.search_vector @@ plainto_tsquery('hungarian', ?)
+          AND (cc.visibility = 'PUBLIC' OR ? = TRUE OR m.owner_id = ?)
         ORDER BY score DESC
         LIMIT ?
         """,
         (rs, i) -> mapRow(rs),
-        query, query, limit
+        query, query, scope.canSeeAllAuthorContent(), scope.cadetId(), limit
     );
 }
 ```
@@ -617,6 +619,12 @@ public List<RetrievedItem> retrieve(String query, RetrievalScope scope) {
     return rrfMerge(lists, TOP_K);
 }
 ```
+
+**A `scope` KÖTELEZŐ paraméter — nincs kényelmi overload.** Ha lenne egy `retrieve(query)`
+változat, valaki előbb-utóbb azt hívná, és a láthatóság-szűrés csendben kimaradna. A típus
+olcsóbban véd, mint egy code review. A scope-ot a `ChatService` a hitelesített user
+**permissionjéből** vezeti le (`mission:edit_any`), sosem a kérésből — teljes indoklás és a
+tesztterv: [`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 4. szakasz.
 
 **Ezt hívja a `ChatService` ÉS a PR #4 `EvalService`-e is** — ez adja meg ténylegesen azt a
 garanciát, amit a PR #4 doksija ígért. Ha valaki megváltoztatja a sorrendezést, az eval

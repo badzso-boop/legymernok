@@ -103,6 +103,30 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
 
 ## Fázisok — mindegyik önálló, mergelhető PR
 
+### PR #0 — Retrieval-biztonság (ELŐBB mergelendő)
+
+**Teljes terv: [`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md).**
+
+A 2026-08-26-i átvizsgálás négy olyan hiányosságot talált, amik mind ugyanabból erednek: a
+`content_chunks` réteg egy **bizalmi határon lóg át**, a tervek viszont adat-problémaként
+kezelték, nem hozzáférési kérdésként. Röviden, amit a PR #0 rendez:
+
+- **`ROLE_CADET` elveszíti a `mission:create` és `starsystem:create` jogot** (Norbert döntése,
+  2026-08-26: a kadétok kizárólag missziókat teljesítenek). Ezzel megszűnik a keresztfelhasználós
+  prompt-injection csatorna: az indexbe innentől csak admin/content-creator tartalom kerül.
+  **Migráció nem kell** — a `DataInitializer.createRoleIfNotFound()` lecseréli a jogosultság-
+  halmazt, nem hozzáfűzi.
+- **`GiteaService.SOLUTION_FILE_PATTERN` kiemelése** egy közös `MissionFilePatterns` osztályba,
+  hogy a PR #1 chunkere ugyanazt a mintát használja, ami a kadét-másolatból már ma is kihagyja
+  a referencia megoldást. Egy lista, ne kettő.
+
+Ehhez kapcsolódóan a PR #1 kap egy `visibility` oszlopot (lásd a `V10` sémát lent), a PR #2
+pedig egy **kötelező** `RetrievalScope` paramétert minden keresési belépési ponton — a
+részletek a PR #0 doksijában, mert egy összefüggő tervet alkotnak.
+
+**Prerekvizit Norbertnek**: a meglévő, kadét által írt tartalom leltára és rendezése (PR #0
+2.4 szakasz) — **a PR #1 reindexe éles adaton addig nem futtatható**.
+
 ### PR #1 — RAG chunking backend
 
 - **Új migráció** `backend/src/main/resources/db/migration/V10__create_content_chunks.sql`:
@@ -116,9 +140,11 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
       chunk_text TEXT NOT NULL,
       content_embedding vector(768),
       embedding_model VARCHAR(64) NOT NULL,
+      visibility VARCHAR(16) NOT NULL DEFAULT 'PUBLIC',
       search_vector tsvector GENERATED ALWAYS AS (to_tsvector('hungarian', chunk_text)) STORED,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE')),
+      CONSTRAINT content_chunks_visibility_check CHECK (visibility IN ('PUBLIC', 'AUTHOR_ONLY')),
       CONSTRAINT content_chunks_unique_chunk UNIQUE (source_type, source_id, file_path, chunk_index)
   );
   -- 2026-08-26: SZÁNDÉKOSAN NINCS vektor-index ezen a táblán, ld. az indoklást lentebb.
