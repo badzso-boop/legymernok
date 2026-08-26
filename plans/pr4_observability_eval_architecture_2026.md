@@ -67,7 +67,9 @@ CREATE TABLE eval_golden_entries (
     created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT eval_golden_entries_source_type_check
-        CHECK (expected_source_type IN ('STAR_SYSTEM', 'MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE'))
+        CHECK (expected_source_type IN ('ANY', 'STAR_SYSTEM', 'MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE'))
+        -- 'ANY' 2026-08-26-tól: az egységes pipeline (PR #2 6.6) óta a forrástípus már nem
+        -- ágválasztó, csak elvárás — van olyan kérdés, ahol bármelyik találat elfogadható.
 );
 
 CREATE TABLE eval_runs (
@@ -149,8 +151,12 @@ public class EvalGoldenEntry {
     private String expectedSourceType;
     @Column(name = "expected_source_name_contains")
     private String expectedSourceNameContains;
-    @Column(name = "expected_keywords")
-    private List<String> expectedKeywords;  // Postgres TEXT[] — Hibernate 6 natívan támogatja
+    // 2026-08-26-i javítás: a "Hibernate 6 natívan támogatja" állítás pontatlan volt —
+    // List<String> -> Postgres TEXT[] leképezéshez explicit @JdbcTypeCode kell, e nélkül a
+    // ddl-auto=validate INDULÁSKOR elszáll (a projekt beállítása validate, ld. CLAUDE.md).
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "expected_keywords", columnDefinition = "text[]")
+    private List<String> expectedKeywords;
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -812,6 +818,10 @@ sequenceDiagram
 | `deleteRun_runningRun_throwsConflict` | `EvalServiceTest` | `RUNNING` státuszú run törlési kísérlete `ResourceConflictException`-t dob, a sor a DB-ben megmarad |
 | `deleteRun_notFound_throwsNotFound` | `EvalServiceTest` | Ismeretlen `runId` → `ResourceNotFoundException` |
 | `usePollingEvalRun.test.ts` | frontend | Mockolt `evalApi.getRunDetail()`, ami első hívásra `RUNNING`-ot, másodikra `COMPLETED`-et ad → a hook pontosan 2 hívást indít, a második után leáll (nem pollingol tovább) |
+| `allMigrationsApplyIncludingV11` | `EvalSchemaIT` (Testcontainers, ÚJ 2026-08-26) | `V1`…`V11` lefut tiszta `pgvector/pgvector:pg16`-on |
+| `expectedKeywordsArrayMappingBoots` | `EvalSchemaIT` (Testcontainers) | A `TEXT[]` ↔ `List<String>` mapping `ddl-auto=validate` mellett elindul — ez a fenti `@JdbcTypeCode` javítás regressziós tesztje |
+| `deletingRunCascadesItsResults` | `EvalSchemaIT` (Testcontainers) | `DELETE FROM eval_runs` → a hozzá tartozó `eval_run_results` sorok is eltűnnek |
+| `statusCheckConstraintRejectsUnknownValue` | `EvalSchemaIT` (Testcontainers) | `status='BANANA'` INSERT elszáll a CHECK-en |
 | `EvalPage.test.tsx` | frontend | Golden set CRUD-interakció (mockolt `evalApi`), "Futtatás" gomb → azonnal "folyamatban" jelzés (NEM várja meg a végét) → polling-gal frissül → eredmény-kártya megjelenik, korábbi futás kiválasztása betölti a régi eredményt |
 
 **Kézi ellenőrzés (Norbi, itt nem elvégezhető)**: golden set feltöltése valós kérdésekkel,

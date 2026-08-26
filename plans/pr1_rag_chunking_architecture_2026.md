@@ -57,6 +57,13 @@ tisztább rétegezésért, szólj, és átalakítom.
 
 ## 3. `ContentChunkDto` — pontos mezők
 
+> **2026-08-26: ezt a típust a PR #2 leváltja `RetrievedItem`-re** (`sourceName` mezővel
+> bővítve, `chunkText` → `text` átnevezéssel) — ld.
+> [`pr2_hybrid_retrieval_architecture_2026.md`](pr2_hybrid_retrieval_architecture_2026.md)
+> 6.5 szakasz. A PR #1 indexelési útvonala érdemben nem használja (ott a belső `PendingChunk`
+> rekord dolgozik), tehát ez a szakasz csak a PR #1 önálló olvashatóságáért marad itt.
+
+
 ```java
 package com.legymernok.backend.dto.rag;
 
@@ -103,6 +110,24 @@ kimenet: List<String>
        amíg a bekezdés el nem fogy
 5. az utolsó, még nem lezárt chunkot is hozzáadjuk (ha nem üres)
 ```
+
+**2026-08-26-i pontosítás — felső korlát, mert a fenti spec önellentmondó volt.** A 4. lépés
+úgy, ahogy fent van, tetszőlegesen nagy chunkot engedne: ha az aktuális chunk 799 karakter, és
+a következő bekezdés 700, akkor a "hozzáadás UTÁN ellenőrizzük a hosszt" szabály egy 1499
+karakteres chunkot hozna létre. Közben a 10. szakasz `chunkText_longText_respectsOverlap`
+tesztje "pontosan 150 karakteres átfedést" vár — a kettő együtt nem implementálható
+egyértelműen, két fejlesztő két különböző eredményt írna.
+
+**A rögzített szabály**: a bekezdéshatár az elsődleges, DE van egy kemény felső korlát
+`MAX_CHUNK = 1200` karakternél (a cél 800 másfélszerese). Ha egy bekezdés hozzáadása ezt
+átlépné, a bekezdést NEM adjuk hozzá az aktuális chunkhoz — lezárjuk az aktuálisat, és a
+bekezdés egy új chunkot kezd (ha maga a bekezdés is hosszabb `MAX_CHUNK`-nál, jön a kemény
+vágás a fenti szabály szerint).
+
+Így a chunkok mérete a `[~150, 1200]` tartományban marad, a `\n\n` határ tiszteletben van
+tartva, és az átfedés mindig pontosan 150 karakter — vagyis a tesztek állítása értelmezhető.
+Konstansként kiemelve (`TARGET_CHUNK = 800`, `OVERLAP = 150`, `MAX_CHUNK = 1200`), hogy
+hangolható legyen anélkül, hogy az algoritmushoz kellene nyúlni.
 
 **Miért pure function**: nincs benne `JdbcTemplate`, `AiEmbeddingService`, semmilyen
 side-effect — ez teszi lehetővé, hogy a `ContentChunkingServiceTest` mock nélkül,
@@ -370,10 +395,26 @@ Java-határon mockolva, NEM HTTP-szerveren keresztül):
 | `reindexAllMissions_countsProcessedMissions` | Mockolt `missionRepository.findAll()` 3 elemmel → visszatérési érték 3, `reindexMission` 3× hívva |
 | `deleteChunks_callsCorrectSql` | A DELETE SQL a helyes `source_type`/`source_id` paraméterekkel hívódik |
 
-**Kézi ellenőrzés (Norbi, itt nem elvégezhető)**: V10 migráció alkalmazása egy valódi
-Postgres ellen, a `reindex-content` végpont hívása Postmanből/curl-lel, majd
-`SELECT count(*), source_type FROM content_chunks GROUP BY source_type;` — hogy a
-várt darabszám jön-e ki egy ismert tartalmú misszión.
+### 10.1 Testcontainers-alapú DB-tesztek (ÚJ, 2026-08-26)
+
+A `ContentChunkingServiceTest` Mockito-alapú marad (a `chunkText()` pure function és az
+embed-first sorrend ellenőrzéséhez nem kell DB). **Emellé** jön egy külön,
+Testcontainers-alapú osztály, ami azt fedi le, amit mock nem tud:
+
+| Teszteset | Mit ellenőriz |
+|---|---|
+| `allMigrationsApplyOnCleanDatabase` | `V1`…`V10` hibátlanul lefut egy tiszta `pgvector/pgvector:pg16`-on |
+| `vectorAndPgcryptoExtensionsAvailable` | a `vector` és `pgcrypto` extension tényleg elérhető (ez az az image-választási hiba, amit a gyökér `CLAUDE.md` külön kiemel) |
+| `deletingMissionCascadesItsChunks` | misszió beszúrása + chunkok, majd `DELETE FROM missions` → 0 chunk marad (a 2026-08-26-i FK viselkedése) |
+| `uniqueChunkConstraintHoldsWithEmptyFilePath` | ugyanaz a `(source_type, source_id, '', chunk_index)` kétszer → constraint violation (a `NOT NULL DEFAULT ''` döntés bizonyítása, 12. szakasz) |
+| `hungarianTsvectorStemsInflectedForms` | `to_tsvector('hungarian', 'a függvényt hívjuk')` illeszkedik `plainto_tsquery('hungarian', 'függvény')`-re (a `'simple'`→`'hungarian'` váltás tényleges haszna) |
+| `embeddingModelColumnIsRequired` | `embedding_model` nélküli INSERT elszáll (NOT NULL) |
+
+**Kézi ellenőrzés (Norbi, ami a Testcontainers után is marad)**: a `reindex-content` végpont
+hívása egy valódi, tartalommal teli adatbázison, majd
+`SELECT file_path, chunk_index, LEFT(chunk_text, 80) FROM content_chunks
+WHERE source_type='MISSION_CODE_FILE' ORDER BY file_path, chunk_index;` — **vizuálisan**
+ellenőrizve, hogy a vágások metódushatáron vannak-e. Ez ítéleti kérdés, nem automatizálható.
 
 ## 11. ~~Nyitott kérdés hozzád~~ — MEGVÁLASZOLVA (2026-08-25), ld. 12. szakasz
 

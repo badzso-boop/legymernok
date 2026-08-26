@@ -57,7 +57,7 @@ backend/src/main/java/com/legymernok/backend/
 │   ├── AiServiceClient.java             (MÓDOSUL — PR #2-ben jön létre, itt: + streamChat())
 │   └── ChatService.java                 (MÓDOSUL — chat() → streamChat(), extractAction() új)
 ├── web/chat/
-│   └── ChatController.java              (MÓDOSUL — POST /api/chat törölve, GET /api/chat/stream új)
+│   └── ChatController.java              (MÓDOSUL — a régi POST /api/chat lecserélve POST /api/chat/stream-re)
 └── config/
     └── AppConfig.java                   (MÓDOSUL — + chatStreamExecutor() bean)
 
@@ -244,34 +244,44 @@ szálon), és a hívó (`ChatService.streamChat()`) egy külön executoron futta
 callback-ek engedik, hogy minden egyes token azonnal, a teljes stream vége előtt eljusson
 a hívóhoz (aki azonnal továbbküldi SSE-eseményként), ne kelljen megvárni a teljes választ.
 
-## 6. `ChatController` — `GET /api/chat/stream`
+## 6. `ChatController` — `POST /api/chat/stream`
 
 ```java
-@GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+@PostMapping(value = "/stream",
+             consumes = MediaType.APPLICATION_JSON_VALUE,
+             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 @PreAuthorize("isAuthenticated()")
 public SseEmitter stream(
-        @RequestParam String message,
-        @RequestParam(required = false) String context,
-        Authentication authentication) throws JsonProcessingException {
-    ChatContextDto ctx = (context != null && !context.isBlank())
-            ? objectMapper.readValue(context, ChatContextDto.class)
-            : null;
-    return chatService.streamChat(message, ctx, authentication.getName());
+        @Valid @RequestBody ChatRequest request,
+        Authentication authentication) {
+    return chatService.streamChat(request.message(), request.context(), authentication.getName());
 }
 ```
 
-A `POST /api/chat` (`@PostMapping`) **törlődik** — a fő terv explicit mondja: "nincs éles
-forgalom, amit migrálni kéne" (a chatbot még nincs éles használatban). A `context`
-query-paraméter egy **URL-encode-olt JSON string** (Spring a `@RequestParam`-ot már
-URL-decode-olja, mire a metódusba ér, tehát az `objectMapper.readValue()` egy tiszta
-JSON-stringet kap).
+A meglévő `ChatRequest` rekord (`record ChatRequest(String message, ChatContextDto context)`)
+**változatlanul újrahasznosítva** — nem kell új DTO, és a `@Valid` is a helyén marad (a
+projekt biztonsági ellenőrzőlistája külön kéri minden POST DTO-ra).
 
-**Miért `GET`, nem `POST`**: a fő terv szerint ez a szokásos SSE-végpont-forma, és a
-frontend natív `EventSource`-t ÚGYSEM használ (mert az nem tud `Authorization` fejlécet
-küldeni) — helyette kézzel írt `fetch()`-et használunk (ld. 9. szakasz), ami GET-tel is
-simán tud egyedi fejlécet küldeni, tehát a `GET`-only korlát itt nem releváns hátrány,
-viszont így az endpoint konvencionális SSE-forma marad (böngésző dev-toolokban is jól
-azonosítható, cache-elhető URL-struktúra, stb.).
+A régi `POST /api/chat` (nem-streamelő) **törlődik** — a fő terv explicit mondja: "nincs éles
+forgalom, amit migrálni kéne" (a chatbot még nincs éles használatban).
+
+**Miért `POST`, nem `GET` — 2026-08-26-i döntés, ez megfordítja a korábbi tervet.** A terv
+eredetileg `GET /api/chat/stream?message=...&context=<url-encoded JSON>` volt, azzal az
+indoklással, hogy ez a konvencionális SSE-forma. **A konvenció-érv csak akkor számítana, ha
+natív `EventSource`-t használnánk — de nem használunk** (nem tud `Authorization` fejlécet
+küldeni, ezért kézzel írt `fetch()` megy, ld. 9. szakasz), a `fetch()`-nek pedig teljesen
+mindegy a metódus. Cserébe a `GET` két valós hátránnyal járt:
+
+- **A kadét kérdése bekerül minden proxy access logjába** (`frontend` nginx, bármilyen
+  fölötte lévő réteg) és a böngésző-előzményekbe. Egy oktatási platformon a kérdés lehet
+  személyes vagy beadandóhoz kötődő — a query stringben ez felesleges kockázat.
+- **Hosszú kérdés + URL-kódolt JSON kontextus átlépheti az nginx alap header-bufferét**
+  (`large_client_header_buffers`), és a felhasználó egy `414 Request-URI Too Large`-ot kap,
+  aminek az okát semmi nem magyarázza el neki.
+
+`POST`-tal mindkettő megszűnik: a kérdés és a kontextus a body-ban utazik, hosszkorlát
+gyakorlatilag nincs, és a válasz ugyanúgy `text/event-stream`. A `@Valid @RequestBody` is
+így természetes.
 
 ## 7. `AppConfig` — `chatStreamExecutor` bean
 
@@ -389,10 +399,15 @@ public SseEmitter streamChat(String message, ChatContextDto context, String user
                 () -> {
                     // 3. Feltételes akció-kinyerés — CSAK form-kitölthető oldalon
                     if (context != null && FORM_FILLABLE_PAGE_TYPES.contains(context.pageType())) {
+                        // 2026-08-26: ez egy MÁSODIK, nem streamelő LLM-hívás a kész válasz
+                        // után — a felhasználónak jeleznünk kell, hogy még történik valami,
+                        // különben egy kész válasz után percekkel magától kitöltődne a form.
+                        sendSafely(emitter, "status", "Mezők kitöltése…");
                         ChatAction action = extractAction(fullResponse.toString(), context);
                         if (action != null) {
                             sendSafely(emitter, "action", action);
                         }
+                        sendSafely(emitter, "status", "");
                     }
                     emitter.complete();
                 },
@@ -476,16 +491,21 @@ export async function streamChat(
   onToken: (token: string) => void,
   onAction: (action: ChatStreamAction) => void,
   onError: (error: Error) => void,
+  onStatus: (status: string | null) => void,   // 2026-08-26: "Mezők kitöltése…" jelzéshez
+  signal?: AbortSignal,                         // 2026-08-26: megszakíthatóság
 ): Promise<void> {
   const token = localStorage.getItem("token");
   const baseURL = import.meta.env.VITE_API_URL || "/api";
-  const url =
-    `${baseURL}/chat/stream?message=${encodeURIComponent(message)}` +
-    `&context=${encodeURIComponent(JSON.stringify(context))}`;
 
   try {
-    const response = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const response = await fetch(`${baseURL}/chat/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, context }),
+      signal,
     });
     if (!response.ok || !response.body) {
       throw new Error(`Chat stream request failed: HTTP ${response.status}`);
@@ -514,6 +534,7 @@ export async function streamChat(
           else if (line.startsWith("data:")) data += line.slice(5).trim();
         }
         if (eventName === "token") onToken(data);
+        else if (eventName === "status") onStatus(data || null);
         else if (eventName === "action") {
           try {
             onAction(JSON.parse(data) as ChatStreamAction);
@@ -524,10 +545,27 @@ export async function streamChat(
       }
     }
   } catch (err) {
+    // A felhasználó által kiváltott megszakítás NEM hiba — ne mutassunk hibaüzenetet.
+    if (err instanceof DOMException && err.name === "AbortError") return;
     onError(err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    onStatus(null);
   }
 }
 ```
+
+**2026-08-26-i kiegészítések a fenti kódban:**
+
+- **`POST` + body** a korábbi query-stringes `GET` helyett (ld. 6. szakasz indoklása).
+- **`signal?: AbortSignal`** — enélkül a `fetch()` a widget bezárása/route-váltás után is
+  tovább futott volna, és egy már leszerelt komponens state-jét frissítette volna. A mért
+  ~2 perces válaszidőnél ez nem elméleti: bőven van idő elnavigálni közben.
+- **`AbortError` külön kezelve** — a megszakítás felhasználói szándék, nem hiba; hibaüzenetet
+  mutatni rá félrevezető lenne.
+- **`onStatus` callback + `status` SSE-esemény** — a `extractAction()` a streamelés UTÁN fut
+  (ld. 8.2), tehát a felhasználó egy kész választ lát, majd percekkel később magától
+  kitöltődik a form, mindenféle jelzés nélkül. A `status` esemény ezt a néma szakaszt tölti
+  ki ("Mezők kitöltése…"), ugyanaz a minta, mint a PR #5 `tool_call` felirata.
 
 **Miért `fetch()` + kézzel írt parser, nem natív `EventSource`**: a `frontend/CLAUDE.md`
 és a fő terv is rögzíti — a JWT az `Authorization` fejlécben utazik (`localStorage`-ból,
@@ -558,12 +596,23 @@ interface Message {
 ```
 
 ```typescript
+// 2026-08-26: a futó stream megszakításához + unmount-védelemhez
+const abortRef = useRef<AbortController | null>(null);
+const [status, setStatus] = useState<string | null>(null);
+
+useEffect(() => () => abortRef.current?.abort(), []);   // unmountkor mindig leáll
+
+const handleStop = () => abortRef.current?.abort();
+
 const handleSend = async () => {
   const text = input.trim();
   if (!text || loading) return;
   setInput("");
   setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
   setLoading(true);
+
+  const controller = new AbortController();
+  abortRef.current = controller;
 
   const aiMessageId = crypto.randomUUID();
   setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: "" }]);
@@ -594,11 +643,26 @@ const handleSend = async () => {
         ),
       );
     },
+    setStatus,             // onStatus — "Mezők kitöltése…" a buborék alatt
+    controller.signal,     // megszakíthatóság
   );
 
+  abortRef.current = null;
   setLoading(false);
 };
 ```
+
+**Két új UI-elem ehhez (2026-08-26):**
+
+- **„Leállítás" gomb** — a `loading` állapot alatt a küldés-gomb helyén jelenik meg,
+  `onClick={handleStop}`. A mért ~1 perc 50 mp-es válaszidőnél ez nem kényelmi funkció: ha a
+  kadét rossz kérdést tett fel, ma nincs módja megszakítani, csak megvárni.
+- **`status` felirat** — a buborék alatt egy halvány sor, ha a `status` nem `null`
+  (jelenleg csak „Mezők kitöltése…", de a PR #5 `tool_call` feliratai is ide fognak
+  érkezni, ugyanezen a csatornán).
+
+**A `useEffect` cleanup a lényeg**: enélkül a widget bezárása vagy egy route-váltás után a
+`fetch()` tovább futna, és a `setMessages` egy már leszerelt komponensre hívódna.
 
 **Vizuális részlet**: a `loading` spinner (a meglévő `CircularProgress`) az első token
 megérkezéséig látszódhat az üres AI-buborék helyén — ez apróság, nem igényel külön tervet,
@@ -669,7 +733,7 @@ sequenceDiagram
     User->>CW: üzenet beírása + Enter
     CW->>CW: placeholder AI-üzenet (üres text, saját id)
     CW->>CL: streamChat(message, context, onToken, onAction, onError)
-    CL->>CC: GET /api/chat/stream?message=...&context=... (Authorization header)
+    CL->>CC: POST /api/chat/stream {message, context} (Authorization header)
     CC->>CS: streamChat(message, ctx, username)
     CS-->>CC: SseEmitter (azonnal visszatér)
     CC-->>CL: HTTP 200, Content-Type: text/event-stream (streamelt válasz kezdete)
@@ -733,7 +797,10 @@ sequenceDiagram
 | `handleSend_incrementalTokens_updatesPlaceholderMessage` | `ChatWidget.test.tsx` (bővítve) | Mockolt `streamChat()` 3× hívja az `onToken`-t → a UI-ban a placeholder AI-buborék szövege fokozatosan nő, a `role:"user"` üzenet nem változik |
 | `handleSend_actionEvent_callsTriggerFill` | `ChatWidget.test.tsx` | Mockolt `streamChat()` egy `onAction({type:"FILL_FORM",...})`-t hív → `triggerFill()` a helyes `fields`-szel meghívva |
 | `handleSend_streamError_showsErrorInPlaceholder` | `ChatWidget.test.tsx` | Mockolt `streamChat()` `onError`-t hív → a placeholder buborék hibaüzenetre vált, nem marad örökre üres |
-| `stream_withoutJwt_returns401` | `ChatControllerSecurityTest` (ÚJ) | `GET /api/chat/stream` JWT nélkül → 401, ugyanaz a minta, mint a többi `@PreAuthorize("isAuthenticated()")` végponton |
+| `handleStop_abortsStream_noErrorMessageShown` | `ChatWidget.test.tsx` | A „Leállítás" gomb `abort()`-ot hív; az `AbortError` NEM jelenik meg hibaüzenetként a buborékban (2026-08-26) |
+| `unmount_abortsInFlightStream` | `ChatWidget.test.tsx` | A komponens leszerelése megszakítja a futó streamet — nincs state-frissítés unmount után (2026-08-26) |
+| `statusEvent_showsAndClearsIndicator` | `client.stream.test.ts` | `event: status` → `onStatus("Mezők kitöltése…")`, majd üres `data` → `onStatus(null)` (2026-08-26) |
+| `stream_withoutJwt_returns401` | `ChatControllerSecurityTest` (ÚJ) | `POST /api/chat/stream` JWT nélkül → 401, ugyanaz a minta, mint a többi `@PreAuthorize("isAuthenticated()")` végponton |
 
 **Kézi ellenőrzés (kizárólag Norbi)**: valódi token-streaming élő Ollama ellen — vizuálisan
 ellenőrizve, hogy a tokenek folyamatosan, nem "egyszerre kupacban" jelennek-e meg; hogy a

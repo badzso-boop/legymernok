@@ -380,6 +380,8 @@ listára, a Python type hint-ekből és a docstringből automatikusan generáló
 
 ```python
 import os
+from urllib.parse import urlencode
+
 import httpx
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
@@ -425,7 +427,10 @@ async def _call_backend(method: str, path: str, auth_header: str, json_body: dic
 async def search_platform_content(ctx: Context, query: str, top_k: int = 5) -> dict:
     """Keresés a platform tartalmában (missziók, csillagrendszerek) — hibrid vektor+szöveges kereséssel."""
     auth = _auth_header(ctx)
-    return await _call_backend("GET", f"/api/search/hybrid?q={query}&topK={top_k}", auth)
+    # 2026-08-26: urlencode KÖTELEZŐ — a korábbi f-string interpoláció egy "&" vagy "#"
+    # karaktertől eltört volna a kérdésben (a modell által adott `query` tetszőleges szöveg).
+    qs = urlencode({"q": query, "topK": top_k})
+    return await _call_backend("GET", f"/api/search/hybrid?{qs}", auth)
 
 
 @mcp.tool()
@@ -537,8 +542,12 @@ mcp-server:
     dockerfile: Dockerfile
   container_name: legymernok-mcp-server
   restart: always
-  ports:
-    - "8082:8082"
+  # 2026-08-26: NINCS `ports:` blokk. A korábbi terv "8082:8082"-t publikált a hosztra,
+  # ami ellentmond a gyökér CLAUDE.md biztonsági ellenőrzőlistájának ("új service portot
+  # alapból NE publikálj kifelé"). A backend a legymernok-net-en `http://mcp-server:8082`
+  # néven eléri, hoszt felőli hozzáférésre nincs szükség — és mivel ez a szerver
+  # SZÁNDÉKOSAN nem validálja a JWT-t (csak továbbítja, ld. 6. szakasz), kifelé publikálva
+  # egy fölösleges támadási felület lenne.
   environment:
     BACKEND_URL: http://backend:8080
   depends_on:

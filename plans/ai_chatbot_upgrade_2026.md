@@ -115,6 +115,7 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
       chunk_index INT NOT NULL,
       chunk_text TEXT NOT NULL,
       content_embedding vector(768),
+      embedding_model VARCHAR(64) NOT NULL,
       search_vector tsvector GENERATED ALWAYS AS (to_tsvector('hungarian', chunk_text)) STORED,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE')),
@@ -405,8 +406,7 @@ ChatWidget → ChatService.streamChat() → Ollama tool-calling hurok (max N ite
       dockerfile: Dockerfile
     container_name: legymernok-mcp-server
     restart: always
-    ports:
-      - "8082:8082"
+    # 2026-08-26: NINCS ports: blokk — ld. pr5 7. szakasz (CLAUDE.md biztonsági lista).
     environment:
       BACKEND_URL: http://backend:8080
     depends_on:
@@ -445,6 +445,7 @@ ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
 | `mcp[cli]>=2.0,<3`, `httpx`, `uvicorn` (új `mcp-server/requirements.txt`) | `mcp-server/` (önálló konténer, NEM az `ai-service/` alá) | Ugyanaz a Python SDK verzió-sáv, amit az `ai-os` projekt is használ, de itt Streamable HTTP-transporttal (`MCPServer.streamable_http_app()`), mert a kliens (Spring backend) és a szerver külön konténerben fut — valódi, szabványos, folyamatosan futó MCP-szerver a 4 tool-hoz, nem csak Ollama-specifikus glue-kód, és nem az `ai-service` életciklusához kötve (PR #5). |
 | `io.modelcontextprotocol.sdk:mcp` (+ `mcp-bom` verzió-kezeléshez, backend `pom.xml`) | `service/ai/McpToolLoopService.java` | **ÚJ, 2026-08-25-i doksi-kutatással feltárva** — a hivatalos, Spring AI-jal együttműködésben fejlesztett Java MCP kliens SDK. Ezt kell használni a `mcp-server`-rel való kommunikációhoz a helyett a kézzel írt REST-hívás helyett, amit a terv korábban tévesen feltételezett (az MCP Streamable HTTP valójában JSON-RPC 2.0 egyetlen `/mcp` végponton, nem REST tool-onként) — ld. `pr5_mcp_toolcalling_architecture_2026.md` 3.2 szakasz. |
 | `org.mozilla:rhino:1.7.15.1` (backend `pom.xml`) | `service/rag/strategy/JsMethodSplitter.java` | Pure-Java JS/TS-parser a CODING-misszió kódfájlok metódus-szintű chunkolásához (PR #1, ld. [`pr1_rag_chunking_architecture_2026.md`](pr1_rag_chunking_architecture_2026.md) 12.6) — 2026-08-25-i spike-kal ténylegesen kipróbálva a valódi `mission-js-template` fájlokon, nem elméleti választás. Nincs natív/subprocess igény. |
+| `org.testcontainers:postgresql` + `junit-jupiter` (test scope, backend `pom.xml`) | `src/test/java/.../db/` | **ELDÖNTVE (2026-08-26)**: két új migráció, öt tábla, generált `tsvector` oszlop, FK-cascade és a projekt legösszetettebb nyers SQL-jei kerülnek be — eddig ez a réteg teljesen automatikus ellenőrzés nélkül maradt volna ("Norbi kézzel megnézi"). A `pgvector/pgvector:pg16` image-dzsel (ugyanaz, mint élesben) a Flyway-migrációk lefutása ÉS a nyers lekérdezések valódi Postgres ellen tesztelhetők. Csak `test` scope, a prod-artefaktumot nem érinti. |
 | **Semmi más** a backendhez | — | `SseEmitter` (spring-boot-starter-web), `RestTemplate` (már bean), `ObjectMapper` (már bean) mindent lefed — nincs `spring-webflux`, nincs reaktív lib. |
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
@@ -584,11 +585,21 @@ eltárolva, melyik modellel/prefixszel készült egy adott vektor**. Emiatt egy 
 (vagy ez a prefix-javítás) csendben inkonzisztens állapotot hagy, amíg valaki kézzel le nem
 futtatja a reindexet — semmi nem jelzi, hogy ez megtörtént-e.
 
-Egy `embedding_model VARCHAR(64)` oszlop a `content_chunks`-on (és a `star_systems`-en)
-megoldaná: a retrieval figyelmeztethetne, ha a tárolt érték eltér az aktuális
-`EMBED_MODEL`-től, és a reindex célzottan csak az elavult sorokat érintené. **Ez tudatosan
-NEM része ennek a körnek** — először a prefix-javítás és a hozzá tartozó teljes reindex
-menjen ki, a verziózás egy külön, kisebb kör tárgya.
+**ELDÖNTVE (2026-08-26): bekerül ebbe a körbe.** Egy `embedding_model VARCHAR(64) NOT NULL`
+oszlop a `content_chunks`-on (a `V10` migrációban) és a `star_systems`-en (egy külön, egysoros
+`V12` migrációban, mert az a tábla már létezik). Indexeléskor az aktuális `EMBED_MODEL`
+értéke kerül bele.
+
+Mit old meg:
+- A retrieval **figyelmeztethet** (`log.warn`), ha a tárolt érték eltér az aktuális
+  `EMBED_MODEL`-től — vagyis ha valaki elfelejtette a reindexet egy modellváltás után.
+- A reindex **célzottan** csak az elavult sorokat érintheti, nem kell mindent újraszámolni.
+- A prefix-javítás bevezetésekor egyértelműen látszik a DB-ből, mely sorok készültek már az
+  új eljárással.
+
+**A `star_systems` `V12` migrációja**: az oszlopot `DEFAULT 'unknown'`-nal kell felvenni,
+mert a meglévő sorokról nem tudjuk, mivel készültek — és pont ez a helyes állapot: az
+`'unknown'` érték jelzi, hogy azok a vektorok reindexre várnak.
 
 ## Lokális futtatás — mért teljesítmény és a timeout-lánc (2026-08-26)
 
@@ -704,9 +715,30 @@ minden fázisnak mockolt unit tesztekkel, élő LLM nélkül is ellenőrizhetőn
 ## Ellenőrzés / verifikáció összefoglalva
 
 - **Itt, élő Ollama nélkül is ellenőrizhető, fázisonként**: `mvn test` (új Mockito-alapú service
-  tesztek), `cd ai-service && pip install -r requirements.txt -r requirements-dev.txt && pytest`,
-  `npm test` (Vitest az új frontend stream-parserhez + widget teszthez), és a V10 migráció
-  szintaktikai átolvasása (nincs beágyazott teszt-DB, ami ezt automatikusan bizonyítaná).
+  tesztek **és — 2026-08-26 óta — Testcontainers-alapú DB-tesztek**),
+  `cd ai-service && pip install -r requirements.txt -r requirements-dev.txt && pytest`,
+  `npm test` (Vitest az új frontend stream-parserhez + widget teszthez).
+
+  **A Testcontainers ezt a korábbi mondatot váltja le**: *"a V10 migráció szintaktikai
+  átolvasása (nincs beágyazott teszt-DB, ami ezt automatikusan bizonyítaná)"*. Mostantól van.
+  Amit a DB-tesztek lefednek, és amit korábban SEMMI nem bizonyított automatikusan:
+
+  | Amit tesztel | Melyik PR |
+  |---|---|
+  | Minden Flyway-migráció lefut egy tiszta `pgvector/pgvector:pg16`-on, `V1`-től a legutolsóig | mind |
+  | A `vector` és `pgcrypto` extension tényleg elérhető (nem `postgres:16` image) | PR #1 |
+  | `content_chunks` FK `ON DELETE CASCADE` — misszió törlése után 0 chunk marad | PR #1 |
+  | `content_chunks_unique_chunk` UNIQUE tényleg fog (üres `file_path`-tal is) | PR #1 |
+  | A `to_tsvector('hungarian', ...)` generált oszlop tényleg szótövez (`függvényt` → `függvény`) | PR #1 |
+  | A vektoros lekérdezés `ORDER BY emb <=> ?` alakja lefut és helyes sorrendet ad | PR #2 |
+  | A full-text lekérdezés `plainto_tsquery('hungarian', ?)`-vel talál ragozott alakra | PR #2 |
+  | A `JOIN missions` tényleg kitölti a `source_name`-et | PR #2 |
+  | `eval_runs`/`eval_run_results` CHECK-constraintjei és a CASCADE | PR #4 |
+  | Az `expected_keywords TEXT[]` JPA-mapping `ddl-auto=validate` mellett elindul | PR #4 |
+
+  Ez a lista pont azokat a hibaosztályokat fedi, amiket a projekt korábban élesben szedett
+  össze (`order_in_system`→`order_index`, `template_repository_url` NOT NULL, `mission_type`
+  CHECK — ld. gyökér `CLAUDE.md`).
 - **Csak Norbi, miután lehúzta a branch-et a saját gépére, élő Ollamával**: V10 alkalmazása egy
   valódi Postgres ellen + a `reindex-content` végpont ellenőrzése; hogy a retrieval-minőség/
   reranking ténylegesen jobb választ ad-e; hogy a valódi token-streaming helyesen jelenik-e meg a

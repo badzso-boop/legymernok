@@ -4,7 +4,7 @@
 > osztály/metódus-szintre, ugyanolyan mélységben, mint a
 > [`pr1_rag_chunking_architecture_2026.md`](pr1_rag_chunking_architecture_2026.md). **Csak
 > terv, nincs implementáció.** A PR #1-ben megtervezett `content_chunks` táblára és
-> `ContentChunkDto`-ra épül — azt előbb érdemes elolvasni.
+> `ContentChunkDto`-ra épül (amit ez a PR a 6.5 szakaszban `RetrievedItem`-re vált) — azt előbb érdemes elolvasni.
 
 ## 1. Új komponensek — csomag-elhelyezés
 
@@ -121,22 +121,22 @@ kellene).
 
 | Metódus | Szignatúra | Mit csinál |
 |---|---|---|
-| `retrieveMissionChunks` | `List<ContentChunkDto> retrieveMissionChunks(String query, int topK)` | A fő belépési pont — embedeli a query-t, lefuttatja a két keresést, `rrfMerge()`-dzsel egyesíti. Ld. 4.1. |
-| `vectorSearch` | `private List<ContentChunkDto> vectorSearch(String vectorStr, int limit)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
-| `fullTextSearch` | `private List<ContentChunkDto> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
+| `retrieveMissionChunks` | `List<RetrievedItem> retrieveMissionChunks(String query, int topK)` | A fő belépési pont — embedeli a query-t, lefuttatja a két keresést, `rrfMerge()`-dzsel egyesíti. Ld. 4.1. |
+| `vectorSearch` | `private List<RetrievedItem> vectorSearch(String vectorStr, int limit)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
+| `fullTextSearch` | `private List<RetrievedItem> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
 | `rrfMerge` | `static List<RetrievedItem> rrfMerge(List<List<RetrievedItem>> rankedLists, int topK)` | **Pure static function** — a fő unit-teszt célpont, nincs szüksége semmilyen mockra. Ld. 4.3. |
-| `mapRow` | `private ContentChunkDto mapRow(ResultSet rs)` | Közös `RowMapper`-logika a két keresési metódushoz (ne duplikálódjon a mezőkiolvasás). |
+| `mapRow` | `private RetrievedItem mapRow(ResultSet rs)` | Közös `RowMapper`-logika a két keresési metódushoz (ne duplikálódjon a mezőkiolvasás). |
 
 ### 4.1 `retrieveMissionChunks()` — a fő metódus
 
 ```java
-public List<ContentChunkDto> retrieveMissionChunks(String query, int topK) {
+public List<RetrievedItem> retrieveMissionChunks(String query, int topK) {
     float[] vector = embeddingService.embed(query);
-    List<ContentChunkDto> vectorResults = (vector != null)
+    List<RetrievedItem> vectorResults = (vector != null)
             ? vectorSearch(embeddingService.toVectorString(vector), topK * 3)
             : List.of();   // embed-hiba esetén NEM dobunk kivételt, csak a full-text ágra esünk vissza
 
-    List<ContentChunkDto> fullTextResults = fullTextSearch(query, topK * 3);
+    List<RetrievedItem> fullTextResults = fullTextSearch(query, topK * 3);
 
     return rrfMerge(vectorResults, fullTextResults, topK);
 }
@@ -263,7 +263,7 @@ képlet viszont 1-indexelt pozíciót vár (`1/(k+rank)`, ahol az első helyezet
 DTO-példány (és a benne lévő `chunkText`) az elsőként látott forrásból származzon — ez
 irreleváns, mert a szöveg ugyanaz, csak a duplikált objektum-létrehozást kerüli el.
 
-Mivel ez **statikus, side-effect-mentes függvény**, a `ContentChunkDto` listákat kézzel
+Mivel ez **statikus, side-effect-mentes függvény**, a `RetrievedItem` listákat kézzel
 összeállítva, mock nélkül tesztelhető — ld. 8. szakasz tesztterve.
 
 ### 4.4 Miért két keresés + RRF — a döntés indoklása (2026-08-25-i egyeztetés alapján)
@@ -346,10 +346,13 @@ mert az igényel legkevesebb új infrastruktúrát).
 
 | Metódus | Szignatúra | Mit csinál |
 |---|---|---|
-| `rerank` | `List<ContentChunkDto> rerank(String query, List<ContentChunkDto> candidates, int keepTop)` | Egy `AiServiceClient.generateJson()` hívással pontszámoztatja a jelölteket, majd a pontszám szerint csökkenő sorrendben visszaadja a legjobb `keepTop` darabot. Hiba esetén visszaesik az RRF-sorrendre (nem dob kivételt). |
-| `buildRerankPrompt` | `private String buildRerankPrompt(String query, List<ContentChunkDto> candidates)` | A jelölteket 0-tól indexelve felsorolja a promptban, hogy a modell index→pontszám JSON-t tudjon visszaadni. |
+| `rerank` | `List<RetrievedItem> rerank(String query, List<RetrievedItem> candidates, int keepTop)` | Egy `AiServiceClient.generateJson()` hívással pontszámoztatja a jelölteket, majd a pontszám szerint csökkenő sorrendben visszaadja a legjobb `keepTop` darabot. Hiba esetén visszaesik az RRF-sorrendre (nem dob kivételt). |
+| `buildRerankPrompt` | `private String buildRerankPrompt(String query, List<RetrievedItem> candidates)` | A jelölteket 0-tól indexelve felsorolja a promptban, hogy a modell index→pontszám JSON-t tudjon visszaadni. |
 
 ```java
+@Value("${chat.rerank.enabled:true}")
+private boolean rerankEnabled;
+
 private static final String RERANK_SYSTEM_PROMPT = """
         Egy keresési jelölt-listát kapsz egy kérdéshez. Minden jelöltet 0-tól 10-ig terjedő
         relevancia-pontszámmal kell értékelned a kérdéshez képest. VÁLASZOLJ KIZÁRÓLAG egy
@@ -357,8 +360,16 @@ private static final String RERANK_SYSTEM_PROMPT = """
         pontszámok. Példa: {"0": 8, "1": 2, "2": 9}. Ne írj semmilyen más szöveget.
         """;
 
-public List<ContentChunkDto> rerank(String query, List<ContentChunkDto> candidates, int keepTop) {
+public List<RetrievedItem> rerank(String query, List<RetrievedItem> candidates, int keepTop) {
     if (candidates.isEmpty()) return candidates;
+
+    // 2026-08-26: kapcsolható. Kikapcsolva egy teljes, szinkron LLM-körrel rövidebb minden
+    // chat-válasz — a mért 1,44 token/mp mellett ez nem elhanyagolható (ld.
+    // ai_chatbot_upgrade_2026.md "Lokális futtatás"). Az eval két mérési pontja (PR #2 6.6,
+    // PR #4 5.1.5) megmondja, hogy a rerank javít-e egyáltalán ezen az adathalmazon.
+    if (!rerankEnabled) {
+        return candidates.stream().limit(keepTop).toList();
+    }
 
     String prompt = buildRerankPrompt(query, candidates);
     AiServiceClient.JsonGenerateResult result = aiServiceClient.generateJson(prompt, RERANK_SYSTEM_PROMPT);
@@ -385,7 +396,7 @@ public List<ContentChunkDto> rerank(String query, List<ContentChunkDto> candidat
     }
 }
 
-private String buildRerankPrompt(String query, List<ContentChunkDto> candidates) {
+private String buildRerankPrompt(String query, List<RetrievedItem> candidates) {
     StringBuilder sb = new StringBuilder("Kérdés: ").append(query).append("\n\nJelöltek:\n");
     for (int i = 0; i < candidates.size(); i++) {
         sb.append(i).append(". ").append(truncate(candidates.get(i).chunkText(), 300)).append("\n");
@@ -424,9 +435,9 @@ public ChatResponse chat(ChatRequest request, String username) {
 
     // 1b. ÚJ — hibrid misszió-chunk retrieval + rerank
     long retrievalStart = System.currentTimeMillis();
-    List<ContentChunkDto> missionChunks = List.of();
+    List<RetrievedItem> missionChunks = List.of();
     try {
-        List<ContentChunkDto> candidates = hybridRetrievalService.retrieveMissionChunks(request.message(), RETRIEVAL_TOP_K);
+        List<RetrievedItem> candidates = hybridRetrievalService.retrieveMissionChunks(request.message(), RETRIEVAL_TOP_K);
         long retrievalMs = System.currentTimeMillis() - retrievalStart;
         log.info("chat_retrieval query=\"{}\" candidate_count={} duration_ms={}",
                 truncateForLog(request.message()), candidates.size(), retrievalMs);
@@ -450,13 +461,13 @@ public ChatResponse chat(ChatRequest request, String username) {
 ```
 
 `buildContextLines()` (jelenleg `ChatService.java`, 98-125. sor) egy új paramétert kap
-(`List<ContentChunkDto> missionChunks`), és a meglévő "Releváns csillagrendszerek" blokk
+(`List<RetrievedItem> missionChunks`), és a meglévő "Releváns csillagrendszerek" blokk
 mintáját követve egy új "Releváns misszió-részletek" blokkot fűz hozzá:
 
 ```java
 if (!missionChunks.isEmpty()) {
     StringBuilder sb = new StringBuilder("Releváns misszió-részletek:");
-    for (ContentChunkDto chunk : missionChunks) {
+    for (RetrievedItem item : missionChunks) {
         sb.append("\n  - ").append(truncate(chunk.chunkText(), 300));
     }
     lines.add(sb.toString());
@@ -663,17 +674,17 @@ classDiagram
     class HybridRetrievalService {
         -AiEmbeddingService embeddingService
         -JdbcTemplate jdbcTemplate
-        +retrieveMissionChunks(String query, int topK) List~ContentChunkDto~
-        -vectorSearch(String vectorStr, int limit) List~ContentChunkDto~
-        -fullTextSearch(String query, int limit) List~ContentChunkDto~
-        +rrfMerge(List~ContentChunkDto~ a, List~ContentChunkDto~ b, int topK) List~ContentChunkDto~$
+        +retrieveMissionChunks(String query, int topK) List~RetrievedItem~
+        -vectorSearch(String vectorStr, int limit) List~RetrievedItem~
+        -fullTextSearch(String query, int limit) List~RetrievedItem~
+        +rrfMerge(List~RetrievedItem~ a, List~RetrievedItem~ b, int topK) List~RetrievedItem~$
     }
 
     class RerankingService {
         -AiServiceClient aiServiceClient
         -ObjectMapper objectMapper
-        +rerank(String query, List~ContentChunkDto~ candidates, int keepTop) List~ContentChunkDto~
-        -buildRerankPrompt(String query, List~ContentChunkDto~ candidates) String
+        +rerank(String query, List~RetrievedItem~ candidates, int keepTop) List~RetrievedItem~
+        -buildRerankPrompt(String query, List~RetrievedItem~ candidates) String
     }
 
     class ChatService {
@@ -683,22 +694,22 @@ classDiagram
         -buildContextLines(...) List~String~
     }
 
-    class ContentChunkDto {
+    class RetrievedItem {
         <<record>>
         +UUID id
         +String sourceType
         +UUID sourceId
+        +String sourceName
         +String filePath
-        +int chunkIndex
-        +String chunkText
+        +String text
         +double score
     }
 
     ChatService --> HybridRetrievalService : retrieveMissionChunks()
     ChatService --> RerankingService : rerank()
     RerankingService --> AiServiceClient : generateJson()
-    HybridRetrievalService ..> ContentChunkDto : termel
-    RerankingService ..> ContentChunkDto : fogyaszt+termel
+    HybridRetrievalService ..> RetrievedItem : termel
+    RerankingService ..> RetrievedItem : fogyaszt+termel
     HybridRetrievalService --> "content_chunks tábla" : JdbcTemplate (nyers SQL)
 ```
 
@@ -726,9 +737,9 @@ sequenceDiagram
     and
         HRS->>DB: fullTextSearch (ts_rank)
     end
-    DB-->>HRS: 2× List~ContentChunkDto~
+    DB-->>HRS: 2× List~RetrievedItem~
     HRS->>HRS: rrfMerge() — pure function
-    HRS-->>CS: List~ContentChunkDto~ (candidates)
+    HRS-->>CS: List~RetrievedItem~ (candidates)
     CS->>CS: log.info("chat_retrieval ...")
 
     CS->>RS: rerank(message, candidates, keepTop)
@@ -742,7 +753,7 @@ sequenceDiagram
     else parse hiba VAGY ASC.success()==false
         RS->>RS: log.warn(...) — visszaesik az RRF-sorrendre
     end
-    RS-->>CS: List~ContentChunkDto~ (missionChunks)
+    RS-->>CS: List~RetrievedItem~ (missionChunks)
     CS->>CS: log.info("chat_rerank ...")
 
     CS->>CS: buildContextLines(..., missionChunks) — "Releváns misszió-részletek" blokk
@@ -785,8 +796,19 @@ misszió tartalmára (nem csak a csillagrendszer-szintű névre, mint eddig).
    a `TOP_K`, mi az RRF) átbeszélése után.
 2. ~~`RERANK_KEEP_TOP` konkrét értéke~~ — **ELDÖNTVE (2026-08-25): 3.** A rerank UTÁN
    végül 3 chunk kerül a chat-kontextusba.
-3. ~~Latencia-hatás~~ — **ELDÖNTVE (2026-08-25): elfogadva, nincs szükség külön feature
-   flag-re.** A rerank okozta plusz várakozás (egy második, szinkron Ollama-hívás a
+3. ~~Latencia-hatás~~ — **ÚJRANYITVA, majd ELDÖNTVE (2026-08-26): kapcsolható lett.**
+   A lenti 2026-08-25-i döntés a **mérések előtt** született. Azóta kiderült, hogy a helyi
+   modell 1,44 token/mp-mel fut, és egy válasz ~1 perc 50 mp — ilyen mellett egy plusz,
+   szinkron LLM-kör a generálás ELŐTT nem "elfogadható extra latencia", hanem érzékelhető
+   várakozás. Ezért a `RerankingService` kapott egy `chat.rerank.enabled` kapcsolót
+   (`CHAT_RERANK_ENABLED` env-változó, alapból `true`), kikapcsolva pedig egyszerűen az RRF
+   sorrend első `keepTop` elemét adja vissza — ugyanaz a kódút, mint a hiba-fallback.
+   **A döntést az adat fogja meghozni**: a PR #4 eval-je a rerank ELŐTTI és UTÁNI hit-rate-et
+   is méri (ld. 6.6 szakasz), tehát mérhető lesz, hogy a rerank javít-e egyáltalán ezen a
+   tartalmon. Az eredeti indoklás lentebb megmarad, mert a feature-flag-re vonatkozó része
+   továbbra is érvényes:
+
+   *(2026-08-25) elfogadva, nincs szükség külön feature flag-re.* A rerank okozta plusz várakozás (egy második, szinkron Ollama-hívás a
    generálás előtt, streamelés nélkül) elfogadható, mert az egész `ai_chatbot` feature már
    amúgy is egy meglévő feature flag mögött van (`/admin/feature-flags`) — nem indokolt egy
    újabb, belső flag-et bevezetni csak a reranking be/ki kapcsolásához. Ha a PR #3
