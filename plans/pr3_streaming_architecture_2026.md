@@ -263,6 +263,29 @@ kérésére megnöveltük, mert lassabb helyi modelleknél a 120s szűknek bizon
 mostantól env-változóval (`CHAT_STREAM_TIMEOUT_MS`) felülírható, élesben bármikor
 finomhangolható újraépítés nélkül.
 
+**2026-08-26-i kiegészítés — az `SseEmitter` timeoutja önmagában NEM elég.** Az első teljes
+lokális felállásnál kiderült, hogy a `frontend/nginx.conf` `/api/` blokkjában nincs
+`proxy_read_timeout`, tehát az nginx **60 másodperces alapértéke** érvényes — ez jóval a
+Java-oldali 300 000 ms előtt vágja el a kapcsolatot. A tünet félrevezető: a widgetben
+*"hiba történt a válasz lekérésekor"* jelenik meg, miközben az ollama még dolgozik, és a
+kérés utóbb sikeresen befejeződik. Ez 2026-08-26-án ténylegesen előfordult, mért
+válaszidőkkel (`gemma4-coding:q8`: 1,44 token/mp; `llama2-13b:q4`: ~1 perc 50 mp/válasz) —
+ld. `plans/ai_chatbot_upgrade_2026.md`, "Lokális futtatás — mért teljesítmény és a
+timeout-lánc" szakasz.
+
+Ezért az implementációnak az **egész láncot** kezelnie kell, a relációval együtt
+(**nginx ≥ SseEmitter ≥ ai-service→ollama**):
+
+- `frontend/nginx.conf` `/api/` blokk: explicit `proxy_read_timeout` és `proxy_send_timeout`
+  a `CHAT_STREAM_TIMEOUT_MS`-hez igazítva vagy afölött, **valamint `proxy_buffering off;`** —
+  enélkül az nginx kipufferelné a teljes választ, és a token-streaming értelmét vesztené.
+- `ai-service/main.py`: a `httpx.AsyncClient(timeout=600)` hardkódolt értéke is
+  env-változóból jöjjön.
+
+Streameléssel a probléma enyhül, de nem szűnik meg: az nginx `proxy_read_timeout` az utolsó
+adatcsomag óta eltelt időt méri, tehát folyamatos token-áram mellett elég egy jóval kisebb
+érték is — de beállítani akkor is kell.
+
 ```java
 public SseEmitter streamChat(String message, ChatContextDto context, String username) {
     // Csak egy aktív stream engedélyezett felhasználónként — ha már fut egy korábbi,
@@ -657,6 +680,12 @@ ellenőrizve, hogy a tokenek folyamatosan, nem "egyszerre kupacban" jelennek-e m
 1. ~~`SseEmitter` timeout~~ — **ELDÖNTVE (2026-08-25): megnövelve 300 000 ms-re (5 perc),
    ÉS konfigurálhatóvá téve** (`chat.stream.timeout-ms` / `CHAT_STREAM_TIMEOUT_MS` env-
    változó, ld. 8.2 szakasz) — nem kell hozzá újrafordítás, ha élesben módosítani kell.
+   **KIEGÉSZÍTÉS (2026-08-26):** ez önmagában nem elég — az nginx `/api/` blokkjának
+   60 mp-es alapértéke előbb vág el. Az implementációnak a teljes láncot kezelnie kell
+   (nginx `proxy_read_timeout` + `proxy_buffering off`, és az `ai-service` hardkódolt
+   `httpx` timeoutja is env-változóból). Ld. 8.2 szakasz és
+   `plans/ai_chatbot_upgrade_2026.md` "Lokális futtatás — mért teljesítmény és a
+   timeout-lánc" szakasza.
 2. ~~Kapcsolat-megszakadás kezelése~~ — **ELDÖNTVE (2026-08-25): NINCS resume-funkció
    ebben a körben.** Ha megszakad a stream, a válasz elvész, a felhasználónak újra kell
    küldenie az üzenetet — ez elfogadható, a "folytasd onnan, ahol abbamaradt" esetleg egy

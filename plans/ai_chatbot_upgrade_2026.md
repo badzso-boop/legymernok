@@ -440,6 +440,88 @@ ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
 | **Semmi** az evalhoz | — | Az admin UI-alapú eval (PR #4, újratervezve) a meglévő Java retrieval-service-eket hívja közvetlenül — nincs külön Python-implementáció, tehát a korábban tervezett `psycopg[binary]` sem kell. |
 
+## Lokális futtatás — mért teljesítmény és a timeout-lánc (2026-08-26)
+
+**Ez egy tudott, elfogadott limitáció, nem hiba** — a tervezésnél számolni kell vele.
+
+A fenti "Fontos keret-feltétel" szerint az élő LLM-tesztelés Norbi saját gépén történik. Az
+első teljes lokális felállás során kimértük, mennyibe kerül ez ténylegesen — a számok
+lényegesen rosszabbak, mint amit a tervek implicit feltételeztek.
+
+### Hardver-adottság
+
+| | |
+|---|---|
+| Inferencia | **CPU-only** (`ollama` log: `inference compute: id=cpu library=cpu`) |
+| RAM | 15,6 GiB |
+| GPU | NVIDIA GTX 1050, **2 GB VRAM** — egy 11–13B modellhez használhatatlan |
+
+A `docker-compose.yml` `ollama` service-e nem is kér GPU-t (nincs
+`deploy.resources.reservations.devices`), és a 2 GB VRAM mellett ennek nem is lenne értelme.
+**A modellméret a sebesség egyetlen érdemi gombja.**
+
+### Mért értékek
+
+| Modell | Méret betöltve | Capabilities | Sebesség / válaszidő |
+|---|---|---|---|
+| `gemma4-coding:q8` (11.9B, Q8_0) | 14 GB | `completion, tools, **thinking**` | **1,44 token/mp** |
+| `llama2-13b:q4` (13.0B, Q4_0) | 7,4 GB | `completion` | **~1 perc 50 mp** egy válaszra, betöltéssel együtt |
+
+A `gemma4-coding` **thinking modell**: a tényleges válasz előtt több száz tokent generál
+gondolkodásként. 1,44 token/mp mellett ez önmagában több perc, és a nyers gondolatmenet a
+`/api/generate` `response` mezőjébe is beszivároghat — a widgetben a kadét ezt látná.
+
+A meglévő lokális modellek közül **egyedül a `llama2-13b:q4` nem gondolkodik**, ezért lett ez
+beállítva `CHAT_MODEL`-nek. Cserébe 2023-as modell, gyenge magyar nyelvtudással.
+
+**Következtetés:** ezen a gépen egy 11B+ modell CPU-n nem alkalmas interaktív chatre. Ha
+használható válaszidő kell, egy 3B körüli modell (`qwen2.5:3b`, `llama3.2:3b`, ~2 GB) a reális
+választás — nagyságrendileg 7-8-szoros sebesség. A `thinking` capability az `ollama show
+<modell>` kimenetéből mindig ellenőrizhető; a `deepseek-r1` / `qwen3` / `qwq` / `gpt-oss`
+család mind gondolkodó, ezek ugyanebbe a problémába futnak.
+
+### A timeout-lánc — minden rétegnek konfigurálhatónak kell lennie
+
+A válaszidő ismeretében ez nem elméleti kérdés: **a lánc leggyengébb láncszeme dönt**, hiába
+nagy az összes többi.
+
+| Réteg | Jelenlegi timeout | Konfigurálható? |
+|---|---|---|
+| böngésző → frontend nginx `/api/` | **60 mp** (nginx default, `frontend/nginx.conf`-ban nincs felülírva) | **NEM** ← ez vág el elsőként |
+| frontend nginx → backend | ugyanaz a 60 mp | **NEM** |
+| backend → ai-service (`RestTemplate`) | nincs (`AppConfig.restTemplate()` = `new RestTemplate()`, végtelen) | nem releváns |
+| ai-service → ollama (`httpx`) | 600 mp (`ai-service/main.py`) | **NEM** (hardkódolt) |
+| PR #3 `SseEmitter` | 300 mp | **IGEN** (`chat.stream.timeout-ms` / `CHAT_STREAM_TIMEOUT_MS`) |
+
+**Ezt a PR #3 terve nem fedi le.** Ott az `SseEmitter` timeoutja lett 300 000 ms-re emelve és
+env-változóval felülírhatóvá téve — ez helyes, de **önmagában nem elég**: az nginx a `/api/`
+blokkban 60 másodperc után elvágja a kapcsolatot, jóval a Java-oldali 300 mp előtt. A
+felhasználó ilyenkor a widgetben csak annyit lát, hogy *"hiba történt a válasz lekérésekor"*,
+miközben az ollama még dolgozik, és a kérés utóbb sikeresen be is fejeződik. Ez a hibakép
+2026-08-26-án ténylegesen előfordult, és először modell-hibának tűnt.
+
+**Elvárás a streaming (PR #3) implementációjához:**
+
+1. A `frontend/nginx.conf` `/api/` blokkjában legyen explicit `proxy_read_timeout` (és
+   `proxy_send_timeout`), a `CHAT_STREAM_TIMEOUT_MS`-hez igazítva vagy afölött.
+   Streamelésnél a `proxy_buffering off;` is kell, különben az nginx a teljes választ
+   kipuffereli, és a token-streaming értelmét veszti.
+2. Az `ai-service/main.py` `httpx` timeoutja (`600`) is env-változóból jöjjön, ne hardkódolva.
+3. A rétegek relációja legyen tudatos: **nginx ≥ SseEmitter ≥ ai-service→ollama**, különben a
+   külső réteg vágja el a belsőt, és a hibaüzenet félrevezet.
+
+A streaming amúgy pont ezt a problémát enyhíti a legjobban: az első token pár másodpercen
+belül megérkezik, tehát a kapcsolat aktív marad, és a felhasználó sem ül üres képernyő előtt
+két percig. De az nginx `proxy_read_timeout` **az utolsó adatcsomag óta** eltelt időt méri,
+szóval streameléssel is kell a beállítás — csak jóval kisebb értékkel is elég lenne.
+
+### Hatás a fejlesztésre
+
+Ezzel számolni kell az ütemezésnél: minden élő, végponttól végpontig tartó kézi ellenőrzés
+körönként **percekbe** kerül, nem másodpercekbe. Ez erősíti a tervek meglévő döntését, hogy
+minden fázisnak mockolt unit tesztekkel, élő LLM nélkül is ellenőrizhetőnek kell lennie — az
+élő Ollamás verifikáció maradjon ritka, kötegelt végső ellenőrzés.
+
 ## Nyitott kérdések / Norbi feladatai a végén
 
 1. A golden set tételeit valós, élő seed-adatokkal (star system/mission nevek) kell kitölteni az
