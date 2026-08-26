@@ -183,6 +183,25 @@ egy 10+ chunkos misszónál ez számít.)
 konstruktorába (egy új `private final ContentChunkingService contentChunkingService;`
 mezőként) — Lombok automatikusan felveszi.
 
+**2026-08-26-i kiegészítés — törléskor NINCS hook-pont, és ez tudatos.** A fenti táblázat
+csak létrehozó/módosító útvonalakat fed le. Felmerült, hogy kell-e egy ötödik hook a
+`MissionService.deleteMission()`-be, ami hívja a `deleteChunks()`-ot — **nem kell**, mert a
+`V10` séma `source_id` oszlopa `REFERENCES missions(id) ON DELETE CASCADE` (ld.
+`ai_chatbot_upgrade_2026.md` PR #1 szakasz), tehát a takarítást az adatbázis végzi.
+
+Ez tudatosan jobb, mint egy ötödik service-hook: egy hook-ot el lehet felejteni egy jövőbeli,
+új törlési útvonalnál (pl. csillagrendszer-törlés, ami kaszkádol a misszióira, vagy egy
+tömeges admin-takarítás), és az elfelejtés **csendes** — árva chunkok maradnának az indexben,
+amiket a chatbot továbbra is felszolgálna a törölt tartalomból. Az FK ezt a hibaosztályt
+szerkezetileg zárja ki.
+
+**Tesztelési következmény**: a `deleteChunks_callsCorrectSql` teszteset (10. szakasz) továbbra
+is releváns (a `deleteChunks()` metódust a reindex-útvonal használja), de a "törölt misszió
+chunkjai eltűnnek" viselkedést **nem lehet Mockito-val bizonyítani** — az az adatbázis
+viselkedése. Ez a `V10` migráció kézi ellenőrzésének a része lesz: egy misszió létrehozása,
+reindexelés, `SELECT count(*) FROM content_chunks WHERE source_id = ?`, majd a misszió
+törlése után ugyanaz a lekérdezés 0-t kell adjon.
+
 **Fontos, amit érdemes tisztázni**: a `MissionService.createMission()`/`updateMission()`
 és a `FillInBlankService.saveDefinition()` metódusok jelenleg `@Transactional`-ok. Ha a
 `ContentChunkingService.reindexMission()` (ami maga is `@Transactional`) ugyanabban a

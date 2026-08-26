@@ -110,7 +110,7 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
   CREATE TABLE IF NOT EXISTS content_chunks (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       source_type VARCHAR(32) NOT NULL,
-      source_id UUID NOT NULL,
+      source_id UUID NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
       file_path VARCHAR(500) NOT NULL DEFAULT '',
       chunk_index INT NOT NULL,
       chunk_text TEXT NOT NULL,
@@ -129,6 +129,17 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
   ```
   (A `V2__add_pgvector.sql` index-stílusát követi; a generált `tsvector` oszlop nem igényel
   service-oldali karbantartást.)
+  **2026-08-26-i kiegészítés — `source_id` idegen kulcs `ON DELETE CASCADE`-dzsel.** Eredetileg
+  a `source_id` egy szabad UUID-oszlop volt, FK nélkül. Ez árva chunkokat hagyott volna: a
+  PR #1 hook-pontjai (5. szakasz) csak a létrehozást/módosítást fedik le, a `deleteMission()`-t
+  NEM — egy törölt misszió szövege így bennragadt volna az indexben, és a chatbot továbbra is
+  felszolgálta volna. Mivel **mindhárom `source_type` ugyanarra a `missions.id`-ra hivatkozik**
+  (a `MISSION_FILL_IN_BLANK` is a misszió ID-jához kötött, nem a `FillInBlankDefinition`
+  sajátjához — ld. `ContentChunkDto` 3. szakasz), egyetlen FK mindhármat lefedi, és a takarítás
+  az adatbázis dolga lesz, nem egy könnyen elfelejthető service-hívásé. **Következmény, amivel
+  számolni kell:** ha valaha egy nem-misszió alapú `source_type` kerülne a táblába (pl.
+  `STAR_SYSTEM`), ez az FK megakadályozná — akkor vagy külön tábla kell, vagy az FK-t polimorf
+  megoldásra kell cserélni (és akkor visszajön a kézi takarítás igénye).
   **2026-08-25-i pontosítás**: a `file_path` oszlop `NOT NULL DEFAULT ''` (nem NULL-abilis) —
   ez tudatos döntés, mert Postgres-ben két `NULL` érték SOSE számít egyenlőnek egy UNIQUE
   constraintben, tehát ha `file_path` NULL-abilis lenne, a `MISSION`/`MISSION_FILL_IN_BLANK`
