@@ -1,0 +1,834 @@
+# PR #3 — Streaming + strukturált kimenet: implementációs architektúra-terv
+
+> Ez a dokumentum a `plans/ai_chatbot_upgrade_2026.md` PR #3 szakaszát bontja le
+> osztály/metódus-szintre: pontos service-metódusok, hook-pontok a meglévő kódban
+> (frontend + backend + ai-service), class- és sequence-diagramok. Csak terv, nincs
+> implementáció ebben a körben.
+
+## 0. Függőség a PR #2-től
+
+Ez a PR a `service/ai/AiServiceClient.java` osztályt bővíti (`streamChat(...)`
+metódussal) — magát az osztályt és a `generateJson(String prompt, String systemPrompt)`
+metódusát a PR #2 (Hibrid retrieval + reranking) vezeti be. Ha a PR #2 saját
+architektúra-doksija (`plans/pr2_hybrid_retrieval_architecture_2026.md`) más
+csomag-elhelyezést vagy szignatúrát rögzít, mint amit itt feltételezünk, **ezt a
+dokumentumot ahhoz kell igazítani** — itt a fő terv (`ai_chatbot_upgrade_2026.md`,
+"PR #2" szakasz) alapján dolgozunk: `service/ai/AiServiceClient.java`,
+`JsonGenerateResult generateJson(String prompt, String systemPrompt)`.
+
+## 1. Kontextus a meglévő kódból (2026-08-25-i állapot)
+
+Mielőtt bármit tervezünk, ez a jelenlegi, valós állapot:
+
+- **`ChatService.chat()`** (`service/ai/ChatService.java`): szinkron metódus, ami (1)
+  szemantikus keresést végez a csillagrendszereken, (2) egy `callGenerate()` HTTP-hívást
+  csinál közvetlenül `RestTemplate`-tel az `ai-service /generate`-re (`stream: false`
+  hardkódolva az ai-service oldalán), (3) a válasz VÉGÉRŐL egy `FILL_FORM_PATTERN` regex-szel
+  kivágja az esetleges akció-JSON-t (`parseAction()`), majd (4) a maradék szöveget
+  (`removeActionJson()`) visszaadja. **Ezt a teljes (2)-(4) folyamatot váltja le ez a PR.**
+- **`ChatController`** (`web/chat/ChatController.java`): egyetlen `POST /api/chat`
+  endpoint, `@PreAuthorize("isAuthenticated()")`, `ChatRequest` body-t vár
+  (`record ChatRequest(String message, ChatContextDto context)`), `ChatResponse`-t ad
+  vissza (`record ChatResponse(String response, ChatAction action)`,
+  `@JsonInclude(NON_NULL)`).
+- **`ChatContextDto`**: `record ChatContextDto(String currentPage, String pageType,
+  Map<String,String> formFields, String language)`.
+- **`ai-service/main.py`**: a `/generate` endpoint `GenerateRequest`-et fogad
+  (`prompt`, `context: list[str]`, `model?`, `system_prompt?`), Ollama `/api/generate`-et
+  hívja `stream: False`-szal, egyetlen `GenerateResponse`-t ad vissza. A prompt-összeállítás:
+  `f"Kontextus:\n{context_block}\n\nKérdés: {req.prompt}"`.
+- **`frontend/src/api/client.ts`**: `chatApi.send(message, context)` — sima
+  `apiClient.post("/chat", ...)` (Axios, a JWT-t az `apiClient` request-interceptora teszi
+  rá `localStorage.getItem("token")`-ből, `baseURL = import.meta.env.VITE_API_URL || "/api"`).
+- **`ChatWidget.tsx`**: `handleSend()` `await`-eli a `chatApi.send()`-et, utána egyszerre
+  rakja be a teljes AI-választ a `messages`-be, `loading` állapot közben egy
+  `CircularProgress` spinnert mutat.
+- **`ChatContext.tsx`**: NEM változik ebben a PR-ban (megerősítve — csak a `triggerFill()`
+  callback-mechanizmust adja, ami a `ChatAction.fields`-et fogadja, függetlenül attól,
+  hogy az honnan érkezik).
+
+## 2. Új/módosuló komponensek — csomag-elhelyezés
+
+```
+backend/src/main/java/com/legymernok/backend/
+├── dto/chat/
+│   └── OllamaStreamChunk.java          (ÚJ, record)
+├── service/ai/
+│   ├── AiServiceClient.java             (MÓDOSUL — PR #2-ben jön létre, itt: + streamChat())
+│   └── ChatService.java                 (MÓDOSUL — chat() → streamChat(), extractAction() új)
+├── web/chat/
+│   └── ChatController.java              (MÓDOSUL — a régi POST /api/chat lecserélve POST /api/chat/stream-re)
+└── config/
+    └── AppConfig.java                   (MÓDOSUL — + chatStreamExecutor() bean)
+
+ai-service/
+└── main.py                              (MÓDOSUL — + POST /chat/stream)
+
+frontend/src/
+├── api/client.ts                        (MÓDOSUL — chatApi.send() törölve, streamChat() új)
+└── components/chat/ChatWidget.tsx       (MÓDOSUL — handleSend() átírva)
+```
+
+## 3. `ai-service/main.py` — `POST /chat/stream` (2026-08-26: `/api/chat`-re állítva)
+
+### Miért `/api/chat` és nem `/api/generate`
+
+**Ez a szakasz 2026-08-26-án lett átírva.** Az eredeti terv Ollama `/api/generate`
+végpontjára épített (prompt-alapú szöveg-kiegészítés). A PR #5 (tool-calling) viszont
+Ollama **`/api/chat`**-jét igényli (üzenet-lista + `tools` mező) — és a PR #5 terve ezt egy
+mondattal hidalta át: *„streamGenerate(...) UGYANAZZAL a messages-listával"*, **amit a
+`/generate/stream` végpont nem tud fogadni**, mert `prompt` + `context: list[str]` mezőket
+vár.
+
+Ebből a tervben egy dupla hívás lett volna (egy nem-streamelő `chatWithTools()` a
+tool-döntéshez, majd egy MÁSODIK, streamelő hívás a végső válaszhoz) — ami **kétszer
+generáltatja le a végső választ, eltérő mintavétellel**: a felhasználó nem azt látná, amit a
+tool-hurok „eldöntött".
+
+**Döntés: a PR #3 eleve `/api/chat`-re épül.** Így egyetlen streamelő végpont van, amit a
+PR #5 változatlanul újrahasznál (csak `tools` mezővel és hosszabb üzenetlistával) — nincs
+dupla generálás, és a PR #3 nem épít olyasmit, amit a PR #5-nek el kellene dobnia. Norbert
+döntése: *„nem baj, ha bonyolultabb lesz a PR #3."*
+
+```python
+class ChatStreamRequest(BaseModel):
+    messages: list[dict]                 # [{role, content}, ...] — a hívó állítja össze
+    model: str | None = None
+    tools: list[dict] | None = None      # PR #5 tölti ki; PR #3-ban mindig None
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatStreamRequest):
+    model = req.model or CHAT_MODEL
+
+    async def ndjson_proxy():
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            payload: dict = {"model": model, "messages": req.messages, "stream": True}
+            if req.tools:
+                payload["tools"] = req.tools
+            async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as r:
+                async for line in r.aiter_lines():
+                    if line:
+                        yield line + "\n"
+
+    return StreamingResponse(ndjson_proxy(), media_type="application/x-ndjson")
+```
+
+**Semmi új dependency** — `StreamingResponse` (FastAPI) + `httpx.AsyncClient.stream()`, ahogy
+eddig is. Az `OLLAMA_TIMEOUT` env-változóból jön (ld. 8.2 szakasz timeout-lánc).
+
+**Ami a hívóra hárul**: a kontextus-blokk összeállítása. Eddig ezt az ai-service végezte
+(`f"Kontextus:\n{context_block}\n\nKérdés: {req.prompt}"`), mostantól a `ChatService`
+állít elő egy rendes `{"role": "system", "content": SYSTEM_PROMPT + kontextus}` üzenetet és
+egy `{"role": "user", "content": message}`-t. Ez amúgy is tisztább — a chat-sablont a modell
+kapja meg, nem egy kézzel összefűzött prompt-string.
+
+**Ollama `/api/chat` NDJSON-formátuma** (`stream: true`) — más, mint az `/api/generate`-é:
+```
+{"model":"...","message":{"role":"assistant","content":"Szia"},"done":false}
+{"model":"...","message":{"role":"assistant","content":"!"},"done":false}
+{"model":"...","message":{"role":"assistant","content":"","tool_calls":[...]},"done":false}
+{"model":"...","message":{"role":"assistant","content":""},"done":true,"eval_count":128,...}
+```
+A token a `message.content`-ben van (nem a gyökér `response` mezőben), a tool-hívás a
+`message.tool_calls`-ban, és a záró sorban vannak a `prompt_eval_count`/`eval_count`/
+`eval_duration` mezők.
+
+**Semmi új dependency** — `StreamingResponse` a FastAPI-ból, `httpx.AsyncClient.stream()`
+a meglévő `httpx`-ből, pontosan ahogy a fő terv írja. A prompt-összeállítás logikája
+(`context_block`/`prompt` felépítése) **szó szerint másolat** a meglévő `/generate`
+endpointból — nincs ok eltérni tőle.
+
+**Ollama natív NDJSON-formátuma** (`stream: true`), soronként egy JSON objektum:
+```
+{"model":"gemma3:8b-q4_K_M","created_at":"...","response":"Szia","done":false}
+{"model":"gemma3:8b-q4_K_M","created_at":"...","response":"!","done":false}
+...
+{"model":"gemma3:8b-q4_K_M","created_at":"...","response":"","done":true,"total_duration":...,"prompt_eval_count":42,"eval_count":128,"eval_duration":...}
+```
+Az utolsó sor `done:true`, és **csak ekkor** vannak jelen a `prompt_eval_count`/`eval_count`/
+`eval_duration` mezők (a köztes sorokban nincsenek).
+
+## 4. `OllamaStreamChunk` — pontos mezők
+
+```java
+package com.legymernok.backend.dto.chat;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record OllamaStreamChunk(
+    Message message,                 // 2026-08-26: /api/chat formátum, nem a régi "response" mező
+    boolean done,
+    @JsonProperty("eval_count") Long evalCount,
+    @JsonProperty("eval_duration") Long evalDuration,
+    @JsonProperty("prompt_eval_count") Long promptEvalCount
+) {
+    public record Message(
+        String role,
+        String content,
+        @JsonProperty("tool_calls") List<OllamaToolCall> toolCalls   // PR #3-ban mindig null
+    ) {}
+
+    /** Kényelmi accessor — null-biztos, mert a záró (done=true) sorban a content üres/hiányzik. */
+    public String contentOrEmpty() {
+        return (message == null || message.content() == null) ? "" : message.content();
+    }
+
+    public boolean hasToolCalls() {
+        return message != null && message.toolCalls() != null && !message.toolCalls().isEmpty();
+    }
+}
+```
+
+**Miért kell explicit `@JsonProperty`**: a projektben eddig SEHOL nincs globális
+snake_case↔camelCase Jackson-naming-stratégia beállítva (a `ChatService.callGenerate()`
+kézzel, `Map.of("system_prompt", ...)`-tal snake_case-eli a KIMENŐ mezőket) — tehát az
+`ObjectMapper` alapértelmezett, sima camelCase-t vár, enélkül az annotáció nélkül az
+`eval_count` mező néma `null`-ra deszerializálódna.
+
+## 5. `AiServiceClient.streamChat()` — az új streamelő hívás (2026-08-26)
+
+**Névváltozás**: a metódus `streamGenerate()` helyett `streamChat()`, és `prompt`+`context`
+helyett **üzenetlistát** vesz át — a 3. szakaszban leírt `/api/chat`-re állás miatt. A
+`tools` paraméter a PR #3-ban mindig `null`, a PR #5 tölti ki; így a PR #5-nek nem kell új
+metódust bevezetnie, csak paramétert átadnia.
+
+```java
+public void streamChat(
+        List<Map<String, Object>> messages,
+        List<OllamaToolDefinition> tools,      // PR #3-ban null
+        Consumer<OllamaStreamChunk> onChunk,
+        Runnable onDone,
+        Consumer<Exception> onError) {
+    try {
+        restTemplate.execute(
+            aiServiceUrl + "/chat/stream",
+            HttpMethod.POST,
+            request -> {
+                request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                Map<String, Object> body = new HashMap<>();
+                body.put("messages", messages);
+                if (tools != null && !tools.isEmpty()) body.put("tools", tools);
+                objectMapper.writeValue(request.getBody(), body);
+            },
+            response -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(response.getBody(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.isBlank()) continue;
+                        OllamaStreamChunk chunk = objectMapper.readValue(line, OllamaStreamChunk.class);
+                        onChunk.accept(chunk);
+                        if (chunk.done()) break;
+                    }
+                }
+                onDone.run();
+                return null;
+            }
+        );
+    } catch (Exception e) {
+        onError.accept(e);
+    }
+}
+```
+
+**`RestTemplate.execute(url, method, requestCallback, responseExtractor)`** — ez a
+meglévő `RestTemplate` bean-t használja (`AppConfig.restTemplate()`, már létezik), a
+`responseExtractor` lambda kapja meg a nyers, még streamelt `InputStream`-et, amit
+soronként olvasunk — ez pontosan az a minta, amit a fő terv "nyers streamelt InputStream-et
+ad a NDJSON-olvasó kódnak, új dependency nélkül" mondata ír le.
+
+**Miért `Consumer`/`Runnable`-alapú callback-API, nem visszatérési érték**: mert ez a
+metódus **blokkoló** (a `restTemplate.execute()` a teljes streamelést végigvárja a hívó
+szálon), és a hívó (`ChatService.streamChat()`) egy külön executoron futtatja — a
+callback-ek engedik, hogy minden egyes token azonnal, a teljes stream vége előtt eljusson
+a hívóhoz (aki azonnal továbbküldi SSE-eseményként), ne kelljen megvárni a teljes választ.
+
+## 6. `ChatController` — `POST /api/chat/stream`
+
+```java
+@PostMapping(value = "/stream",
+             consumes = MediaType.APPLICATION_JSON_VALUE,
+             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+@PreAuthorize("isAuthenticated()")
+public SseEmitter stream(
+        @Valid @RequestBody ChatRequest request,
+        Authentication authentication) {
+    return chatService.streamChat(request.message(), request.context(), authentication.getName());
+}
+```
+
+A meglévő `ChatRequest` rekord (`record ChatRequest(String message, ChatContextDto context)`)
+**változatlanul újrahasznosítva** — nem kell új DTO, és a `@Valid` is a helyén marad (a
+projekt biztonsági ellenőrzőlistája külön kéri minden POST DTO-ra).
+
+A régi `POST /api/chat` (nem-streamelő) **törlődik** — a fő terv explicit mondja: "nincs éles
+forgalom, amit migrálni kéne" (a chatbot még nincs éles használatban).
+
+**Miért `POST`, nem `GET` — 2026-08-26-i döntés, ez megfordítja a korábbi tervet.** A terv
+eredetileg `GET /api/chat/stream?message=...&context=<url-encoded JSON>` volt, azzal az
+indoklással, hogy ez a konvencionális SSE-forma. **A konvenció-érv csak akkor számítana, ha
+natív `EventSource`-t használnánk — de nem használunk** (nem tud `Authorization` fejlécet
+küldeni, ezért kézzel írt `fetch()` megy, ld. 9. szakasz), a `fetch()`-nek pedig teljesen
+mindegy a metódus. Cserébe a `GET` két valós hátránnyal járt:
+
+- **A kadét kérdése bekerül minden proxy access logjába** (`frontend` nginx, bármilyen
+  fölötte lévő réteg) és a böngésző-előzményekbe. Egy oktatási platformon a kérdés lehet
+  személyes vagy beadandóhoz kötődő — a query stringben ez felesleges kockázat.
+- **Hosszú kérdés + URL-kódolt JSON kontextus átlépheti az nginx alap header-bufferét**
+  (`large_client_header_buffers`), és a felhasználó egy `414 Request-URI Too Large`-ot kap,
+  aminek az okát semmi nem magyarázza el neki.
+
+`POST`-tal mindkettő megszűnik: a kérdés és a kontextus a body-ban utazik, hosszkorlát
+gyakorlatilag nincs, és a válasz ugyanúgy `text/event-stream`. A `@Valid @RequestBody` is
+így természetes.
+
+## 7. `AppConfig` — `chatStreamExecutor` bean
+
+```java
+@Bean
+public ExecutorService chatStreamExecutor() {
+    return Executors.newCachedThreadPool();
+}
+```
+
+Ugyanabba az `AppConfig.java`-ba kerül, mint a meglévő `restTemplate()`/`passwordEncoder()`
+bean-ek. `newCachedThreadPool()` — a fő terv szerint "ezen a léptéken bőven elég" (nincs
+elvárt nagy egyidejű chat-terhelés egy oktatási platformon).
+
+## 8. `ChatService` — `streamChat()` + `extractAction()`
+
+### 8.1 `FORM_FILLABLE_PAGE_TYPES` konstans
+
+A meglévő `PAGE_TYPE_HINTS` map-ből azok a kulcsok, amiknél ma is "Kitölthető mezők"
+szerepel a hint szövegében:
+
+```java
+private static final Set<String> FORM_FILLABLE_PAGE_TYPES = Set.of(
+    "STAR_SYSTEM_CREATE", "STAR_SYSTEM_EDIT", "MISSION_CREATE", "MISSION_EDIT"
+);
+```
+
+### 8.2 `streamChat()` — a teljes kör
+
+**2026-08-25-i pontosítás — timeout konfigurálhatóvá téve, és csak egy aktív stream
+engedélyezett felhasználónként** (Norbert döntése, ld. 14. szakasz):
+
+```java
+// ChatService mezői közé:
+@Value("${chat.stream.timeout-ms:300000}")
+private long streamTimeoutMs;
+
+private final Map<String, SseEmitter> activeStreamsByUsername = new ConcurrentHashMap<>();
+```
+
+`application.properties`-be (a meglévő `ai.service.url=http://ai-service:8081` mintáját
+követve, ugyanabban a fájlban):
+
+```properties
+chat.stream.timeout-ms=${CHAT_STREAM_TIMEOUT_MS:300000}
+```
+
+Alapérték **300 000 ms (5 perc)** a korábban feltételezett 120 másodperc helyett — Norbert
+kérésére megnöveltük, mert lassabb helyi modelleknél a 120s szűknek bizonyulhat, és mivel
+mostantól env-változóval (`CHAT_STREAM_TIMEOUT_MS`) felülírható, élesben bármikor
+finomhangolható újraépítés nélkül.
+
+**2026-08-26-i kiegészítés — az `SseEmitter` timeoutja önmagában NEM elég.** Az első teljes
+lokális felállásnál kiderült, hogy a `frontend/nginx.conf` `/api/` blokkjában nincs
+`proxy_read_timeout`, tehát az nginx **60 másodperces alapértéke** érvényes — ez jóval a
+Java-oldali 300 000 ms előtt vágja el a kapcsolatot. A tünet félrevezető: a widgetben
+*"hiba történt a válasz lekérésekor"* jelenik meg, miközben az ollama még dolgozik, és a
+kérés utóbb sikeresen befejeződik. Ez 2026-08-26-án ténylegesen előfordult, mért
+válaszidőkkel (`gemma4-coding:q8`: 1,44 token/mp; `llama2-13b:q4`: ~1 perc 50 mp/válasz) —
+ld. `plans/ai_chatbot_upgrade_2026.md`, "Lokális futtatás — mért teljesítmény és a
+timeout-lánc" szakasz.
+
+Ezért az implementációnak az **egész láncot** kezelnie kell, a relációval együtt
+(**nginx ≥ SseEmitter ≥ ai-service→ollama**):
+
+- `frontend/nginx.conf` `/api/` blokk: explicit `proxy_read_timeout` és `proxy_send_timeout`
+  a `CHAT_STREAM_TIMEOUT_MS`-hez igazítva vagy afölött, **valamint `proxy_buffering off;`** —
+  enélkül az nginx kipufferelné a teljes választ, és a token-streaming értelmét vesztené.
+- `ai-service/main.py`: a `httpx.AsyncClient(timeout=600)` hardkódolt értéke is
+  env-változóból jöjjön.
+
+Streameléssel a probléma enyhül, de nem szűnik meg: az nginx `proxy_read_timeout` az utolsó
+adatcsomag óta eltelt időt méri, tehát folyamatos token-áram mellett elég egy jóval kisebb
+érték is — de beállítani akkor is kell.
+
+```java
+public SseEmitter streamChat(String message, ChatContextDto context, String username) {
+    // Csak egy aktív stream engedélyezett felhasználónként — ha már fut egy korábbi,
+    // azt lezárjuk (nem elutasítjuk az újat), hogy egy elfeledett/beragadt tab ne
+    // blokkolja a felhasználó következő kérdését, és ne fusson feleslegesen két
+    // párhuzamos Ollama-hívás ugyanannak a usernek.
+    SseEmitter previous = activeStreamsByUsername.remove(username);
+    if (previous != null) {
+        previous.complete();
+    }
+
+    SseEmitter emitter = new SseEmitter(streamTimeoutMs);
+    activeStreamsByUsername.put(username, emitter);
+    emitter.onCompletion(() -> activeStreamsByUsername.remove(username, emitter));
+    emitter.onTimeout(() -> activeStreamsByUsername.remove(username, emitter));
+    emitter.onError(e -> activeStreamsByUsername.remove(username, emitter));
+
+    chatStreamExecutor.execute(() -> {
+        try {
+            // 1. Retrieval — csillagrendszer (meglévő) + PR #2 hibrid misszió-chunk keresés
+            List<StarSystemSearchResult> relevantSystems = searchStarSystems(message); // ma is megvan
+            List<ContentChunkDto> missionChunks = hybridRetrievalService != null
+                    ? hybridRetrievalService.retrieveMissionChunks(message, 5)
+                    : List.of(); // PR #2 hozza be a hybridRetrievalService-t
+
+            List<String> contextLines = buildContextLines(context, username, relevantSystems, missionChunks);
+
+            // 2. Streamelt generálás
+            StringBuilder fullResponse = new StringBuilder();
+            List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", SYSTEM_PROMPT + "\n\n" + String.join("\n", contextLines)),
+                Map.of("role", "user",   "content", message)
+            );
+            aiServiceClient.streamChat(
+                messages, null,                       // tools: null — PR #5 tölti ki
+                chunk -> {
+                    fullResponse.append(chunk.contentOrEmpty());
+                    sendSafely(emitter, "token", chunk.contentOrEmpty());
+                },
+                () -> {
+                    // 3. Feltételes akció-kinyerés — CSAK form-kitölthető oldalon
+                    if (context != null && FORM_FILLABLE_PAGE_TYPES.contains(context.pageType())) {
+                        // 2026-08-26: ez egy MÁSODIK, nem streamelő LLM-hívás a kész válasz
+                        // után — a felhasználónak jeleznünk kell, hogy még történik valami,
+                        // különben egy kész válasz után percekkel magától kitöltődne a form.
+                        sendSafely(emitter, "status", "Mezők kitöltése…");
+                        ChatAction action = extractAction(fullResponse.toString(), context);
+                        if (action != null) {
+                            sendSafely(emitter, "action", action);
+                        }
+                        sendSafely(emitter, "status", "");
+                    }
+                    emitter.complete();
+                },
+                error -> emitter.completeWithError(error)
+            );
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+    });
+
+    return emitter;
+}
+
+private void sendSafely(SseEmitter emitter, String eventName, Object data) {
+    try {
+        emitter.send(SseEmitter.event().name(eventName).data(data));
+    } catch (IOException e) {
+        // A kliens valószínűleg bezárta a kapcsolatot (pl. tab bezárva) — ez NEM
+        // szerver-oldali hiba, csendben logolható warn szinten, nem kell completeWithError.
+        log.debug("SSE send failed (client likely disconnected): {}", e.getMessage());
+    }
+}
+```
+
+### 8.3 `extractAction()` — a regex-parszolás lecserélése
+
+```java
+private ChatAction extractAction(String assistantResponse, ChatContextDto context) {
+    String hint = PAGE_TYPE_HINTS.getOrDefault(context.pageType(), "");
+    String extractionPrompt = """
+            Az asszisztens az alábbi választ adta egy felhasználónak:
+            "%s"
+
+            %s
+
+            Ha a válasz alapján a fenti mezők bármelyike kitölthető konkrét értékkel,
+            add vissza JSON-ban: {"fields": {"mezőnév": "érték", ...}}.
+            Csak azokat a mezőket szerepeltesd, amikhez van konkrét, a válaszból
+            egyértelműen kiolvasható érték. Ha semmi nem tölthető ki, add vissza: {"fields": {}}.
+            """.formatted(assistantResponse, hint);
+
+    AiServiceClient.JsonGenerateResult result = aiServiceClient.generateJson(extractionPrompt, null);
+    if (result == null) return null;
+
+    try {
+        Map<String, Object> parsed = objectMapper.readValue(result.json(), Map.class);
+        Object fieldsObj = parsed.get("fields");
+        if (!(fieldsObj instanceof Map<?, ?> fieldsMap) || fieldsMap.isEmpty()) return null;
+        Map<String, String> fields = fieldsMap.entrySet().stream()
+                .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+        return new ChatAction("FILL_FORM", fields);
+    } catch (Exception e) {
+        log.warn("Could not parse extracted action JSON: {}", e.getMessage());
+        return null;
+    }
+}
+```
+
+**Ez a metódus TELJESEN lecseréli** a mai `parseAction()`/`removeActionJson()`/
+`FILL_FORM_PATTERN` hármast — a régi kód törlődik. Fontos különbség a régi mintához
+képest: a régi rendszerben a modell **saját magától, kéretlenül** told bele egy JSON-t a
+válasz végére (a `SYSTEM_PROMPT` 3. szabálya mondja neki, hogy tegye) — az új mintában a
+látható válasz **teljesen tiszta, natural-language szöveg** marad (a `SYSTEM_PROMPT`-ból a
+3-4. szabály, a FILL_FORM JSON-instrukció, **törlendő**), és az akció-kinyerés egy
+**külön, dedikált, nem-streamelt hívás**, csak akkor, ha a `pageType` ezt indokolja.
+
+⚠️ **A fenti `extractionPrompt` szövege egy első tervezet, NEM tesztelt élő modellel** —
+ld. 12. szakasz, "Nyitott kérdés Norbertnek".
+
+## 9. Frontend — `client.ts` `streamChat()`
+
+```typescript
+interface ChatStreamAction {
+  type: string;
+  fields: Record<string, string>;
+}
+
+export async function streamChat(
+  message: string,
+  context: ChatContextPayload,
+  onToken: (token: string) => void,
+  onAction: (action: ChatStreamAction) => void,
+  onError: (error: Error) => void,
+  onStatus: (status: string | null) => void,   // 2026-08-26: "Mezők kitöltése…" jelzéshez
+  signal?: AbortSignal,                         // 2026-08-26: megszakíthatóság
+): Promise<void> {
+  const token = localStorage.getItem("token");
+  const baseURL = import.meta.env.VITE_API_URL || "/api";
+
+  try {
+    const response = await fetch(`${baseURL}/chat/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, context }),
+      signal,
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`Chat stream request failed: HTTP ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE-frame-ek dupla newline-nal elválasztva; az utolsó, esetleg még
+      // csonka frame-et megtartjuk a buffer-ben a következő read()-ig.
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+
+      for (const frame of frames) {
+        if (!frame.trim()) continue;
+        let eventName = "message";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) eventName = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (eventName === "token") onToken(data);
+        else if (eventName === "status") onStatus(data || null);
+        else if (eventName === "action") {
+          try {
+            onAction(JSON.parse(data) as ChatStreamAction);
+          } catch {
+            // hibás action-payload — csendben eldobjuk, a token-stream addig már megjelent
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // A felhasználó által kiváltott megszakítás NEM hiba — ne mutassunk hibaüzenetet.
+    if (err instanceof DOMException && err.name === "AbortError") return;
+    onError(err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    onStatus(null);
+  }
+}
+```
+
+**2026-08-26-i kiegészítések a fenti kódban:**
+
+- **`POST` + body** a korábbi query-stringes `GET` helyett (ld. 6. szakasz indoklása).
+- **`signal?: AbortSignal`** — enélkül a `fetch()` a widget bezárása/route-váltás után is
+  tovább futott volna, és egy már leszerelt komponens state-jét frissítette volna. A mért
+  ~2 perces válaszidőnél ez nem elméleti: bőven van idő elnavigálni közben.
+- **`AbortError` külön kezelve** — a megszakítás felhasználói szándék, nem hiba; hibaüzenetet
+  mutatni rá félrevezető lenne.
+- **`onStatus` callback + `status` SSE-esemény** — a `extractAction()` a streamelés UTÁN fut
+  (ld. 8.2), tehát a felhasználó egy kész választ lát, majd percekkel később magától
+  kitöltődik a form, mindenféle jelzés nélkül. A `status` esemény ezt a néma szakaszt tölti
+  ki ("Mezők kitöltése…"), ugyanaz a minta, mint a PR #5 `tool_call` felirata.
+
+**Miért `fetch()` + kézzel írt parser, nem natív `EventSource`**: a `frontend/CLAUDE.md`
+és a fő terv is rögzíti — a JWT az `Authorization` fejlécben utazik (`localStorage`-ból,
+ugyanúgy, mint az Axios-interceptor teszi ma), és a natív `EventSource` API **nem tud
+egyedi fejlécet küldeni** — ez a projekt biztonsági mintája (`api/client.ts` request
+interceptor), amit itt kézzel kell reprodukálni.
+
+**A `Spring SseEmitter.event().name(x).data(y)` pontosan ezt a frame-formátumot
+generálja**: `event: x\ndata: <JSON-szerializált y>\n\n` — a fenti parser erre van
+felkészítve (dupla newline = frame-határ, `event:`/`data:` prefixek soronként).
+
+`chatApi.send()` **törlődik** a `client.ts`-ből.
+
+## 10. `ChatWidget.tsx` — `handleSend()` átírása
+
+A mai `Message` interfész (`{ role, text }`) egy **stabil `id` mezővel bővül**, hogy a
+streamelt token-frissítés ne tömb-indexre, hanem egy egyedi azonosítóra hivatkozzon (index
+alapú frissítés React-ben törékeny, ha közben más állapotváltozás történik — pl. gyors
+egymás utáni üzenetküldés — ez egy tudatos, apró robusztussági döntés ehhez a PR-hoz, nem
+igényel Norbert-jóváhagyást):
+
+```typescript
+interface Message {
+  id: string;   // ÚJ mező, pl. crypto.randomUUID()
+  role: "user" | "ai";
+  text: string;
+}
+```
+
+```typescript
+// 2026-08-26: a futó stream megszakításához + unmount-védelemhez
+const abortRef = useRef<AbortController | null>(null);
+const [status, setStatus] = useState<string | null>(null);
+
+useEffect(() => () => abortRef.current?.abort(), []);   // unmountkor mindig leáll
+
+const handleStop = () => abortRef.current?.abort();
+
+const handleSend = async () => {
+  const text = input.trim();
+  if (!text || loading) return;
+  setInput("");
+  setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
+  setLoading(true);
+
+  const controller = new AbortController();
+  abortRef.current = controller;
+
+  const aiMessageId = crypto.randomUUID();
+  setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: "" }]);
+
+  await streamChat(
+    text,
+    {
+      currentPage: location.pathname,
+      pageType: getPageType(location.pathname),
+      formFields,
+      language: i18n.language,
+    },
+    (token) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === aiMessageId ? { ...m, text: m.text + token } : m)),
+      );
+    },
+    (action) => {
+      if (action.type === "FILL_FORM") triggerFill(action.fields);
+    },
+    (error) => {
+      console.error("Chat stream error:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiMessageId
+            ? { ...m, text: m.text || "Hiba történt a válasz lekérésekor. Próbáld újra!" }
+            : m,
+        ),
+      );
+    },
+    setStatus,             // onStatus — "Mezők kitöltése…" a buborék alatt
+    controller.signal,     // megszakíthatóság
+  );
+
+  abortRef.current = null;
+  setLoading(false);
+};
+```
+
+**Két új UI-elem ehhez (2026-08-26):**
+
+- **„Leállítás" gomb** — a `loading` állapot alatt a küldés-gomb helyén jelenik meg,
+  `onClick={handleStop}`. A mért ~1 perc 50 mp-es válaszidőnél ez nem kényelmi funkció: ha a
+  kadét rossz kérdést tett fel, ma nincs módja megszakítani, csak megvárni.
+- **`status` felirat** — a buborék alatt egy halvány sor, ha a `status` nem `null`
+  (jelenleg csak „Mezők kitöltése…", de a PR #5 `tool_call` feliratai is ide fognak
+  érkezni, ugyanezen a csatornán).
+
+**A `useEffect` cleanup a lényeg**: enélkül a widget bezárása vagy egy route-váltás után a
+`fetch()` tovább futna, és a `setMessages` egy már leszerelt komponensre hívódna.
+
+**Vizuális részlet**: a `loading` spinner (a meglévő `CircularProgress`) az első token
+megérkezéséig látszódhat az üres AI-buborék helyén — ez apróság, nem igényel külön tervet,
+a meglévő `loading` state-logika (ami most is `finally`-ben áll vissza `false`-ra) enélkül
+is helyesen működik, csak most a streamelés VÉGÉN, nem a válasz elejéén áll vissza.
+
+## 11. Class diagram
+
+```mermaid
+classDiagram
+    class ChatController {
+        -ChatService chatService
+        -ObjectMapper objectMapper
+        +stream(String message, String context, Authentication auth) SseEmitter
+    }
+
+    class ChatService {
+        -AiServiceClient aiServiceClient
+        -HybridRetrievalService hybridRetrievalService
+        -StarSystemService starSystemService
+        -ExecutorService chatStreamExecutor
+        -long streamTimeoutMs
+        -Map~String,SseEmitter~ activeStreamsByUsername
+        +streamChat(String message, ChatContextDto context, String username) SseEmitter
+        -extractAction(String assistantResponse, ChatContextDto context) ChatAction
+        -buildContextLines(...) List~String~
+    }
+
+    class AiServiceClient {
+        -RestTemplate restTemplate
+        -ObjectMapper objectMapper
+        +generateJson(String prompt, String systemPrompt) JsonGenerateResult
+        +streamChat(List messages, List~OllamaToolDefinition~ tools, Consumer~OllamaStreamChunk~ onChunk, Runnable onDone, Consumer~Exception~ onError) void
+    }
+
+    class OllamaStreamChunk {
+        <<record>>
+        +String response
+        +boolean done
+        +Long evalCount
+        +Long evalDuration
+        +Long promptEvalCount
+    }
+
+    class AppConfig {
+        +chatStreamExecutor() ExecutorService
+    }
+
+    ChatController --> ChatService : streamChat()
+    ChatService --> AiServiceClient : streamChat() / generateJson()
+    AiServiceClient ..> OllamaStreamChunk : deszerializál
+    ChatService --> AppConfig : chatStreamExecutor bean
+```
+
+## 12. Sequence diagram — a teljes streamelési lánc (böngésző → ai-service → Ollama → vissza)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CW as ChatWidget.tsx
+    participant CL as client.ts (fetch)
+    participant CC as ChatController
+    participant CS as ChatService
+    participant ASC as AiServiceClient
+    participant AI as ai-service (FastAPI)
+    participant OL as Ollama
+
+    User->>CW: üzenet beírása + Enter
+    CW->>CW: placeholder AI-üzenet (üres text, saját id)
+    CW->>CL: streamChat(message, context, onToken, onAction, onError)
+    CL->>CC: POST /api/chat/stream {message, context} (Authorization header)
+    CC->>CS: streamChat(message, ctx, username)
+    CS-->>CC: SseEmitter (azonnal visszatér)
+    CC-->>CL: HTTP 200, Content-Type: text/event-stream (streamelt válasz kezdete)
+
+    Note over CS: háttérszálon (chatStreamExecutor) fut tovább
+    CS->>CS: retrieval (star systems + PR#2 hibrid mission chunks)
+    CS->>ASC: streamChat(messages, null, onChunk, onDone, onError)
+    ASC->>AI: POST /chat/stream
+    AI->>OL: POST /api/chat {stream:true}
+
+    loop minden NDJSON sor, amíg done=false
+        OL-->>AI: {"message":{"content":"tok"},"done":false}
+        AI-->>ASC: NDJSON sor (proxyolva)
+        ASC->>ASC: onChunk(OllamaStreamChunk)
+        ASC->>CS: onChunk callback
+        CS->>CC: emitter.send(event:"token", data:tok)
+        CC-->>CL: SSE frame: "event: token\ndata: tok\n\n"
+        CL->>CL: buffer split, frame parse
+        CL->>CW: onToken(tok)
+        CW->>CW: setMessages — a placeholder AI-üzenethez fűzi a tokent
+        CW-->>User: token megjelenik a UI-ban
+    end
+
+    OL-->>AI: {"message":{"content":""},"done":true,"eval_count":128,...}
+    AI-->>ASC: utolsó NDJSON sor
+    ASC->>CS: onDone()
+    alt context.pageType FORM_FILLABLE
+        CS->>ASC: generateJson(extractionPrompt, null)
+        ASC->>AI: POST /generate {format:"json", stream:false}
+        AI->>OL: POST /api/generate {stream:false}
+        OL-->>AI: {"response":"{\"fields\":{...}}"}
+        AI-->>ASC: JsonGenerateResult
+        ASC-->>CS: JsonGenerateResult
+        CS->>CS: extractAction() parse
+        CS->>CC: emitter.send(event:"action", data:{...})
+        CC-->>CL: SSE frame: "event: action\ndata: {...}\n\n"
+        CL->>CW: onAction({type:"FILL_FORM", fields:{...}})
+        CW->>CW: triggerFill(fields) — ChatContext-en keresztül
+    end
+    CS->>CC: emitter.complete()
+    CC-->>CL: stream lezárva (HTTP kapcsolat vége)
+    CL->>CW: streamChat() promise resolve
+    CW->>CW: loading = false
+```
+
+## 13. Tesztterv
+
+| Teszteset | Osztály | Mit ellenőriz |
+|---|---|---|
+| `streamChat_nonFillablePage_neverCallsGenerateJson` | `ChatServiceTest` | `GENERAL`/`STAR_MAP` típusú oldalon `extractAction()`/`generateJson()` SOSEM hívódik, csak `token`-események + `emitter.complete()` |
+| `streamChat_fillablePage_sendsTokenThenActionEvent` | `ChatServiceTest` | `MISSION_CREATE` oldalon a mockolt `streamChat()` több chunkot ad → mind `token`-eseményként megy ki, majd a mockolt `generateJson()` válasza alapján egy záró `action`-esemény, ebben a sorrendben |
+| `streamChat_streamChatError_completesWithError` | `ChatServiceTest` | Mockolt `streamChat()` az `onError` callback-et hívja → `emitter.completeWithError()` fut, nem `emitter.complete()` |
+| `streamChat_emptyExtractedFields_sendsNoActionEvent` | `ChatServiceTest` | `extractAction()` `{"fields":{}}`-t kap vissza → NINCS `action`-esemény, csak `complete()` |
+| `extractAction_malformedJson_returnsNullGracefully` | `ChatServiceTest` | A `generateJson()` hibás/parse-olhatatlan JSON-t ad vissza → `null`, nem dob kivételt, a stream `complete()`-tel zár akció nélkül |
+| `streamChat_multiLineNdjson_invokesOnChunkPerLine` | `AiServiceClientTest` (bővítve) | Mockolt `RestTemplate` egy több-soros NDJSON `InputStream`-et ad vissza → `onChunk` pontosan annyiszor hívódik, ahány sor, a `done=true` sorig |
+| `streamChat_ioExceptionDuringRead_invokesOnError` | `AiServiceClientTest` | A streamelt olvasás közben dobott `IOException` az `onError` callback-et hívja, nem propagálódik kivételként a hívóhoz |
+| `parseFrame_singleTokenEvent_callsOnToken` | `client.stream.test.ts` (ÚJ) | Mockolt `fetch` egy `"event: token\ndata: hello\n\n"` frame-et ad vissza → `onToken("hello")` hívva |
+| `parseFrame_actionEvent_callsOnActionWithParsedJson` | `client.stream.test.ts` | `"event: action\ndata: {\"type\":\"FILL_FORM\",\"fields\":{\"name\":\"x\"}}\n\n"` → `onAction()` a helyes objektummal |
+| `parseFrame_frameSplitAcrossTwoReads_stillParsesCorrectly` | `client.stream.test.ts` | Egy SSE-frame két külön `reader.read()` hívás byte-jaira van szétvágva (a valós hálózaton ez NORMÁL eset, nem edge case) → a buffer-logika helyesen összefűzi, mielőtt parse-olna |
+| `parseFrame_httpErrorStatus_callsOnError` | `client.stream.test.ts` | `response.ok === false` → `onError()` hívva, `onToken`/`onAction` egyszer sem |
+| `handleSend_incrementalTokens_updatesPlaceholderMessage` | `ChatWidget.test.tsx` (bővítve) | Mockolt `streamChat()` 3× hívja az `onToken`-t → a UI-ban a placeholder AI-buborék szövege fokozatosan nő, a `role:"user"` üzenet nem változik |
+| `handleSend_actionEvent_callsTriggerFill` | `ChatWidget.test.tsx` | Mockolt `streamChat()` egy `onAction({type:"FILL_FORM",...})`-t hív → `triggerFill()` a helyes `fields`-szel meghívva |
+| `handleSend_streamError_showsErrorInPlaceholder` | `ChatWidget.test.tsx` | Mockolt `streamChat()` `onError`-t hív → a placeholder buborék hibaüzenetre vált, nem marad örökre üres |
+| `handleStop_abortsStream_noErrorMessageShown` | `ChatWidget.test.tsx` | A „Leállítás" gomb `abort()`-ot hív; az `AbortError` NEM jelenik meg hibaüzenetként a buborékban (2026-08-26) |
+| `unmount_abortsInFlightStream` | `ChatWidget.test.tsx` | A komponens leszerelése megszakítja a futó streamet — nincs state-frissítés unmount után (2026-08-26) |
+| `statusEvent_showsAndClearsIndicator` | `client.stream.test.ts` | `event: status` → `onStatus("Mezők kitöltése…")`, majd üres `data` → `onStatus(null)` (2026-08-26) |
+| `stream_withoutJwt_returns401` | `ChatControllerSecurityTest` (ÚJ) | `POST /api/chat/stream` JWT nélkül → 401, ugyanaz a minta, mint a többi `@PreAuthorize("isAuthenticated()")` végponton |
+
+**Kézi ellenőrzés (kizárólag Norbi)**: valódi token-streaming élő Ollama ellen — vizuálisan
+ellenőrizve, hogy a tokenek folyamatosan, nem "egyszerre kupacban" jelennek-e meg; hogy a
+`FILL_FORM`-akció ténylegesen kitölti-e a formot egy valós `MISSION_CREATE` oldalon; hogy a
+120s `SseEmitter`-timeout elég-e a saját modell sebességéhez (ld. 14. szakasz).
+
+## 14. Nyitott kérdés Norbertnek
+
+1. ~~`SseEmitter` timeout~~ — **ELDÖNTVE (2026-08-25): megnövelve 300 000 ms-re (5 perc),
+   ÉS konfigurálhatóvá téve** (`chat.stream.timeout-ms` / `CHAT_STREAM_TIMEOUT_MS` env-
+   változó, ld. 8.2 szakasz) — nem kell hozzá újrafordítás, ha élesben módosítani kell.
+   **KIEGÉSZÍTÉS (2026-08-26):** ez önmagában nem elég — az nginx `/api/` blokkjának
+   60 mp-es alapértéke előbb vág el. Az implementációnak a teljes láncot kezelnie kell
+   (nginx `proxy_read_timeout` + `proxy_buffering off`, és az `ai-service` hardkódolt
+   `httpx` timeoutja is env-változóból). Ld. 8.2 szakasz és
+   `plans/ai_chatbot_upgrade_2026.md` "Lokális futtatás — mért teljesítmény és a
+   timeout-lánc" szakasza.
+2. ~~Kapcsolat-megszakadás kezelése~~ — **ELDÖNTVE (2026-08-25): NINCS resume-funkció
+   ebben a körben.** Ha megszakad a stream, a válasz elvész, a felhasználónak újra kell
+   küldenie az üzenetet — ez elfogadható, a "folytasd onnan, ahol abbamaradt" esetleg egy
+   jövőbeli, külön kör tárgya lehet, ha valaha tényleg felmerül rá igény.
+3. ~~`extractAction()` prompt szövege~~ — **LEZÁRVA (2026-08-26): Norbert élő modellel
+   teszteli implementáció után.** A 8.3 szakasz prompt-szövege továbbra is egy első
+   tervezet, és a JSON-kinyerés megbízhatósága csak élő iterációval dönthető el — ez nem
+   tervezési hiányosság, hanem a feladat természete. A tétel a kézi teszt-listán marad
+   (`ai_chatbot_upgrade_2026.md` "Ellenőrzés / verifikáció összefoglalva"), tehát nem
+   maradhat ki; **tervezési döntést viszont nem blokkol, az implementáció elindulhat.**
+4. ~~Egyidejű üzenetküldés~~ — **ELDÖNTVE (2026-08-25): igen, legyen "csak egy aktív
+   stream/felhasználó" korlátozás.** Norbert indoklása: erőforrás-spórolás — implementáció
+   ld. 8.2 szakasz (`activeStreamsByUsername` map, az új stream indulásakor a régi
+   emitter lezárva, NEM elutasítva az újat).
