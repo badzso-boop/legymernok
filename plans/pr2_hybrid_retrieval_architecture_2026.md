@@ -124,7 +124,7 @@ kellene).
 | `retrieveMissionChunks` | `List<ContentChunkDto> retrieveMissionChunks(String query, int topK)` | A fő belépési pont — embedeli a query-t, lefuttatja a két keresést, `rrfMerge()`-dzsel egyesíti. Ld. 4.1. |
 | `vectorSearch` | `private List<ContentChunkDto> vectorSearch(String vectorStr, int limit)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
 | `fullTextSearch` | `private List<ContentChunkDto> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
-| `rrfMerge` | `static List<ContentChunkDto> rrfMerge(List<ContentChunkDto> a, List<ContentChunkDto> b, int topK)` | **Pure static function** — a fő unit-teszt célpont, nincs szüksége semmilyen mockra. Ld. 4.3. |
+| `rrfMerge` | `static List<RetrievedItem> rrfMerge(List<List<RetrievedItem>> rankedLists, int topK)` | **Pure static function** — a fő unit-teszt célpont, nincs szüksége semmilyen mockra. Ld. 4.3. |
 | `mapRow` | `private ContentChunkDto mapRow(ResultSet rs)` | Közös `RowMapper`-logika a két keresési metódushoz (ne duplikálódjon a mezőkiolvasás). |
 
 ### 4.1 `retrieveMissionChunks()` — a fő metódus
@@ -152,28 +152,31 @@ folytatja üres eredménnyel.
 ### 4.2 `vectorSearch()` / `fullTextSearch()` — pontos SQL
 
 ```java
-private List<ContentChunkDto> vectorSearch(String vectorStr, int limit) {
+private List<RetrievedItem> vectorSearch(String vectorStr, int limit) {
     return jdbcTemplate.query(
         """
-        SELECT id, source_type, source_id, file_path, chunk_index, chunk_text,
-               1 - (content_embedding <=> ?::vector) AS score
-        FROM content_chunks
-        WHERE content_embedding IS NOT NULL
-        ORDER BY score DESC
+        SELECT cc.id, cc.source_type, cc.source_id, m.name AS source_name,
+               cc.file_path, cc.chunk_index, cc.chunk_text,
+               1 - (cc.content_embedding <=> ?::vector) AS score
+        FROM content_chunks cc
+        JOIN missions m ON m.id = cc.source_id
+        ORDER BY cc.content_embedding <=> ?::vector
         LIMIT ?
         """,
         (rs, i) -> mapRow(rs),
-        vectorStr, limit
+        vectorStr, vectorStr, limit
     );
 }
 
-private List<ContentChunkDto> fullTextSearch(String query, int limit) {
+private List<RetrievedItem> fullTextSearch(String query, int limit) {
     return jdbcTemplate.query(
         """
-        SELECT id, source_type, source_id, file_path, chunk_index, chunk_text,
-               ts_rank(search_vector, plainto_tsquery('hungarian', ?)) AS score
-        FROM content_chunks
-        WHERE search_vector @@ plainto_tsquery('hungarian', ?)
+        SELECT cc.id, cc.source_type, cc.source_id, m.name AS source_name,
+               cc.file_path, cc.chunk_index, cc.chunk_text,
+               ts_rank(cc.search_vector, plainto_tsquery('hungarian', ?)) AS score
+        FROM content_chunks cc
+        JOIN missions m ON m.id = cc.source_id
+        WHERE cc.search_vector @@ plainto_tsquery('hungarian', ?)
         ORDER BY score DESC
         LIMIT ?
         """,
@@ -223,31 +226,32 @@ A `?::vector` cast pontosan leköveti a PR #1 séma-döntéseit.
 ```java
 static final int RRF_K = 60;
 
-static List<ContentChunkDto> rrfMerge(List<ContentChunkDto> a, List<ContentChunkDto> b, int topK) {
+static List<RetrievedItem> rrfMerge(List<List<RetrievedItem>> rankedLists, int topK) {
     Map<UUID, Double> scoreById = new LinkedHashMap<>();
-    Map<UUID, ContentChunkDto> chunkById = new LinkedHashMap<>();
+    Map<UUID, RetrievedItem> itemById = new LinkedHashMap<>();
 
-    addRankedScores(a, scoreById, chunkById);
-    addRankedScores(b, scoreById, chunkById);
+    for (List<RetrievedItem> list : rankedLists) {
+        addRankedScores(list, scoreById, itemById);
+    }
 
     return scoreById.entrySet().stream()
             .sorted(Map.Entry.<UUID, Double>comparingByValue().reversed())
             .limit(topK)
-            .map(e -> withScore(chunkById.get(e.getKey()), e.getValue()))
+            .map(e -> withScore(itemById.get(e.getKey()), e.getValue()))
             .toList();
 }
 
-private static void addRankedScores(List<ContentChunkDto> list, Map<UUID, Double> scoreById, Map<UUID, ContentChunkDto> chunkById) {
+private static void addRankedScores(List<RetrievedItem> list, Map<UUID, Double> scoreById, Map<UUID, RetrievedItem> itemById) {
     for (int rank = 0; rank < list.size(); rank++) {
-        ContentChunkDto chunk = list.get(rank);
-        scoreById.merge(chunk.id(), 1.0 / (RRF_K + rank + 1), Double::sum);
-        chunkById.putIfAbsent(chunk.id(), chunk);
+        RetrievedItem item = list.get(rank);
+        scoreById.merge(item.id(), 1.0 / (RRF_K + rank + 1), Double::sum);
+        itemById.putIfAbsent(item.id(), item);
     }
 }
 
-private static ContentChunkDto withScore(ContentChunkDto chunk, double score) {
-    return new ContentChunkDto(chunk.id(), chunk.sourceType(), chunk.sourceId(),
-            chunk.filePath(), chunk.chunkIndex(), chunk.chunkText(), score);
+private static RetrievedItem withScore(RetrievedItem item, double score) {
+    return new RetrievedItem(item.id(), item.sourceType(), item.sourceId(),
+            item.sourceName(), item.filePath(), item.text(), score);
 }
 ```
 
@@ -559,6 +563,92 @@ információ származik."*
 A `matchesAny()` innentől `List<RetrievedItem>`-en dolgozik — a `sourceType`, `sourceName` és
 `text` mezők mind léteznek, a `top_result_name` pedig `items.get(0).sourceName()`. A PR #4
 doksijának 5.1 szakaszában szereplő, definiálatlan `RetrievalResult` típus erre cserélendő.
+
+## 6.6 Egységes retrieval-pipeline — három lista egy fúzióba (2026-08-26, ELDÖNTVE)
+
+### Miért kellett újratervezni
+
+A 2026-08-26-i átvizsgálás kimutatta, hogy a PR #4 eval-je **nem azt méri, ami élesben fut**:
+
+- Élesben a `ChatService` **mindkét ágat** lefuttatja (csillagrendszer flat keresés ÉS
+  misszió-chunk hibrid keresés), és **két külön kontextus-blokkot** fűz a prompthoz.
+- Az eval `runRetrievalFor(entry)`-je viszont **az elvárt forrástípus alapján egyetlen ágat
+  választ**.
+
+Az eval így szerkezetileg képtelen elkapni a két legvalószínűbb hibaosztályt: hogy a rossz ág
+nyer (a kérdésre a csillagrendszer-találat kerül előre, pedig a misszió-chunk lett volna a
+jó), és hogy a két ág együtt ad rossz sorrendet. A PR #4 azzal érvel, hogy a Java-oldali
+eval „a valódi, éles service-eket hívja, nem egy Pythonban lereplikált verziót" — a
+service-ek valódiak, de a **kompozíció** replikált volt, és el is tért.
+
+### A döntés: egy fúzió, egy rangsorolt lista
+
+**Norbert döntése (2026-08-26): a csillagrendszer-találatok is bemennek ugyanabba az
+RRF-be**, mint a vektoros és a full-text chunk-lista. Kettő helyett **három** rangsorolt lista
+fésülődik össze — az RRF pont erre való, semmivel nem bonyolultabb.
+
+Ezért lett a `rrfMerge()` szignatúrája `List<List<RetrievedItem>>`-es (4.3 szakasz), nem
+kétparaméteres.
+
+```java
+// service/rag/RetrievalPipeline.java (ÚJ) — EZ a közös belépési pont
+public List<RetrievedItem> retrieve(String query, RetrievalScope scope) {
+    float[] vector = embeddingService.embedQuery(query);
+
+    List<List<RetrievedItem>> lists = new ArrayList<>();
+    if (vector != null) {
+        String vectorStr = embeddingService.toVectorString(vector);
+        lists.add(hybridRetrievalService.vectorSearch(vectorStr, TOP_K * 3, scope));
+        lists.add(starSystemService.searchByEmbedding(vectorStr, TOP_K * 3));   // -> RetrievedItem
+    }
+    lists.add(hybridRetrievalService.fullTextSearch(query, TOP_K * 3, scope));
+
+    return rrfMerge(lists, TOP_K);
+}
+```
+
+**Ezt hívja a `ChatService` ÉS a PR #4 `EvalService`-e is** — ez adja meg ténylegesen azt a
+garanciát, amit a PR #4 doksija ígért. Ha valaki megváltoztatja a sorrendezést, az eval
+azonnal követi, nem csúszhat el a kettő.
+
+**A 4.1 szakasz `retrieveMissionChunks()`-a ezzel elavul** mint fő belépési pont — a
+`vectorSearch()`/`fullTextSearch()` publikussá válik (a pipeline hívja őket külön-külön), a
+kétlistás összefésülés pedig megszűnik.
+
+### Két mellékhatás, mindkettő javulás
+
+1. **A chat-kontextus relevancia szerint rendeződik**, nem típus szerint csoportosítva — a
+   `buildContextLines()` egyetlen, rangsorolt „Releváns találatok" blokkot ad, a 6.5 szakasz
+   forrás-megjelölésével (`[misszió: "..."]` / `[csillagrendszer: "..."]`).
+2. **A `hit@k` értelmet nyer.** Amíg két, egymástól független lista volt, a „hányadik
+   találat" kérdésnek nem volt jól definiált válasza a két típus között.
+
+### Két mérési pont, nem egy
+
+Fontos részlet, ami a régi tervben elveszett volna: **`RERANK_KEEP_TOP = 3`**, tehát a
+pipeline kimenete a rerank után 3 elem — a `hit@5` ott **mérhetetlen**, matematikailag azonos
+a `hit@3`-mal. Két oszlopot töltöttünk volna ugyanazzal az adattal.
+
+Ezért az eval **két ponton mér**:
+
+| Mérési pont | Metrikák | Mit mond meg |
+|---|---|---|
+| **rerank ELŐTT** (a fúzió kimenete, `TOP_K = 5`) | `hit@3`, `hit@5` | a retrieval önmagában mennyire jó |
+| **rerank UTÁN** (`RERANK_KEEP_TOP = 3`) | `hit@3` | a végeredmény minősége |
+
+A kettő különbsége az egyetlen mód arra, hogy megmutasd: **a reranking ténylegesen javít-e**.
+Enélkül a rerank egy indokolatlan extra LLM-hívás marad — ami a mért latencia (ld.
+`ai_chatbot_upgrade_2026.md` „Lokális futtatás") mellett külön is súlyos kérdés.
+
+A PR #4 `V11` sémája ehhez két új oszlopot kap — ld.
+[`pr4_observability_eval_architecture_2026.md`](pr4_observability_eval_architecture_2026.md)
+2. szakasz.
+
+### Az `expected_source_type` szerepe megváltozik
+
+Már **nem ágválasztó** (nincs mit választani, egy pipeline van) — csak egy elvárás, amit a
+`matchesAny()` ellenőriz. Érdemes megengedni egy `ANY` értéket is a golden setben azokra a
+kérdésekre, ahol bármelyik forrástípus elfogadható találat.
 
 ## 7. Class diagram
 

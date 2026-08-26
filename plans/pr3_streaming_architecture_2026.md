@@ -7,7 +7,7 @@
 
 ## 0. Függőség a PR #2-től
 
-Ez a PR a `service/ai/AiServiceClient.java` osztályt bővíti (`streamGenerate(...)`
+Ez a PR a `service/ai/AiServiceClient.java` osztályt bővíti (`streamChat(...)`
 metódussal) — magát az osztályt és a `generateJson(String prompt, String systemPrompt)`
 metódusát a PR #2 (Hibrid retrieval + reranking) vezeti be. Ha a PR #2 saját
 architektúra-doksija (`plans/pr2_hybrid_retrieval_architecture_2026.md`) más
@@ -54,7 +54,7 @@ backend/src/main/java/com/legymernok/backend/
 ├── dto/chat/
 │   └── OllamaStreamChunk.java          (ÚJ, record)
 ├── service/ai/
-│   ├── AiServiceClient.java             (MÓDOSUL — PR #2-ben jön létre, itt: + streamGenerate())
+│   ├── AiServiceClient.java             (MÓDOSUL — PR #2-ben jön létre, itt: + streamChat())
 │   └── ChatService.java                 (MÓDOSUL — chat() → streamChat(), extractAction() új)
 ├── web/chat/
 │   └── ChatController.java              (MÓDOSUL — POST /api/chat törölve, GET /api/chat/stream új)
@@ -62,34 +62,77 @@ backend/src/main/java/com/legymernok/backend/
     └── AppConfig.java                   (MÓDOSUL — + chatStreamExecutor() bean)
 
 ai-service/
-└── main.py                              (MÓDOSUL — + POST /generate/stream)
+└── main.py                              (MÓDOSUL — + POST /chat/stream)
 
 frontend/src/
 ├── api/client.ts                        (MÓDOSUL — chatApi.send() törölve, streamChat() új)
 └── components/chat/ChatWidget.tsx       (MÓDOSUL — handleSend() átírva)
 ```
 
-## 3. `ai-service/main.py` — `POST /generate/stream`
+## 3. `ai-service/main.py` — `POST /chat/stream` (2026-08-26: `/api/chat`-re állítva)
+
+### Miért `/api/chat` és nem `/api/generate`
+
+**Ez a szakasz 2026-08-26-án lett átírva.** Az eredeti terv Ollama `/api/generate`
+végpontjára épített (prompt-alapú szöveg-kiegészítés). A PR #5 (tool-calling) viszont
+Ollama **`/api/chat`**-jét igényli (üzenet-lista + `tools` mező) — és a PR #5 terve ezt egy
+mondattal hidalta át: *„streamGenerate(...) UGYANAZZAL a messages-listával"*, **amit a
+`/generate/stream` végpont nem tud fogadni**, mert `prompt` + `context: list[str]` mezőket
+vár.
+
+Ebből a tervben egy dupla hívás lett volna (egy nem-streamelő `chatWithTools()` a
+tool-döntéshez, majd egy MÁSODIK, streamelő hívás a végső válaszhoz) — ami **kétszer
+generáltatja le a végső választ, eltérő mintavétellel**: a felhasználó nem azt látná, amit a
+tool-hurok „eldöntött".
+
+**Döntés: a PR #3 eleve `/api/chat`-re épül.** Így egyetlen streamelő végpont van, amit a
+PR #5 változatlanul újrahasznál (csak `tools` mezővel és hosszabb üzenetlistával) — nincs
+dupla generálás, és a PR #3 nem épít olyasmit, amit a PR #5-nek el kellene dobnia. Norbert
+döntése: *„nem baj, ha bonyolultabb lesz a PR #3."*
 
 ```python
-@app.post("/generate/stream")
-async def generate_stream(req: GenerateRequest):
+class ChatStreamRequest(BaseModel):
+    messages: list[dict]                 # [{role, content}, ...] — a hívó állítja össze
+    model: str | None = None
+    tools: list[dict] | None = None      # PR #5 tölti ki; PR #3-ban mindig None
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatStreamRequest):
     model = req.model or CHAT_MODEL
-    context_block = "\n\n".join(req.context)
-    prompt = f"Kontextus:\n{context_block}\n\nKérdés: {req.prompt}" if context_block else req.prompt
 
     async def ndjson_proxy():
-        async with httpx.AsyncClient(timeout=600) as client:
-            payload: dict = {"model": model, "prompt": prompt, "stream": True}
-            if req.system_prompt:
-                payload["system"] = req.system_prompt
-            async with client.stream("POST", f"{OLLAMA_URL}/api/generate", json=payload) as r:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            payload: dict = {"model": model, "messages": req.messages, "stream": True}
+            if req.tools:
+                payload["tools"] = req.tools
+            async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as r:
                 async for line in r.aiter_lines():
                     if line:
                         yield line + "\n"
 
     return StreamingResponse(ndjson_proxy(), media_type="application/x-ndjson")
 ```
+
+**Semmi új dependency** — `StreamingResponse` (FastAPI) + `httpx.AsyncClient.stream()`, ahogy
+eddig is. Az `OLLAMA_TIMEOUT` env-változóból jön (ld. 8.2 szakasz timeout-lánc).
+
+**Ami a hívóra hárul**: a kontextus-blokk összeállítása. Eddig ezt az ai-service végezte
+(`f"Kontextus:\n{context_block}\n\nKérdés: {req.prompt}"`), mostantól a `ChatService`
+állít elő egy rendes `{"role": "system", "content": SYSTEM_PROMPT + kontextus}` üzenetet és
+egy `{"role": "user", "content": message}`-t. Ez amúgy is tisztább — a chat-sablont a modell
+kapja meg, nem egy kézzel összefűzött prompt-string.
+
+**Ollama `/api/chat` NDJSON-formátuma** (`stream: true`) — más, mint az `/api/generate`-é:
+```
+{"model":"...","message":{"role":"assistant","content":"Szia"},"done":false}
+{"model":"...","message":{"role":"assistant","content":"!"},"done":false}
+{"model":"...","message":{"role":"assistant","content":"","tool_calls":[...]},"done":false}
+{"model":"...","message":{"role":"assistant","content":""},"done":true,"eval_count":128,...}
+```
+A token a `message.content`-ben van (nem a gyökér `response` mezőben), a tool-hívás a
+`message.tool_calls`-ban, és a záró sorban vannak a `prompt_eval_count`/`eval_count`/
+`eval_duration` mezők.
 
 **Semmi új dependency** — `StreamingResponse` a FastAPI-ból, `httpx.AsyncClient.stream()`
 a meglévő `httpx`-ből, pontosan ahogy a fő terv írja. A prompt-összeállítás logikája
@@ -114,12 +157,27 @@ package com.legymernok.backend.dto.chat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record OllamaStreamChunk(
-    String response,
+    Message message,                 // 2026-08-26: /api/chat formátum, nem a régi "response" mező
     boolean done,
     @JsonProperty("eval_count") Long evalCount,
     @JsonProperty("eval_duration") Long evalDuration,
     @JsonProperty("prompt_eval_count") Long promptEvalCount
-) {}
+) {
+    public record Message(
+        String role,
+        String content,
+        @JsonProperty("tool_calls") List<OllamaToolCall> toolCalls   // PR #3-ban mindig null
+    ) {}
+
+    /** Kényelmi accessor — null-biztos, mert a záró (done=true) sorban a content üres/hiányzik. */
+    public String contentOrEmpty() {
+        return (message == null || message.content() == null) ? "" : message.content();
+    }
+
+    public boolean hasToolCalls() {
+        return message != null && message.toolCalls() != null && !message.toolCalls().isEmpty();
+    }
+}
 ```
 
 **Miért kell explicit `@JsonProperty`**: a projektben eddig SEHOL nincs globális
@@ -128,27 +186,30 @@ kézzel, `Map.of("system_prompt", ...)`-tal snake_case-eli a KIMENŐ mezőket) �
 `ObjectMapper` alapértelmezett, sima camelCase-t vár, enélkül az annotáció nélkül az
 `eval_count` mező néma `null`-ra deszerializálódna.
 
-## 5. `AiServiceClient.streamGenerate()` — az új streamelő hívás
+## 5. `AiServiceClient.streamChat()` — az új streamelő hívás (2026-08-26)
+
+**Névváltozás**: a metódus `streamGenerate()` helyett `streamChat()`, és `prompt`+`context`
+helyett **üzenetlistát** vesz át — a 3. szakaszban leírt `/api/chat`-re állás miatt. A
+`tools` paraméter a PR #3-ban mindig `null`, a PR #5 tölti ki; így a PR #5-nek nem kell új
+metódust bevezetnie, csak paramétert átadnia.
 
 ```java
-public void streamGenerate(
-        String prompt,
-        List<String> contextLines,
-        String systemPrompt,
+public void streamChat(
+        List<Map<String, Object>> messages,
+        List<OllamaToolDefinition> tools,      // PR #3-ban null
         Consumer<OllamaStreamChunk> onChunk,
         Runnable onDone,
         Consumer<Exception> onError) {
     try {
         restTemplate.execute(
-            aiServiceUrl + "/generate/stream",
+            aiServiceUrl + "/chat/stream",
             HttpMethod.POST,
             request -> {
                 request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-                objectMapper.writeValue(request.getBody(), Map.of(
-                    "prompt", prompt,
-                    "context", contextLines,
-                    "system_prompt", systemPrompt
-                ));
+                Map<String, Object> body = new HashMap<>();
+                body.put("messages", messages);
+                if (tools != null && !tools.isEmpty()) body.put("tools", tools);
+                objectMapper.writeValue(request.getBody(), body);
             },
             response -> {
                 try (BufferedReader reader = new BufferedReader(
@@ -315,11 +376,15 @@ public SseEmitter streamChat(String message, ChatContextDto context, String user
 
             // 2. Streamelt generálás
             StringBuilder fullResponse = new StringBuilder();
-            aiServiceClient.streamGenerate(
-                message, contextLines, SYSTEM_PROMPT,
+            List<Map<String, Object>> messages = List.of(
+                Map.of("role", "system", "content", SYSTEM_PROMPT + "\n\n" + String.join("\n", contextLines)),
+                Map.of("role", "user",   "content", message)
+            );
+            aiServiceClient.streamChat(
+                messages, null,                       // tools: null — PR #5 tölti ki
                 chunk -> {
-                    fullResponse.append(chunk.response());
-                    sendSafely(emitter, "token", chunk.response());
+                    fullResponse.append(chunk.contentOrEmpty());
+                    sendSafely(emitter, "token", chunk.contentOrEmpty());
                 },
                 () -> {
                     // 3. Feltételes akció-kinyerés — CSAK form-kitölthető oldalon
@@ -566,7 +631,7 @@ classDiagram
         -RestTemplate restTemplate
         -ObjectMapper objectMapper
         +generateJson(String prompt, String systemPrompt) JsonGenerateResult
-        +streamGenerate(String prompt, List~String~ contextLines, String systemPrompt, Consumer~OllamaStreamChunk~ onChunk, Runnable onDone, Consumer~Exception~ onError) void
+        +streamChat(List messages, List~OllamaToolDefinition~ tools, Consumer~OllamaStreamChunk~ onChunk, Runnable onDone, Consumer~Exception~ onError) void
     }
 
     class OllamaStreamChunk {
@@ -583,7 +648,7 @@ classDiagram
     }
 
     ChatController --> ChatService : streamChat()
-    ChatService --> AiServiceClient : streamGenerate() / generateJson()
+    ChatService --> AiServiceClient : streamChat() / generateJson()
     AiServiceClient ..> OllamaStreamChunk : deszerializál
     ChatService --> AppConfig : chatStreamExecutor bean
 ```
@@ -611,12 +676,12 @@ sequenceDiagram
 
     Note over CS: háttérszálon (chatStreamExecutor) fut tovább
     CS->>CS: retrieval (star systems + PR#2 hibrid mission chunks)
-    CS->>ASC: streamGenerate(prompt, contextLines, systemPrompt, onChunk, onDone, onError)
-    ASC->>AI: POST /generate/stream
-    AI->>OL: POST /api/generate {stream:true}
+    CS->>ASC: streamChat(messages, null, onChunk, onDone, onError)
+    ASC->>AI: POST /chat/stream
+    AI->>OL: POST /api/chat {stream:true}
 
     loop minden NDJSON sor, amíg done=false
-        OL-->>AI: {"response":"tok","done":false}
+        OL-->>AI: {"message":{"content":"tok"},"done":false}
         AI-->>ASC: NDJSON sor (proxyolva)
         ASC->>ASC: onChunk(OllamaStreamChunk)
         ASC->>CS: onChunk callback
@@ -628,7 +693,7 @@ sequenceDiagram
         CW-->>User: token megjelenik a UI-ban
     end
 
-    OL-->>AI: {"response":"","done":true,"eval_count":128,...}
+    OL-->>AI: {"message":{"content":""},"done":true,"eval_count":128,...}
     AI-->>ASC: utolsó NDJSON sor
     ASC->>CS: onDone()
     alt context.pageType FORM_FILLABLE
@@ -655,12 +720,12 @@ sequenceDiagram
 | Teszteset | Osztály | Mit ellenőriz |
 |---|---|---|
 | `streamChat_nonFillablePage_neverCallsGenerateJson` | `ChatServiceTest` | `GENERAL`/`STAR_MAP` típusú oldalon `extractAction()`/`generateJson()` SOSEM hívódik, csak `token`-események + `emitter.complete()` |
-| `streamChat_fillablePage_sendsTokenThenActionEvent` | `ChatServiceTest` | `MISSION_CREATE` oldalon a mockolt `streamGenerate()` több chunkot ad → mind `token`-eseményként megy ki, majd a mockolt `generateJson()` válasza alapján egy záró `action`-esemény, ebben a sorrendben |
-| `streamChat_streamGenerateError_completesWithError` | `ChatServiceTest` | Mockolt `streamGenerate()` az `onError` callback-et hívja → `emitter.completeWithError()` fut, nem `emitter.complete()` |
+| `streamChat_fillablePage_sendsTokenThenActionEvent` | `ChatServiceTest` | `MISSION_CREATE` oldalon a mockolt `streamChat()` több chunkot ad → mind `token`-eseményként megy ki, majd a mockolt `generateJson()` válasza alapján egy záró `action`-esemény, ebben a sorrendben |
+| `streamChat_streamChatError_completesWithError` | `ChatServiceTest` | Mockolt `streamChat()` az `onError` callback-et hívja → `emitter.completeWithError()` fut, nem `emitter.complete()` |
 | `streamChat_emptyExtractedFields_sendsNoActionEvent` | `ChatServiceTest` | `extractAction()` `{"fields":{}}`-t kap vissza → NINCS `action`-esemény, csak `complete()` |
 | `extractAction_malformedJson_returnsNullGracefully` | `ChatServiceTest` | A `generateJson()` hibás/parse-olhatatlan JSON-t ad vissza → `null`, nem dob kivételt, a stream `complete()`-tel zár akció nélkül |
-| `streamGenerate_multiLineNdjson_invokesOnChunkPerLine` | `AiServiceClientTest` (bővítve) | Mockolt `RestTemplate` egy több-soros NDJSON `InputStream`-et ad vissza → `onChunk` pontosan annyiszor hívódik, ahány sor, a `done=true` sorig |
-| `streamGenerate_ioExceptionDuringRead_invokesOnError` | `AiServiceClientTest` | A streamelt olvasás közben dobott `IOException` az `onError` callback-et hívja, nem propagálódik kivételként a hívóhoz |
+| `streamChat_multiLineNdjson_invokesOnChunkPerLine` | `AiServiceClientTest` (bővítve) | Mockolt `RestTemplate` egy több-soros NDJSON `InputStream`-et ad vissza → `onChunk` pontosan annyiszor hívódik, ahány sor, a `done=true` sorig |
+| `streamChat_ioExceptionDuringRead_invokesOnError` | `AiServiceClientTest` | A streamelt olvasás közben dobott `IOException` az `onError` callback-et hívja, nem propagálódik kivételként a hívóhoz |
 | `parseFrame_singleTokenEvent_callsOnToken` | `client.stream.test.ts` (ÚJ) | Mockolt `fetch` egy `"event: token\ndata: hello\n\n"` frame-et ad vissza → `onToken("hello")` hívva |
 | `parseFrame_actionEvent_callsOnActionWithParsedJson` | `client.stream.test.ts` | `"event: action\ndata: {\"type\":\"FILL_FORM\",\"fields\":{\"name\":\"x\"}}\n\n"` → `onAction()` a helyes objektummal |
 | `parseFrame_frameSplitAcrossTwoReads_stillParsesCorrectly` | `client.stream.test.ts` | Egy SSE-frame két külön `reader.read()` hívás byte-jaira van szétvágva (a valós hálózaton ez NORMÁL eset, nem edge case) → a buffer-logika helyesen összefűzi, mielőtt parse-olna |

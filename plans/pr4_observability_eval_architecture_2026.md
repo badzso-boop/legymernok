@@ -74,8 +74,9 @@ CREATE TABLE eval_runs (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     started_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at    TIMESTAMPTZ,
-    hit_rate_at_3  DOUBLE PRECISION,
-    hit_rate_at_5  DOUBLE PRECISION,
+    hit_rate_at_3  DOUBLE PRECISION,          -- rerank ELŐTT (a fúzió kimenete)
+    hit_rate_at_5  DOUBLE PRECISION,          -- rerank ELŐTT
+    hit_rate_reranked_at_3 DOUBLE PRECISION,  -- rerank UTÁN — 2026-08-26, ld. PR #2 6.6
     status         VARCHAR(20) NOT NULL DEFAULT 'RUNNING',
     llm_judge_used BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT eval_runs_status_check CHECK (status IN ('RUNNING', 'COMPLETED', 'FAILED'))
@@ -85,8 +86,9 @@ CREATE TABLE eval_run_results (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id           UUID NOT NULL REFERENCES eval_runs(id) ON DELETE CASCADE,
     golden_entry_id  UUID NOT NULL REFERENCES eval_golden_entries(id) ON DELETE CASCADE,
-    hit_at_3         BOOLEAN NOT NULL,
-    hit_at_5         BOOLEAN NOT NULL,
+    hit_at_3         BOOLEAN NOT NULL,        -- rerank ELŐTT
+    hit_at_5         BOOLEAN NOT NULL,        -- rerank ELŐTT
+    hit_at_3_reranked BOOLEAN NOT NULL,       -- rerank UTÁN — 2026-08-26
     top_result_name  VARCHAR(255),
     latency_ms       INT NOT NULL,
     llm_judge_score  DOUBLE PRECISION,
@@ -372,6 +374,48 @@ Ez a fenti pszeudokódot változtatás nélkül működőképessé teszi (`resul
 **Egy apró, de fontos igazítás a `matchesAny()`-ben**: a `result.chunkText` helyett
 `result.text()` a mező neve (a `RetrievedItem` a csillagrendszer-leírást is ugyanebben a
 mezőben hordozza, ezért nem `chunkText` a neve).
+
+### 5.1.5 `runRetrievalFor()` MEGSZŰNIK — a közös pipeline hívása (2026-08-26, ELDÖNTVE)
+
+A fenti pszeudokód `runRetrievalFor(entry)`-je **az elvárt forrástípus alapján választott
+retrieval-ágat** (`STAR_SYSTEM`-nél `searchByEmbedding()`, egyébként
+`retrieveMissionChunks()`). Élesben viszont a `ChatService` mindkét ágat lefuttatja — az eval
+tehát egy olyan rendszert mért volna, ami nem létezik, és szerkezetileg képtelen lett volna
+elkapni a „rossz ág nyer" és a „a két ág együtt ad rossz sorrendet" hibaosztályokat.
+
+**A megoldás a PR #2 6.6 szakaszában született meg**: mostantól egyetlen, közös
+`RetrievalPipeline.retrieve(query, scope)` létezik, ami három rangsorolt listát (vektoros
+chunk-keresés, full-text chunk-keresés, csillagrendszer-keresés) fésül egyetlen RRF-be. Ezt
+hívja a `ChatService` ÉS az `EvalService` is — ez adja meg ténylegesen azt a garanciát, amit
+ez a doksi eddig csak ígért („nem kell egy második, lereplikált verziót karbantartani").
+
+```
+runEvalAsync ciklusa, a módosított rész:
+
+    preRerank  = retrievalPipeline.retrieve(entry.getQuery(), RetrievalScope.forEval())
+    postRerank = rerankingService.rerank(entry.getQuery(), preRerank, RERANK_KEEP_TOP)
+
+    hit3         = matchesAny(preRerank.subList(0, min(3, preRerank.size())), entry)
+    hit5         = matchesAny(preRerank, entry)                      // TOP_K = 5
+    hit3Reranked = matchesAny(postRerank, entry)                     // RERANK_KEEP_TOP = 3
+```
+
+**Miért két mérési pont**: `RERANK_KEEP_TOP = 3`, tehát a rerank kimenete 3 elem — ott a
+`hit@5` matematikailag azonos a `hit@3`-mal, két oszlopot töltöttünk volna ugyanazzal az
+adattal. A rerank ELŐTTI listán mérve a `@3`/`@5` a retrieval minőségét mutatja, a rerank
+UTÁNI `hit@3` pedig a végeredményt. **A kettő különbsége az egyetlen mód arra, hogy
+megmutasd, a reranking ténylegesen javít-e** — enélkül egy indokolatlan extra LLM-hívás
+marad, ami a mért latencia mellett (ld. `ai_chatbot_upgrade_2026.md` „Lokális futtatás")
+külön is súlyos kérdés.
+
+A `V11` séma ehhez kapta a `eval_runs.hit_rate_reranked_at_3` és a
+`eval_run_results.hit_at_3_reranked` oszlopot (2. szakasz), a UI eredmény-táblázata pedig
+mindkét értéket mutassa egymás mellett.
+
+**Az `expected_source_type` szerepe megváltozik**: már nem ágválasztó (nincs mit választani),
+csak egy elvárás, amit a `matchesAny()` ellenőriz. Érdemes megengedni egy `ANY` értéket is
+azokra a kérdésekre, ahol bármelyik forrástípus elfogadható találat — ehhez a
+`eval_golden_entries_source_type_check` CHECK-constraintet ki kell egészíteni `'ANY'`-vel.
 
 ### 5.2 Az LLM-judge lépés — **ELDÖNTVE Norberttel (2026-08-25)**
 

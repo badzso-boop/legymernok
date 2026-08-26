@@ -133,11 +133,8 @@ bemenet: userMessage, contextLines, userJwt, emitter (a ChatController-ből kapo
 
        b. HA response.toolCalls() üres (a modell végleges, szöveges választ adott, nincs
           több tool-hívás):
-            - EZ a válasz KERÜL STREAMELÉSRE a felhasználónak — de mivel a `chatWithTools()`
-              nem streamel (4. szakasz indoklás), itt egy MÁSODIK, immár streamelő hívás
-              szükséges: aiServiceClient.streamGenerate(...) UGYANAZZAL a messages-listával,
-              hogy a válasz tokenenként jusson el a UI-hoz (tudatosan felvállalt dupla-hívás,
-              extra latenciát/költséget jelent, ld. lent az indoklás)
+            - A kör tokenjei MÁR ki lettek streamelve, ahogy érkeztek (ld. 3.1.5 —
+              pufferelési szabály). Itt nincs második hívás.
             - HA a `ctx.pageType()` FORM_FILLABLE (a PR #3 mintája szerint): extractAction()
               hívása a végső szövegre, `action` SSE-esemény küldése
             - emitter.complete(); return
@@ -174,14 +171,61 @@ bemenet: userMessage, contextLines, userJwt, emitter (a ChatController-ből kapo
      mcpClient.closeGracefully()   // MINDIG lezárva, akár siker, akár hiba/max-iteráció volt
 ```
 
-**Fontos, amit a fenti (4.b pont) explicit kimond, mert a fő terv nem tér ki rá**: az Ollama
-natív tool-calling API-ja (`/api/chat`, nem `/api/generate`) **NEM streamel jól tool-hívásokkal
-kombinálva** egyszerű módon — amíg a modell tool-hívásokat fontolgat, nincs "látható" szöveg,
-amit érdemes lenne streamelni. Ezért a terv szerint **csak a végső, tool-hívás nélküli kör**
-streamel ténylegesen (a `streamGenerate()`-en keresztül, PR #3-ból), a köztes tool-döntő
-körök egy szinkron `chatWithTools()` hívással mennek. **ELDÖNTVE (2026-08-25): ez a néma
-várakozás egy `tool_call` SSE-eseménnyel kompenzálva** — ld. 3.3 szakasz — a felhasználó
-így pontosan látja, melyik tool fut éppen, nem csak egy generikus "Dolgozom…" feliratot.
+### 3.1.5 Pufferelési szabály — csak a végső válasz streamel (2026-08-26, ELDÖNTVE)
+
+**Ez a szakasz 2026-08-26-án váltotta le a korábbi dupla-hívásos tervet.** A régi terv szerint
+a tool-döntő körök egy szinkron `chatWithTools()` hívással mentek, a végső válasz pedig egy
+MÁSODIK, streamelő hívással — ami **kétszer generáltatta volna le ugyanazt a választ, eltérő
+mintavétellel**, tehát a felhasználó nem azt látta volna, amit a tool-hurok „eldöntött".
+Ráadásul a hivatkozott `streamGenerate()` `prompt`+`context` mezőket vár, nem
+üzenetlistát — a dupla hívás így technikailag sem lett volna kivitelezhető.
+
+**Megoldás**: a PR #3 2026-08-26 óta eleve `/api/chat`-re épül és `streamChat(messages,
+tools, ...)` a szignatúrája (ld. `pr3_streaming_architecture_2026.md` 3. és 5. szakasz) —
+tehát **minden kör ugyanazon a streamelő végponton megy**, a tool-döntő körök is. Nincs
+`chatWithTools()`, nincs dupla generálás, nincs második végpont.
+
+**A megtervezendő rész: mikor kezdjük mutatni a tokeneket.** Norbert döntése: *„a végén a
+választ streameljük csak, és pufferelünk a tokeneket addig."* Egy tool-körben a modell
+elvileg írhat szöveget, mielőtt eldönti, hogy toolt hív — azt a szöveget nem szabad
+megjeleníteni, mert egy eldobott körhöz tartozik.
+
+```
+körönként:
+    buffer = ""
+    committed = false           // elköteleztük-e magunkat, hogy ez a végső kör
+
+    minden beérkező chunk-ra:
+        HA chunk.hasToolCalls():
+            - buffer eldobva (NEM megy ki a felhasználónak)
+            - tool_call SSE-esemény a friendlyToolLabel()-lel (3.3 szakasz)
+            - ez egy TOOL-kör -> kilépés a chunk-ciklusból, tool végrehajtása
+        HA NEM committed:
+            buffer += chunk.contentOrEmpty()
+            HA buffer hossza >= COMMIT_THRESHOLD (128 karakter):
+                - committed = true
+                - a teljes buffer kimegy egyetlen token-eseményként
+        KÜLÖNBEN:
+            - a chunk azonnal kimegy token-eseményként (élő streamelés)
+
+    a kör VÉGÉN (done=true), HA nem volt tool_call ÉS NEM committed:
+        - a buffer kimegy (rövid válasz, sosem érte el a küszöböt)
+```
+
+**Miért küszöb és nem „a kör végéig pufferelünk"**: ha a teljes végső kört puffereljük, a
+streamelés értelmét veszti — a mért 1 perc 50 másodperces válaszidőnél (ld.
+`ai_chatbot_upgrade_2026.md` „Lokális futtatás") a felhasználó ugyanúgy két percig üres
+képernyőt nézne, csak most bonyolultabb kóddal. A 128 karakteres küszöb azt jelenti, hogy a
+késleltetés a gyakorlatban **néhány token**, utána élő a stream.
+
+**A gyakorlatban a puffer többnyire üres marad**: Ollama a `tool_calls`-t üres `content`
+mellett küldi, tehát egy tool-körben az első chunk már eldönti a kérdést, mielőtt bármi
+szöveg gyűlne össze. A küszöb csak védőháló arra a ritka esetre, amikor a modell előbb
+elkezd írni, aztán mégis toolt hív.
+
+**A néma tool-döntő körök továbbra is `tool_call` SSE-eseménnyel vannak kompenzálva** (3.3
+szakasz) — a felhasználó pontosan látja, melyik tool fut éppen, nem csak egy generikus
+„Dolgozom…" feliratot.
 
 ### 3.2 `openMcpClient()` + `callMcpTool()` — a hivatalos Java MCP SDK-val (2026-08-25-i doksi-kutatás)
 
@@ -306,31 +350,23 @@ public ChatWithToolsResult chatWithTools(
 **Ez egy ÚJ metódus az `AiServiceClient`-en**, ami a PR #2-ben bevezetett osztályt bővíti
 (`generateJson()` már ott van) — nem hoz létre új osztályt.
 
-## 5. `ai-service/main.py` — új `/chat` proxy-végpont
+## 5. `ai-service/main.py` — NINCS új végpont (2026-08-26)
 
-A fő terv nem tér ki rá explicit, de szükséges: az `ai-service` jelenlegi `/generate`
-végpontja Ollama `/api/generate`-jét hívja (szöveg-kiegészítés), a natív tool-calling viszont
-Ollama **`/api/chat`** végpontján érhető el (üzenet-lista + `tools` mező, más válasz-formátum).
-Ehhez az `ai-service`-nek szüksége van egy **új, dedikált proxy-végpontra**:
+**Ez a szakasz 2026-08-26-án okafogyottá vált.** A korábbi terv egy új, nem-streamelő
+`POST /chat` proxy-végpontot írt elő, mert az `ai-service` akkori `/generate/stream`-je
+Ollama `/api/generate`-jére épült, a tool-calling viszont `/api/chat`-et igényel.
 
-```python
-@app.post("/chat")
-async def chat(request: ChatWithToolsRequest):
-    payload = {
-        "model": request.model,
-        "messages": request.messages,
-        "tools": request.tools,
-        "stream": False,
-    }
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
-        return resp.json()  # egyszerű passthrough, nincs transzformáció
-```
+Mivel a PR #3 azóta **eleve `/api/chat`-re épül** (`POST /chat/stream`, `messages` + opcionális
+`tools`, ld. `pr3_streaming_architecture_2026.md` 3. szakasz), a PR #5-nek **nem kell új
+végpontot bevezetnie** — ugyanazt hívja, csak kitöltött `tools` mezővel.
 
-Ez egy egyszerű, statikus (nem streamelő) passthrough — nincs hozzá új dependency
-(`httpx` már megvan a PR #3 miatt). **Ezt a fő terv "Függőségek" táblázata és a PR #5
-fájllistája jelenleg NEM sorolja fel explicit** — érdemes a fő tervbe is bejegyezni, hogy ne
-maradjon ki implementáláskor.
+Ez egyben megszünteti azt a következetlenséget is, amit a korábbi terv maga jelzett
+(„a fő terv Függőségek táblázata és a PR #5 fájllistája jelenleg NEM sorolja fel explicit") —
+nincs mit felsorolni, mert nincs új végpont.
+
+**Következmény a 4. szakaszra**: a `chatWithTools()` metódus sem kell — a
+`streamChat(messages, tools, ...)` (PR #3) mindkét esetet lefedi, a tool-hívásokat a
+`OllamaStreamChunk.hasToolCalls()` jelzi a chunk-callbackben.
 
 ## 6. `mcp-server/main.py` — a 4 tool, a VALÓDI `mcp` v2 SDK API-jával (2026-08-25-i doksi-kutatás)
 

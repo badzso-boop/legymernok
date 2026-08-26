@@ -120,8 +120,7 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
       CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE')),
       CONSTRAINT content_chunks_unique_chunk UNIQUE (source_type, source_id, file_path, chunk_index)
   );
-  CREATE INDEX IF NOT EXISTS idx_content_chunks_embedding
-      ON content_chunks USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 10);
+  -- 2026-08-26: SZÁNDÉKOSAN NINCS vektor-index ezen a táblán, ld. az indoklást lentebb.
   CREATE INDEX IF NOT EXISTS idx_content_chunks_search_vector
       ON content_chunks USING gin (search_vector);
   CREATE INDEX IF NOT EXISTS idx_content_chunks_source
@@ -450,6 +449,71 @@ ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
 | **Semmi** az evalhoz | — | Az admin UI-alapú eval (PR #4, újratervezve) a meglévő Java retrieval-service-eket hívja közvetlenül — nincs külön Python-implementáció, tehát a korábban tervezett `psycopg[binary]` sem kell. |
+
+## Vektoros keresés — index-stratégia és az `ORDER BY` javítása (2026-08-26)
+
+### A hiba, ami ma is él
+
+A `StarSystemService.searchByEmbedding()` (és a PR #2 terve, ami 1:1 lemásolta) így rendez:
+
+```sql
+1 - (content_embedding <=> ?::vector) AS similarity
+...
+ORDER BY similarity DESC
+```
+
+A pgvector a vektor-indexet **kizárólag** `ORDER BY <oszlop> <=> <vektor>` (nyers távolság,
+növekvő) alakra tudja használni. Egy származtatott kifejezésre (`1 - (...)`) csökkenően
+rendezve **nincs index**, minden lekérdezés teljes tábla-scan + rendezés.
+
+**Ez a ma élő rendszert is érinti**: a `V2__add_pgvector.sql` `idx_star_system_embedding`
+ivfflat indexe emiatt soha nem használódott — ráadásul üres táblán épült, ami önmagában is
+használhatatlanná tenné. A jelenlegi szemantikus keresés tehát ma is egzakt scannel megy,
+csak ez 1-2 csillagrendszernél észrevehetetlen.
+
+### Javítás (kötelező, minden vektoros lekérdezésre)
+
+```sql
+SELECT id, ..., 1 - (content_embedding <=> ?::vector) AS score
+FROM content_chunks
+ORDER BY content_embedding <=> ?::vector      -- nyers távolság, ASC
+LIMIT ?
+```
+
+A `1 - (...)` kifejezés maradhat a SELECT-listában (a pontszám kiírásához kell, a tervezőt
+nem befolyásolja) — csak a rendezésből kell kivenni. A vektor-paraméter így kétszer megy be.
+A `WHERE content_embedding IS NOT NULL` feltétel elhagyható: a pgvector amúgy sem indexel
+NULL-t, a predikátum csak felesleges.
+
+**Ez a javítás akkor is kell, ha most nem teszünk indexet** — enélkül egy később hozzáadott
+index sem lépne életbe, és a hiba csendben megmaradna.
+
+### Index-stratégia — ELDÖNTVE (2026-08-26): egyelőre NINCS vektor-index
+
+Három lehetőséget mérlegeltünk:
+
+| | Mit ad | Mit kér cserébe |
+|---|---|---|
+| **A) Nincs index** | Egzakt találat, nulla hangolás, nulla meglepetés | Lineáris scan |
+| **B) HNSW** | Üresen is épül (nincs tanítóadat-igény), jó recall | Több memória, lassabb insert, `ef_search` hangolás |
+| **C) ivfflat** | Kis memória | Csak adat UTÁN építhető, `lists`/`probes` hangolás, növekedéskor újraépítés |
+
+**Norbert döntése: A.** A várható lépték néhány ezer chunk (nagyságrendileg 200 misszió ×
+~10 chunk), ahol az egzakt keresés milliszekundumokban mérhető — az ANN-nek gyakorlatilag
+nincs mit megnyernie. Cserébe viszont hozna egy nehezen debugolható hibaosztályt: **hibrid
+keresésnél az ANN recall-hibái összeadódnak az RRF-ben**, és utólag nem lehet megmondani,
+hogy egy chunk azért nem jött fel, mert rossz az embedding, vagy mert az index nem találta
+meg. Az egzakt keresés ezt a bizonytalanságot teljesen kiveszi a rendszerből.
+
+**Ha valaha mégis index kell** (a mérés indokolja), akkor **HNSW, nem ivfflat** — az ivfflat
+üres táblás építése pontosan az a csapda, amibe ez a terv eredetileg beleszaladt volna, és a
+`lists`/`probes` hangolás ezen a léptéken tiszta ráfizetés.
+
+### Külön, ettől független teendő
+
+A `StarSystemService.searchByEmbedding()` `ORDER BY`-ja és a `V2` üresen épült ivfflat indexe
+a **jelenlegi éles kódot** érinti, nem ezt a fejlesztést. Érdemes külön, pár soros PR-ban
+javítani, függetlenül attól, hogy ez az öt fázis mikor indul.
 
 ## Embedding-hívás — task-prefixek és modell-verziózás (2026-08-26)
 
