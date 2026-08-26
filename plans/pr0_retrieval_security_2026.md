@@ -126,9 +126,26 @@ HAVING count(ss.id) > 0 OR count(m.id) > 0;
 nem futtatható éles adaton** — mert pont az a tartalom kerülne be, ami elől a jogelvétel
 véd.
 
-A frontendről a „+ Új csillagrendszer" / „+ Új misszió" gombokat is el kell rejteni a kadét
-elől — ma a `usePermission`-alapú feltételes renderelés mintája létezik, csak alkalmazni kell
-rá. Enélkül a gomb látszik, a hívás pedig 403-mal elhasal, ami rossz UX.
+### 2.4.1 Frontend — a létrehozó gombok elrejtése
+
+A „+ Új csillagrendszer" / „+ Új misszió" gombokat is el kell rejteni a kadét elől. Enélkül a
+gomb látszik, a hívás pedig 403-mal elhasal — rossz UX, és úgy néz ki, mintha hibás lenne az
+oldal.
+
+**Amivel meg lehet csinálni (ellenőrizve a kódban)**: az `AuthContext` már ma is kínál egy
+`hasRole(role: string)` függvényt, és a JWT `roles` tömbje **a flattened permissionöket is
+tartalmazza**, nem csak a szerepkör-neveket — ezt a `AuthContext.tsx` saját kommentje is
+kimondja (125-127. sor: *„A backend már 'flattened' permissionöket is küldhet role-ként"*).
+Egy `hasRole("mission:create")` hívás tehát ma is helyesen működne.
+
+**Amit viszont NEM szabad feltételezni**: hogy erre már van bevett minta. Nincs — a jelenlegi
+használat kizárólag szerepkör-nevekre megy (`hasRole("ROLE_ADMIN")` a `MainLayout.tsx:61`-ben,
+a `UserList.tsx`-ben és a `ProtectedRoute`-ban), és **nem létezik `usePermission` hook** a
+`frontend/src/hooks/` alatt. Ez a PR #0 tehát vagy közvetlenül `hasRole("mission:create")`-et
+hív a két érintett helyen (kevesebb munka), vagy bevezet egy vékony `usePermission()` wrappert
+a szándék olvashatóbbá tételéért (a `hasRole` név félrevezető egy permission-ellenőrzésnél).
+**Javaslat: a wrapper** — a különbség két fájl, cserébe a hívási helyeken egyértelmű lesz,
+hogy permissionről és nem szerepkörről van szó.
 
 ### 2.5 Amit a jogelvétel megold és amit nem
 
