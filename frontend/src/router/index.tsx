@@ -171,7 +171,11 @@ export const router = createHashRouter([
       {
         path: "forge",
         element: (
-          <ProtectedRoute>
+          // 2026-08-26: a Forge eddig bármely bejelentkezett usernek elérhető volt
+          // (sima ProtectedRoute), csak a backend-hívások hasaltak el 403-mal. A kadétok
+          // create-jogainak elvétele után ez már üres, hibás oldalt jelentene nekik —
+          // ld. plans/pr0_retrieval_security_2026.md 2.4.1.
+          <ProtectedRoute requiredRole="mission:create">
             <MissionEditorPage mode="forge" />
           </ProtectedRoute>
         ),
@@ -179,7 +183,7 @@ export const router = createHashRouter([
       {
         path: "forge/:missionId",
         element: (
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="mission:create">
             <MissionEditorPage mode="forge" />
           </ProtectedRoute>
         ),
@@ -187,7 +191,7 @@ export const router = createHashRouter([
       {
         path: "my-forge",
         element: (
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="mission:create">
             <MyForgePage />
           </ProtectedRoute>
         ),

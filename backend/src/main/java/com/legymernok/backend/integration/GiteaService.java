@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
+import com.legymernok.backend.service.mission.MissionFilePatterns;
 import java.util.regex.Pattern;
 
 @Service
@@ -242,8 +243,11 @@ public class GiteaService {
     // készítő által megadott kezdő kódváz (lehet üres is), ez kerül át a
     // kadéthoz solution.<ext> néven, hogy a tesztek importja (pl. "from
     // solution import add") érvényben maradjon.
-    private static final Pattern SOLUTION_FILE_PATTERN = Pattern.compile("^solution\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern STARTER_FILE_PATTERN = Pattern.compile("^starter\\.(js|ts|py)$", Pattern.CASE_INSENSITIVE);
+    // A minták a MissionFilePatterns-be kerültek, mert a RAG-indexelés (CodeFileChunker) is
+    // ugyanezt a "mit nem láthat a kadét" szabályt alkalmazza — két külön lista csendben
+    // szétcsúszhatna. Ld. plans/pr0_retrieval_security_2026.md 3.3.
+    private static final Pattern SOLUTION_FILE_PATTERN = MissionFilePatterns.SOLUTION;
+    private static final Pattern STARTER_FILE_PATTERN = MissionFilePatterns.STARTER;
 
     /**
      * Egy CODING misszió saját (Forge) repójának tartalmát másolja át egy

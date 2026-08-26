@@ -21,6 +21,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import { useAuth } from "../context/AuthContext";
+import { usePermission } from "../hooks/usePermission";
 import { useTranslation } from "react-i18next";
 import "../App.css";
 
@@ -59,6 +60,10 @@ const MainLayout: React.FC = () => {
   };
 
   const isAdmin = hasRole("ROLE_ADMIN");
+  // 2026-08-26: a Forge a kadétoknak már nem elérhető (ld.
+  // plans/pr0_retrieval_security_2026.md 2.4.1) — a linket is el kell rejteni, különben
+  // egy működésképtelen menüpontra kattintanának.
+  const canUseForge = usePermission("mission:create");
 
   return (
     <Box
@@ -149,9 +154,11 @@ const MainLayout: React.FC = () => {
                   <Button color="inherit" onClick={() => navigate("/sector-map")}>
                     {t("nav.sectorMap")}
                   </Button>
-                  <Button color="inherit" onClick={() => navigate("/my-forge")}>
-                    {t("nav.myForge")}
-                  </Button>
+                  {canUseForge && (
+                    <Button color="inherit" onClick={() => navigate("/my-forge")}>
+                      {t("nav.myForge")}
+                    </Button>
+                  )}
                   <IconButton
                     color="inherit"
                     aria-label={t("nav.account")}
@@ -214,9 +221,11 @@ const MainLayout: React.FC = () => {
                 <ListItemButton onClick={() => go("/sector-map")}>
                   <ListItemText primary={t("nav.sectorMap")} />
                 </ListItemButton>
-                <ListItemButton onClick={() => go("/my-forge")}>
-                  <ListItemText primary={t("nav.myForge")} />
-                </ListItemButton>
+                {canUseForge && (
+                  <ListItemButton onClick={() => go("/my-forge")}>
+                    <ListItemText primary={t("nav.myForge")} />
+                  </ListItemButton>
+                )}
                 <ListItemButton onClick={() => go("/profile")}>
                   <ListItemText primary={t("nav.profile")} />
                 </ListItemButton>
