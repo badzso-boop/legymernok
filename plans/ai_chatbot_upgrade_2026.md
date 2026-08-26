@@ -115,7 +115,7 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
       chunk_index INT NOT NULL,
       chunk_text TEXT NOT NULL,
       content_embedding vector(768),
-      search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', chunk_text)) STORED,
+      search_vector tsvector GENERATED ALWAYS AS (to_tsvector('hungarian', chunk_text)) STORED,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CONSTRAINT content_chunks_source_type_check CHECK (source_type IN ('MISSION', 'MISSION_FILL_IN_BLANK', 'MISSION_CODE_FILE')),
       CONSTRAINT content_chunks_unique_chunk UNIQUE (source_type, source_id, file_path, chunk_index)
@@ -187,7 +187,7 @@ Norbi feladata és explicit meg van jelölve minden fázisnál.
 - **Új** `backend/.../service/rag/HybridRetrievalService.java`:
   - `List<ContentChunkDto> retrieveMissionChunks(String query, int topK)` — embedeli a kérdést,
     lefuttatja a `vectorSearch()`-öt (koszinusz-ANN a `content_chunks`-on) és a `fullTextSearch()`-öt
-    (`ts_rank` + `plainto_tsquery('simple', ?)`), mindkettő `topK*3`-at hoz le, `rrfMerge()`-dzsel
+    (`ts_rank` + `plainto_tsquery('hungarian', ?)`), mindkettő `topK*3`-at hoz le, `rrfMerge()`-dzsel
     egyesítve.
   - `static List<ContentChunkDto> rrfMerge(List<ContentChunkDto> a, List<ContentChunkDto> b, int topK)`
     — pure function, `k=60`, chunk-id szerinti dedup, `1/(60+rank)` összegzés, csökkenő rendezés —
@@ -450,6 +450,81 @@ ezt érdemes lesz kipróbálni a saját gépén elérhető modellekkel).
 | **Semmi** az ai-service streaminghez | — | `StreamingResponse` (fastapi, már megvan) + `httpx.AsyncClient.stream()` (httpx, már megvan) lefedi az NDJSON-továbbítást — `sse-starlette` nem kell. |
 | **Semmi** a frontendhez | — | A kézzel írt `fetch()`+`ReadableStream` SSE-parse (~20 sor) ezen a léptéken nem indokol külön libet. |
 | **Semmi** az evalhoz | — | Az admin UI-alapú eval (PR #4, újratervezve) a meglévő Java retrieval-service-eket hívja közvetlenül — nincs külön Python-implementáció, tehát a korábban tervezett `psycopg[binary]` sem kell. |
+
+## Embedding-hívás — task-prefixek és modell-verziózás (2026-08-26)
+
+### A hiba
+
+Az `AiEmbeddingService.embed(String text)` egyetlen metódus, amit a kód **dokumentum-
+beágyazásra és kérdés-beágyazásra egyaránt** használ, nyers szöveggel. A jelenlegi
+`EMBED_MODEL` (`nomic-embed-text`, v1.5) viszont **task-prefixekkel van tanítva**: a
+dokumentumokat `search_document: ` , a lekérdezéseket `search_query: ` prefixszel várja. A
+prefixek nélkül a kérdés- és a dokumentum-vektorok nem ugyanabba az altérbe esnek, és a
+koszinusz-hasonlóság mérhetően romlik — ez egy csendes minőségromlás, ami semmilyen hibát
+nem dob, csak rosszabb találatokat ad.
+
+Ez a hiba a **jelenlegi, élő** csillagrendszer-keresést is érinti, nem csak a tervezett
+chunk-retrievalt.
+
+### A javítás
+
+`AiEmbeddingService` két explicit metódust kap a mai egy helyett:
+
+```java
+public float[] embedDocument(String text)   // documentPrefix + text
+public float[] embedQuery(String text)      // queryPrefix + text
+```
+
+A régi, kétértelmű `embed(String)` **megszűnik** — nem marad meg deprecated alakban sem,
+mert pont az a hibaforrás, hogy hívás helyén nem derül ki, melyik oldalról van szó. Minden
+hívási helyet át kell nézni és a megfelelőre cserélni:
+
+| Hívási hely | Melyik |
+|---|---|
+| `StarSystemService.generateAndSaveEmbedding()` | `embedDocument` |
+| `ContentChunkingService` minden reindex-ága (PR #1) | `embedDocument` |
+| `ChatService` szemantikus keresés | `embedQuery` |
+| `HybridRetrievalService.retrieveMissionChunks()` (PR #2) | `embedQuery` |
+| `EvalService.runRetrievalFor()` (PR #4) | `embedQuery` |
+
+**A prefix konfigurálható, nem beégetett** — mert modell-specifikus. Egy nem-nomic modellre
+váltva a prefix nem javít, hanem ront:
+
+```properties
+ai.embed.document-prefix=${AI_EMBED_DOCUMENT_PREFIX:search_document: }
+ai.embed.query-prefix=${AI_EMBED_QUERY_PREFIX:search_query: }
+```
+
+Üres értékre állítva a viselkedés a mostani (prefix nélküli) — tehát egy modellváltás nem
+igényel kódmódosítást, csak env-változót.
+
+### Kötelező következmény: teljes újraindexelés
+
+A prefix megváltoztatja a vektorteret, tehát **a már tárolt embeddingek érvénytelenné
+válnak** — nem hibásak szintaktikailag, csak egy másik tér pontjai, és a hasonlóságuk az új
+kérdés-vektorokhoz értelmetlen. A javítás bevezetésekor **kötelező** lefuttatni mindkét
+reindexet:
+
+```
+POST /api/admin/reindex-star-systems
+POST /api/admin/reindex-content          (PR #1 hozza be)
+```
+
+Ez nem opcionális karbantartás — nélküle a keresés rosszabb lesz, mint a javítás előtt volt,
+mert a két oldal biztosan eltérő prefixeltségű lenne.
+
+### Kapcsolódó, még nyitott hiányosság: nincs modell-verzió az adatban
+
+A `content_embedding vector(768)` dimenzió be van égetve a sémába, és **sehol nincs
+eltárolva, melyik modellel/prefixszel készült egy adott vektor**. Emiatt egy modellváltás
+(vagy ez a prefix-javítás) csendben inkonzisztens állapotot hagy, amíg valaki kézzel le nem
+futtatja a reindexet — semmi nem jelzi, hogy ez megtörtént-e.
+
+Egy `embedding_model VARCHAR(64)` oszlop a `content_chunks`-on (és a `star_systems`-en)
+megoldaná: a retrieval figyelmeztethetne, ha a tárolt érték eltér az aktuális
+`EMBED_MODEL`-től, és a reindex célzottan csak az elavult sorokat érintené. **Ez tudatosan
+NEM része ennek a körnek** — először a prefix-javítás és a hozzá tartozó teljes reindex
+menjen ki, a verziózás egy külön, kisebb kör tárgya.
 
 ## Lokális futtatás — mért teljesítmény és a timeout-lánc (2026-08-26)
 

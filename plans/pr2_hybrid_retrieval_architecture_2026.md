@@ -123,7 +123,7 @@ kellene).
 |---|---|---|
 | `retrieveMissionChunks` | `List<ContentChunkDto> retrieveMissionChunks(String query, int topK)` | A fő belépési pont — embedeli a query-t, lefuttatja a két keresést, `rrfMerge()`-dzsel egyesíti. Ld. 4.1. |
 | `vectorSearch` | `private List<ContentChunkDto> vectorSearch(String vectorStr, int limit)` | Koszinusz-ANN a `content_chunks.content_embedding`-en, a `StarSystemService.searchByEmbedding()` mintáját követve. Ld. 4.2. |
-| `fullTextSearch` | `private List<ContentChunkDto> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('simple', ?)`. Ld. 4.2. |
+| `fullTextSearch` | `private List<ContentChunkDto> fullTextSearch(String query, int limit)` | Postgres full-text keresés a generált `search_vector` (PR #1 séma) oszlopon, `ts_rank` + `plainto_tsquery('hungarian', ?)`. Ld. 4.2. |
 | `rrfMerge` | `static List<ContentChunkDto> rrfMerge(List<ContentChunkDto> a, List<ContentChunkDto> b, int topK)` | **Pure static function** — a fő unit-teszt célpont, nincs szüksége semmilyen mockra. Ld. 4.3. |
 | `mapRow` | `private ContentChunkDto mapRow(ResultSet rs)` | Közös `RowMapper`-logika a két keresési metódushoz (ne duplikálódjon a mezőkiolvasás). |
 
@@ -171,9 +171,9 @@ private List<ContentChunkDto> fullTextSearch(String query, int limit) {
     return jdbcTemplate.query(
         """
         SELECT id, source_type, source_id, file_path, chunk_index, chunk_text,
-               ts_rank(search_vector, plainto_tsquery('simple', ?)) AS score
+               ts_rank(search_vector, plainto_tsquery('hungarian', ?)) AS score
         FROM content_chunks
-        WHERE search_vector @@ plainto_tsquery('simple', ?)
+        WHERE search_vector @@ plainto_tsquery('hungarian', ?)
         ORDER BY score DESC
         LIMIT ?
         """,
@@ -186,10 +186,37 @@ private List<ContentChunkDto> fullTextSearch(String query, int limit) {
 Ez 1:1 a `StarSystemService.searchByEmbedding()` (`StarSystemService.java`, 416-435. sor)
 JDBC-mintáját követi (`1 - (embedding <=> ?::vector) AS similarity`-stílus), csak a
 `content_chunks` táblára és a PR #1-ben már meglévő `search_vector` generált oszlopra
-alkalmazva. A `?::vector` cast és a `plainto_tsquery('simple', ?)` (nem `english`/`hungarian`
-szótár — a `search_vector` is `'simple'` konfigurációval lett generálva a PR #1 migrációban,
-ennek egyeznie KELL, különben a full-text index nem használódik hatékonyan) pontosan
-lekövetik a PR #1 séma-döntéseit.
+alkalmazva.
+
+**2026-08-26-i javítás — `'simple'` helyett `'hungarian'`.** A terv eredetileg a `'simple'`
+konfigurációt írta elő, azzal az indoklással, hogy a generált oszlopnak és a lekérdezésnek
+egyeznie kell. **Az egyezés követelménye igaz és továbbra is érvényes** (ha a két oldal
+eltérne, a GIN-index nem használódna) — de a `'simple'` konfiguráció **nem végez
+szótövezést**, ami magyar szövegen gyakorlatilag működésképtelenné teszi a lexikális ágat:
+
+| kérdésben | indexelt szövegben | `'simple'` talál? | `'hungarian'` talál? |
+|---|---|---|---|
+| „függvényt" | „függvény" | nem | igen |
+| „misszióban" | „misszió" | nem | igen |
+| „változókról" | „változó" | nem | igen |
+
+Mivel a platform teljes tartalma és a kadétok kérdései is magyarul vannak, a `'simple'`
+mellett a hibrid keresés lexikális fele szinte sosem járult volna hozzá az RRF-hez — pont az
+a vakfolt-kiegészítés veszett volna el, amit a 4.4 szakasz olyan részletesen indokol. A
+Postgres beépített `hungarian` snowball-konfigurációja ezt orvosolja, extra telepítés nélkül.
+
+**Mindkét oldalt egyszerre kell átállítani**: a PR #1 `V10` migrációjának generált oszlopát
+(`to_tsvector('hungarian', chunk_text)`) ÉS az itteni lekérdezéseket. Ha csak az egyik
+változna, a `search_vector @@ plainto_tsquery(...)` feltétel néma nulla találatot adna.
+
+**Ismert korlát, amit érdemes kimondani**: a kódfájl-chunkoknál (`MISSION_CODE_FILE`) a
+magyar szótövezés nem segít, sőt enyhén ronthat is (az azonosítók, pl. `osszead`, nem magyar
+szavak) — ott a lexikális ág értéke amúgy is inkább a pontos azonosító-egyezésben van, amit
+a szótövezés nem bánt el érdemben. Ez elfogadható kompromisszum egyetlen közös
+konfigurációért cserébe; ha valaha mérhetően problémát okoz, a `MISSION_CODE_FILE` chunkokhoz
+külön `search_vector_code` oszlop (`'simple'`) lenne a megoldás.
+
+A `?::vector` cast pontosan leköveti a PR #1 séma-döntéseit.
 
 ### 4.3 `rrfMerge()` — pure function, a fő teszt-célpont
 
@@ -440,6 +467,98 @@ leírt, "MDC-mezők láthatatlanok maradnának" megállapítást — ez a PR pon
 
 **Új konstruktor-függőségek `ChatService`-ben**: `hybridRetrievalService`,
 `rerankingService` — a `@RequiredArgsConstructor` automatikusan felveszi.
+
+## 6.5 `RetrievedItem` — a közös retrieval-típus (2026-08-26-i kiegészítés)
+
+### A befoltozandó lyuk
+
+A 2026-08-26-i átvizsgálás egy típus-lyukat talált a PR #2 és a PR #4 között:
+
+- A PR #4 `matchesAny()`-je (`pr4_observability_eval_architecture_2026.md` 5.1) egy
+  `List<RetrievalResult>` típusra hivatkozik, és `result.sourceName`-et olvas — **ez a típus
+  sehol nincs definiálva**, a `sourceName` mező pedig nem létezik.
+- A `ContentChunkDto`-ban csak `sourceId` (UUID) van, névből semmi — tehát az
+  `eval_run_results.top_result_name VARCHAR(255)` oszlopot **nincs miből feltölteni**.
+- A `ChatService.buildContextLines()` misszió-blokkja emiatt csak a nyers chunk-szöveget
+  fűzi be, **forrás-megjelölés nélkül** — szemben a csillagrendszer-blokkal, ami nevet is ad.
+  A modell így nem tud hivatkozni arra, honnan vette az információt, a felhasználó pedig nem
+  tud odanavigálni. Egy RAG-rendszernél a forrás-hivatkozás nem extra, hanem alapelvárás.
+
+Mindhárom ugyanabból ered: **nincs egyetlen, közös típus, amiben a kétféle retrieval-ág
+eredménye összehasonlítható formában megjelenik.**
+
+### A megoldás
+
+```java
+package com.legymernok.backend.dto.rag;
+
+/**
+ * A retrieval kétféle ágának (csillagrendszer flat keresés + misszió-chunk hibrid keresés)
+ * KÖZÖS eredmény-típusa. Ezt fogyasztja a ChatService kontextus-építése ÉS a PR #4
+ * EvalService hit-rate számítása — így a két oldal garantáltan ugyanazt látja.
+ */
+public record RetrievedItem(
+    String sourceType,   // STAR_SYSTEM | MISSION | MISSION_FILL_IN_BLANK | MISSION_CODE_FILE
+    UUID sourceId,       // star system ID vagy mission ID
+    String sourceName,   // a csillagrendszer neve, vagy a misszió neve
+    String filePath,     // "" minden nem-kódfájl forrásnál
+    String text,         // a chunk szövege, vagy a csillagrendszer leírása
+    double score
+) {}
+```
+
+**A `sourceName` a `missions` táblából jön, JOIN-nal** — most már triviálisan, mert a
+2026-08-26-i FK (`source_id REFERENCES missions(id)`) garantálja, hogy minden chunkhoz
+tartozik pontosan egy misszió:
+
+```sql
+SELECT cc.id, cc.source_type, cc.source_id, m.name AS source_name,
+       cc.file_path, cc.chunk_index, cc.chunk_text,
+       <score-kifejezés> AS score
+FROM content_chunks cc
+JOIN missions m ON m.id = cc.source_id
+...
+```
+
+A JOIN mindkét keresési ágba (`vectorSearch`, `fullTextSearch`) bekerül, a `mapRow()` pedig
+`RetrievedItem`-et állít elő `ContentChunkDto` helyett.
+
+**A `ContentChunkDto` megszűnik**, és mindenhol `RetrievedItem` váltja fel (a PR #1
+indexelési útvonala amúgy sem használta érdemben — ott a belső `PendingChunk` rekord
+dolgozik). Egy DTO kevesebb, és nem marad két, majdnem-egyforma típus, amik között
+konvertálgatni kellene.
+
+**A `StarSystemSearchResult` nem szűnik meg** (más helyeken is használt), de a `ChatService`
+egy kis mapper-metódussal `RetrievedItem`-mé alakítja:
+`new RetrievedItem("STAR_SYSTEM", r.getId(), r.getName(), "", r.getDescription(), r.getSimilarity())`.
+
+### Forrás-megjelölés a chat-kontextusban
+
+A `buildContextLines()` misszió-blokkja ezzel értelmes hivatkozást tud adni:
+
+```java
+if (!missionItems.isEmpty()) {
+    StringBuilder sb = new StringBuilder("Releváns misszió-részletek:");
+    for (RetrievedItem item : missionItems) {
+        sb.append("\n  - [misszió: \"").append(item.sourceName()).append("\"");
+        if (!item.filePath().isBlank()) {
+            sb.append(", fájl: ").append(item.filePath());
+        }
+        sb.append("] ").append(truncate(item.text(), 300));
+    }
+    lines.add(sb.toString());
+}
+```
+
+A `SYSTEM_PROMPT` egy új szabállyal egészül ki, hogy a modell ténylegesen éljen is vele:
+*„Ha a válaszod a kapott misszió-részleteken alapul, említsd meg a misszió nevét, ahonnan az
+információ származik."*
+
+### Amit ez a PR #4-ben old meg
+
+A `matchesAny()` innentől `List<RetrievedItem>`-en dolgozik — a `sourceType`, `sourceName` és
+`text` mezők mind léteznek, a `top_result_name` pedig `items.get(0).sourceName()`. A PR #4
+doksijának 5.1 szakaszában szereplő, definiálatlan `RetrievalResult` típus erre cserélendő.
 
 ## 7. Class diagram
 

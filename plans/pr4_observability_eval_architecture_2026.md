@@ -346,6 +346,33 @@ PR #2 hibrid retrieval-jénél; egy pontos szó-egyezés túl törékeny lenne e
 rendszer eval-jéhez, ahol a cél a "megtalálta-e a releváns forrást", nem a szó szerinti
 egyezés.)
 
+**2026-08-26-i javítás — a `RetrievalResult` típus definiálva lett.** A fenti pszeudokód egy
+`List<RetrievalResult>` típusra és egy `result.sourceName` mezőre hivatkozott, **amik sehol
+nem voltak definiálva** — a `ContentChunkDto`-ban ugyanis csak `sourceId` (UUID) volt, névből
+semmi, tehát a `top_result_name VARCHAR(255)` oszlopot nem lett volna miből feltölteni.
+
+A hiányzó típus a PR #2-ben lett pótolva: **`RetrievedItem`**
+(`dto/rag/RetrievedItem.java`, ld. `pr2_hybrid_retrieval_architecture_2026.md` 6.5 szakasz) —
+egy közös rekord, amit MINDKÉT retrieval-ág termel (csillagrendszer flat keresés és
+misszió-chunk hibrid keresés), és amit a `ChatService` kontextus-építése ÉS az itteni
+`matchesAny()` egyaránt fogyaszt:
+
+```java
+public record RetrievedItem(
+    String sourceType, UUID sourceId, String sourceName,
+    String filePath, String text, double score
+) {}
+```
+
+Ez a fenti pszeudokódot változtatás nélkül működőképessé teszi (`result.sourceType`,
+`result.sourceName`, `result.text` mind létező mezők), és a `top_result_name` értéke
+`results.get(0).sourceName()`. A `sourceName` a `missions` táblából jön JOIN-nal — ezt a
+2026-08-26-i `source_id REFERENCES missions(id)` FK teszi garantáltan lehetségessé.
+
+**Egy apró, de fontos igazítás a `matchesAny()`-ben**: a `result.chunkText` helyett
+`result.text()` a mező neve (a `RetrievedItem` a csillagrendszer-leírást is ugyanebben a
+mezőben hordozza, ezért nem `chunkText` a neve).
+
 ### 5.2 Az LLM-judge lépés — **ELDÖNTVE Norberttel (2026-08-25)**
 
 A fő terv csak ennyit mondott: *"Opcionális LLM-judge lépés (checkbox a UI-n) —
