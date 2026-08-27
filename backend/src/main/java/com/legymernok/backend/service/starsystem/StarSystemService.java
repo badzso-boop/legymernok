@@ -383,13 +383,13 @@ public class StarSystemService {
                 + (ss.getDescription() != null ? " - " + ss.getDescription() : "")
                 + (missionNames.isEmpty() ? "" : ". Missziók: " + String.join(", ", missionNames));
 
-        float[] embedding = embeddingService.embed(text);
+        AiEmbeddingService.Embedding embedding = embeddingService.embedDocument(text);
         if (embedding == null) {
             log.warn("Embedding generation failed for StarSystem {}", starSystemId);
             return;
         }
 
-        String vectorStr = embeddingService.toVectorString(embedding);
+        String vectorStr = embeddingService.toVectorString(embedding.vector());
         jdbcTemplate.update(
                 "UPDATE star_systems SET content_embedding = ?::vector WHERE id = ?::uuid",
                 vectorStr, starSystemId.toString()
