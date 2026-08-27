@@ -8,6 +8,7 @@ import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.service.rag.ContentChunkingService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.mission.MissionStatus;
 import com.legymernok.backend.model.auth.Permission;
@@ -67,6 +68,7 @@ class MissionServiceTest {
     @Mock private FillInBlankBlankRepository fillInBlankBlankRepository;
     @Mock private FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
     @Mock private MissionGroupRepository missionGroupRepository;
+    @Mock private ContentChunkingService contentChunkingService;
     @InjectMocks private MissionService missionService;
 
     private Cadet testUser;

@@ -37,6 +37,7 @@ class FillInBlankServiceTest {
     @Mock private FillInBlankAnswerDetailRepository answerDetailRepository;
     @Mock private CadetRepository cadetRepository;
     @Mock private com.legymernok.backend.service.streak.StreakService streakService;
+    @Mock private com.legymernok.backend.service.rag.ContentChunkingService contentChunkingService;
     @InjectMocks private FillInBlankService fillInBlankService;
 
     private Cadet testUser;
