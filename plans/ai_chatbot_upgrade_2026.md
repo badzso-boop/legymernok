@@ -134,7 +134,9 @@ részletek a PR #0 doksijában, mert egy összefüggő tervet alkotnak.
 > `GiteaService.collectAllFiles`), valamint a mergelés után kötelező lépések (teljes
 > újraindexelés MINDKÉT indexre, a `V10` kézi ellenőrzése) a
 > [`pr1_rag_chunking_architecture_2026.md`](pr1_rag_chunking_architecture_2026.md) 0.
-> szakaszában. A Testcontainers-alapú DB-tesztek **nem** kerültek bele — külön lépés.
+> szakaszában. A séma-szintű DB-tesztek **bekerültek** (`ContentChunkSchemaIT`, saját
+> `Backend Schema Tests` CI-jobbal), de nem Testcontainersszel, hanem a `docker` CLI-n
+> keresztül — a Testcontainers nem tud együttműködni a Docker Engine 29+-szal.
 
 
 - **Új migráció** `backend/src/main/resources/db/migration/V10__create_content_chunks.sql`:

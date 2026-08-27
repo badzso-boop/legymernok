@@ -17,7 +17,7 @@ Ez a dokumentum már nem csak terv: a PR #1 megvalósult. Ami az implementáció
 | `AiEmbeddingService.embedDocument(String) : float[]` | `embedDocument`/`embedQuery` egy `Embedding(float[] vector, String model)` rekordot ad vissza | a `content_chunks.embedding_model` oszlopot ki kell tölteni, a modellnevet pedig az ai-service `/embed` válasza adja — így nem kell külön konfig-forrásból kitalálni, melyik modell készítette a vektort. |
 | `org.mozilla:rhino:1.7.15.1` | `org.mozilla:rhino:1.7.15` | ez a Maven Centralból ténylegesen feloldható verzió (ellenőrizve). |
 | `reindexCodingMissionFilesFromGitea` közvetlenül `getRepoContents()`-t jár be rekurzívan | `GiteaService.collectAllFiles(owner, repo)` publikus wrapper, ami a már meglévő privát `collectFilesRecursive()`-et használja | a rekurzív bejárás már létezett a `GiteaService`-ben — újraírni belőle egy másodikat pontosan az a fajta duplikáció, amiből később csendben szétcsúszó viselkedés lesz. |
-| 10.1 Testcontainers-alapú DB-tesztek | **NINCS benne ebben a PR-ban** | önálló infrastruktúra-lépés (új teszt-scope függőség + új CI-job, mert a jelenlegi `-Dtest=...service.**,...config.**` szűrő nem futtatná), és a PR #1 enélkül is reviewálható. A `V10` migráció ellenőrzése addig **kézi** (ld. lent). |
+| 10.1 **Testcontainers**-alapú DB-tesztek | megvannak, de **nem Testcontainersszel**: a `docker` CLI-t hajtja meg egy `DockerPostgres` teszt-helper | a Testcontainers (a jelenleg legfrissebb 1.21.3-ban is) fixen `1.32`-es Docker API-verziót küld, amit a Docker Engine 29+ visszautasít (`"client version 1.32 is too old. Minimum supported API version is 1.44"`). Kipróbálva: sem a `DOCKER_API_VERSION` env, sem a rendszertulajdonság, sem a `DOCKER_HOST` kényszerítése nem segít — a verzió a Testcontainersben van beégetve. A `docker` CLI mindig a saját daemonjához illő API-verziót használja, tehát ez verzió-független, és **nulla új Maven-függőséget** hoz be. Saját CI-job futtatja: `Backend Schema Tests`. |
 
 **Ami emiatt nyitva marad, és amit a mergelés UTÁN kötelező megtenni:**
 
@@ -30,8 +30,11 @@ Ez a dokumentum már nem csak terv: a PR #1 megvalósult. Ami az implementáció
    ```
    Enélkül a szemantikus keresés **rosszabb** lesz, mint a PR előtt volt, mert a kérdés- és a
    dokumentum-oldal biztosan eltérő prefixeltségű.
-2. **A `V10` migráció kézi ellenőrzése** egy valódi `pgvector/pgvector:pg16` ellen
-   (`SELECT count(*) FROM content_chunks;`, misszió törlése után 0 chunk marad).
+2. ~~A `V10` migráció kézi ellenőrzése~~ — **automatizálva**: a `ContentChunkSchemaIT` egy
+   valódi `pgvector/pgvector:pg16` konténer ellen futtatja a `V1`…`V10`-et, és ellenőrzi a
+   kaszkádot, a unique constraintet, a `hungarian` szótövezést, a `NOT NULL`-t és a
+   `visibility` CHECK-et. **Teendő neked**: a `Backend Schema Tests` jobot fel kell venni a
+   `Protect Main` ruleset kötelező status checkjei közé, különben lefut ugyan, de nem blokkol.
 3. **PR #0 prerekvizit**: a meglévő, kadét által írt tartalom leltára
    ([`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 2.4) — **a reindex éles
    adaton addig nem futtatható**.
@@ -430,7 +433,16 @@ Java-határon mockolva, NEM HTTP-szerveren keresztül):
 | `reindexAllMissions_countsProcessedMissions` | Mockolt `missionRepository.findAll()` 3 elemmel → visszatérési érték 3, `reindexMission` 3× hívva |
 | `deleteChunks_callsCorrectSql` | A DELETE SQL a helyes `source_type`/`source_id` paraméterekkel hívódik |
 
-### 10.1 Testcontainers-alapú DB-tesztek (ÚJ, 2026-08-26)
+### 10.1 Séma-szintű DB-tesztek (ÚJ, 2026-08-26 — IMPLEMENTÁLVA 2026-08-27)
+
+> **Megvalósítási megjegyzés**: az alábbi teszteket a `ContentChunkSchemaIT` tartalmazza, de
+> **nem Testcontainersszel** — ld. a 0. szakasz eltérés-tábláját. Egy `DockerPostgres`
+> teszt-helper indít/áll le egy `pgvector/pgvector:pg16` konténert a `docker` CLI-n keresztül.
+> A `vectorAndPgcryptoExtensionsAvailable` sor átnevezve
+> `vectorExtensionAndUuidGenerationAvailable`-re: a `pgcrypto`-t egyik migráció sem hozza létre,
+> a `gen_random_uuid()` PG13 óta beépített — tehát ezt bizonyítjuk, nem az extension meglétét.
+> Plusz egy hetedik eset: `visibilityCheckRejectsUnknownValues`.
+
 
 A `ContentChunkingServiceTest` Mockito-alapú marad (a `chunkText()` pure function és az
 embed-first sorrend ellenőrzéséhez nem kell DB). **Emellé** jön egy külön,
