@@ -6,6 +6,40 @@
 > ebben a körben — a cél, hogy implementáláskor ne kelljen tervezési döntést hozni menet
 > közben, csak lekövetni ezt a dokumentumot.
 
+## 0. Állapot — IMPLEMENTÁLVA (2026-08-27), a tervtől való eltérésekkel
+
+Ez a dokumentum már nem csak terv: a PR #1 megvalósult. Ami az implementáció közben
+*másképp* alakult, mint ahogy itt le van írva — mindegyik indoklással:
+
+| Terv | Ami lett | Miért |
+|---|---|---|
+| `chunkText()` a `ContentChunkingService` publikus metódusa, a `CodeFileChunker` erre esik vissza | az algoritmus külön `service/rag/strategy/TextChunker` komponensbe került; a `ContentChunkingService.chunkText()` megmaradt, de csak delegál | különben **körkörös Spring-függőség** lett volna: `ContentChunkingService` → `CodeFileChunker` → `ContentChunkingService`. A `TextChunker` semmitől nem függ, így mindkettő injektálhatja. |
+| `AiEmbeddingService.embedDocument(String) : float[]` | `embedDocument`/`embedQuery` egy `Embedding(float[] vector, String model)` rekordot ad vissza | a `content_chunks.embedding_model` oszlopot ki kell tölteni, a modellnevet pedig az ai-service `/embed` válasza adja — így nem kell külön konfig-forrásból kitalálni, melyik modell készítette a vektort. |
+| `org.mozilla:rhino:1.7.15.1` | `org.mozilla:rhino:1.7.15` | ez a Maven Centralból ténylegesen feloldható verzió (ellenőrizve). |
+| `reindexCodingMissionFilesFromGitea` közvetlenül `getRepoContents()`-t jár be rekurzívan | `GiteaService.collectAllFiles(owner, repo)` publikus wrapper, ami a már meglévő privát `collectFilesRecursive()`-et használja | a rekurzív bejárás már létezett a `GiteaService`-ben — újraírni belőle egy másodikat pontosan az a fajta duplikáció, amiből később csendben szétcsúszó viselkedés lesz. |
+| 10.1 Testcontainers-alapú DB-tesztek | **NINCS benne ebben a PR-ban** | önálló infrastruktúra-lépés (új teszt-scope függőség + új CI-job, mert a jelenlegi `-Dtest=...service.**,...config.**` szűrő nem futtatná), és a PR #1 enélkül is reviewálható. A `V10` migráció ellenőrzése addig **kézi** (ld. lent). |
+
+**Ami emiatt nyitva marad, és amit a mergelés UTÁN kötelező megtenni:**
+
+1. **Teljes újraindexelés mindkét indexre.** Az `embedDocument`/`embedQuery` task-prefixek
+   megváltoztatják a vektorteret, tehát a `star_systems.content_embedding` már tárolt értékei
+   **érvénytelenné válnak** — nem hibásak, csak egy másik tér pontjai:
+   ```
+   POST /api/admin/reindex-star-systems
+   POST /api/admin/reindex-content
+   ```
+   Enélkül a szemantikus keresés **rosszabb** lesz, mint a PR előtt volt, mert a kérdés- és a
+   dokumentum-oldal biztosan eltérő prefixeltségű.
+2. **A `V10` migráció kézi ellenőrzése** egy valódi `pgvector/pgvector:pg16` ellen
+   (`SELECT count(*) FROM content_chunks;`, misszió törlése után 0 chunk marad).
+3. **PR #0 prerekvizit**: a meglévő, kadét által írt tartalom leltára
+   ([`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 2.4) — **a reindex éles
+   adaton addig nem futtatható**.
+
+**Amit tudatosan NEM ez a PR old meg** (a `star_systems` tábla `embedding_model` oszlopa és a
+`StarSystemService.searchByEmbedding()` `ORDER BY`-javítása) — ezek a *meglévő* élő kódot
+érintik, külön, pár soros PR-ba valók, ahogy a fő terv is írja.
+
 ## 1. ⚠️ Egy pontatlanság a fő tervben, amit itt tisztázunk
 
 A `ai_chatbot_upgrade_2026.md` PR #1 szakasza ezt mondja a `reindexMission()`-ról:

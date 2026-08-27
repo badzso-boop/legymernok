@@ -129,6 +129,14 @@ részletek a PR #0 doksijában, mert egy összefüggő tervet alkotnak.
 
 ### PR #1 — RAG chunking backend
 
+> **Állapot: IMPLEMENTÁLVA (2026-08-27).** A tervtől való eltérések (külön `TextChunker`
+> komponens a körkörös függőség miatt, `Embedding` rekord a modellnévvel, Rhino 1.7.15,
+> `GiteaService.collectAllFiles`), valamint a mergelés után kötelező lépések (teljes
+> újraindexelés MINDKÉT indexre, a `V10` kézi ellenőrzése) a
+> [`pr1_rag_chunking_architecture_2026.md`](pr1_rag_chunking_architecture_2026.md) 0.
+> szakaszában. A Testcontainers-alapú DB-tesztek **nem** kerültek bele — külön lépés.
+
+
 - **Új migráció** `backend/src/main/resources/db/migration/V10__create_content_chunks.sql`:
   ```sql
   CREATE TABLE IF NOT EXISTS content_chunks (
