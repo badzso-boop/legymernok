@@ -72,10 +72,10 @@ public class ChatService {
         // 1. Szemantikus keresés
         List<StarSystemSearchResult> relevant = List.of();
         try {
-            float[] vector = embeddingService.embed(request.message());
+            AiEmbeddingService.Embedding vector = embeddingService.embedQuery(request.message());
             if (vector != null) {
                 relevant = starSystemService.searchByEmbedding(
-                        embeddingService.toVectorString(vector), 3);
+                        embeddingService.toVectorString(vector.vector()), 3);
             }
         } catch (Exception e) {
             log.warn("Semantic search failed during chat: {}", e.getMessage());

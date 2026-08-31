@@ -63,6 +63,38 @@ jobs:
         run: ./mvnw test -Dtest=com.legymernok.backend.web.**
 
   # ---------------------------------------------------------------------------
+  # Backend Schema Tests (Testcontainers — valodi Postgres)
+  #
+  # Kulon job, mert a fenti ket job fix -Dtest= szuroje (service/config, illetve web)
+  # NEM illeszkedne a migration csomagra — ott a teszt csendben sose futna le, ami
+  # rosszabb, mintha nem is lenne. A GitHub-hostolt ubuntu-latest runneren elo van
+  # telepitve a Docker, a Testcontainers ezt hasznalja extra konfig nelkul.
+  # ---------------------------------------------------------------------------
+  backend-schema-test:
+    name: Backend Schema Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Build with Maven (Skip Tests)
+        run: ./mvnw clean package -DskipTests
+
+      - name: Run Schema Tests (Flyway + pgvector)
+        run: ./mvnw test -Dtest=com.legymernok.backend.migration.**
+
+  # ---------------------------------------------------------------------------
   # Frontend Unit Tests (Vitest)
   # ---------------------------------------------------------------------------
   frontend-unit-test:

@@ -369,6 +369,19 @@ public class GiteaService {
         return cadetFiles;
     }
 
+    /**
+     * Egy repó ÖSSZES fájlja (rekurzívan, alkönyvtárakkal együtt), útvonal → tartalom map-ként.
+     *
+     * <p>A RAG-indexelés használja ({@code ContentChunkingService.reindexCodingMissionFilesFromGitea}),
+     * ahol nincs memóriában lévő fájl-map. A {@code getRepoContents()} csak metaadatot ad, tartalmat
+     * nem — ezért kell fájlonként egy {@code getFileContent()} hívás is.
+     */
+    public Map<String, String> collectAllFiles(String owner, String repoName) {
+        Map<String, String> files = new HashMap<>();
+        collectFilesRecursive(owner, repoName, "", files);
+        return files;
+    }
+
     private void collectFilesRecursive(String owner, String repoName, String path, Map<String, String> collection) {
         List<GiteaContent> contents = getRepoContents(owner, repoName, path);
         for (GiteaContent content : contents) {

@@ -9,6 +9,7 @@ import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
 import com.legymernok.backend.exception.UnauthorizedAccessException;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.service.rag.ContentChunkingService;
 import com.legymernok.backend.model.ConnectTable.CadetMission;
 import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.mission.Mission;
@@ -66,6 +67,7 @@ public class MissionService {
     private final FillInBlankBlankRepository fillInBlankBlankRepository;
     private final FillInBlankDefinitionRepository fillInBlankDefinitionRepository;
     private final MissionGroupRepository missionGroupRepository;
+    private final ContentChunkingService contentChunkingService;
 
     @Value("${gitea.template.js.owner}")
     private String jsTemplateRepoOwner;
@@ -193,6 +195,12 @@ public class MissionService {
             giteaService.uploadFiles(repoOwner, repoName, request.getFiles(), commitMsg, currentUser);
         } else {
             log.warn("Mission '{}' content saved without any files. Mission ID: {}", mission.getName(), mission.getId());
+        }
+
+        // A kódfájlok RAG-indexe csak CODING missziónál értelmezett — QUIZ-nél ez az útvonal
+        // egyetlen quiz.json-t küld, ami amúgy sem indexelhető (és a megoldókulcsot tartalmazza).
+        if (mission.getMissionType() == MissionType.CODING) {
+            contentChunkingService.reindexCodingMissionFiles(mission.getId(), request.getFiles());
         }
 
         // Státusz frissítése PENDING-re, mert új kód került feltöltésre, amit tesztelni kell.
@@ -532,6 +540,8 @@ public class MissionService {
         }
 
         log.info("Admin mission '{}' (ID: {}) created by '{}'.", saved.getName(), saved.getId(), currentUser.getUsername());
+
+        contentChunkingService.reindexMission(saved.getId());
         return mapToResponse(saved);
     }
 
@@ -585,6 +595,8 @@ public class MissionService {
         missionToUpdate.setUpdatedAt(Instant.now());
 
         Mission updatedMission = missionRepository.save(missionToUpdate);
+
+        contentChunkingService.reindexMission(updatedMission.getId());
         return mapToResponse(updatedMission);
     }
 
@@ -736,7 +748,12 @@ public class MissionService {
         requireMissionEditAccess(mission, currentUser);
 
         mission.setContent(content);
-        return mapToResponse(missionRepository.save(mission));
+        Mission saved = missionRepository.save(mission);
+
+        // Ez a `content` mező KIZÁRÓLAGOS módosítási útvonala — enélkül a leggyakoribb
+        // tartalom-módosítás sose indexelődne újra.
+        contentChunkingService.reindexMission(saved.getId());
+        return mapToResponse(saved);
     }
 
     @Transactional
