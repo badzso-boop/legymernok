@@ -18,6 +18,8 @@ Ez a dokumentum már nem csak terv: a PR #1 megvalósult. Ami az implementáció
 | `org.mozilla:rhino:1.7.15.1` | `org.mozilla:rhino:1.7.15` | ez a Maven Centralból ténylegesen feloldható verzió (ellenőrizve). |
 | `reindexCodingMissionFilesFromGitea` közvetlenül `getRepoContents()`-t jár be rekurzívan | `GiteaService.collectAllFiles(owner, repo)` publikus wrapper, ami a már meglévő privát `collectFilesRecursive()`-et használja | a rekurzív bejárás már létezett a `GiteaService`-ben — újraírni belőle egy másodikat pontosan az a fajta duplikáció, amiből később csendben szétcsúszó viselkedés lesz. |
 | 10.1 **Testcontainers**-alapú DB-tesztek | megvannak, de **nem Testcontainersszel**: a `docker` CLI-t hajtja meg egy `DockerPostgres` teszt-helper | a Testcontainers (a jelenleg legfrissebb 1.21.3-ban is) fixen `1.32`-es Docker API-verziót küld, amit a Docker Engine 29+ visszautasít (`"client version 1.32 is too old. Minimum supported API version is 1.44"`). Kipróbálva: sem a `DOCKER_API_VERSION` env, sem a rendszertulajdonság, sem a `DOCKER_HOST` kényszerítése nem segít — a verzió a Testcontainersben van beégetve. A `docker` CLI mindig a saját daemonjához illő API-verziót használja, tehát ez verzió-független, és **nulla új Maven-függőséget** hoz be. Saját CI-job futtatja: `Backend Schema Tests`. |
+| 12.7.1: a `MissionFilePatterns.SOLUTION` illesztését a `CodeFileChunker` végzi | az illesztés a `ContentChunkingService.isReferenceSolution()`-ben van | a `visibility` a beszúrandó `PendingChunk`-ra dől el, azt pedig a `ContentChunkingService` állítja össze — a `CodeFileChunker` csak `List<String>` chunkokat ad vissza, fájl-metaadatot nem. A 12.7.1 **lényege sértetlen**: a minta továbbra is egyetlen helyről, a közös `MissionFilePatterns`-ből jön, nincs duplikált lista, ami csendben szétcsúszhatna. |
+| 12.11: `chunkFile_unindexableExtension_returnsEmpty` | `chunkFile_unindexableExtension_fallsBackToTextChunker` | a `chunkFile()` nem üres listát ad ismeretlen kiterjesztésre, hanem a `TextChunker`-re esik vissza — a **szűrés a hívó oldalon** történik (`isIndexableSourceFile()`), így a `README.md` így sem kerül az indexbe. Ezt a `reindexCodingMissionFiles_marksSolutionAuthorOnly` külön assertálja. |
 
 **Ami emiatt nyitva marad, és amit a mergelés UTÁN kötelező megtenni:**
 
@@ -33,11 +35,15 @@ Ez a dokumentum már nem csak terv: a PR #1 megvalósult. Ami az implementáció
 2. ~~A `V10` migráció kézi ellenőrzése~~ — **automatizálva**: a `ContentChunkSchemaIT` egy
    valódi `pgvector/pgvector:pg16` konténer ellen futtatja a `V1`…`V10`-et, és ellenőrzi a
    kaszkádot, a unique constraintet, a `hungarian` szótövezést, a `NOT NULL`-t és a
-   `visibility` CHECK-et. **Teendő neked**: a `Backend Schema Tests` jobot fel kell venni a
-   `Protect Main` ruleset kötelező status checkjei közé, különben lefut ugyan, de nem blokkol.
-3. **PR #0 prerekvizit**: a meglévő, kadét által írt tartalom leltára
-   ([`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 2.4) — **a reindex éles
-   adaton addig nem futtatható**.
+   `visibility` CHECK-et. ~~**Teendő neked**: a `Backend Schema Tests` jobot fel kell venni a
+   `Protect Main` ruleset kötelező status checkjei közé~~ — **kész (2026-08-31)**, a job
+   kötelező status check.
+3. ~~**PR #0 prerekvizit**: a meglévő, kadét által írt tartalom leltára
+   ([`pr0_retrieval_security_2026.md`](pr0_retrieval_security_2026.md) 2.4) — a reindex éles
+   adaton addig nem futtatható~~ — **tárgytalan (2026-08-31)**: Norbi megerősítette, hogy az
+   adatbázisban jelenleg **kizárólag tesztadat** van, éles kadét-tartalom nincs. A reindex
+   tehát szabadon futtatható. Ha később valódi kadét-tartalom kerül be, a 2.4 leltár újra
+   előfeltétellé válik.
 
 **Amit tudatosan NEM ez a PR old meg** (a `star_systems` tábla `embedding_model` oszlopa és a
 `StarSystemService.searchByEmbedding()` `ORDER BY`-javítása) — ezek a *meglévő* élő kódot

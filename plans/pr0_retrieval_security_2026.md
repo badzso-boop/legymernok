@@ -126,6 +126,12 @@ HAVING count(ss.id) > 0 OR count(m.id) > 0;
 nem futtatható éles adaton** — mert pont az a tartalom kerülne be, ami elől a jogelvétel
 véd.
 
+> **Állapot (2026-08-31): tárgytalan, egyelőre.** Norbi megerősítette, hogy az adatbázisban
+> jelenleg **kizárólag tesztadat** van — éles, kadét által írt tartalom nincs. A fenti leltár
+> tehát most nem blokkolja a PR #1 reindexét. **A lekérdezés viszont maradjon meg**: mihelyt
+> valódi kadét-forgalom indul, ez a leltár újra előfeltétele lesz minden teljes
+> újraindexelésnek.
+
 ### 2.4.1 Frontend — a létrehozó gombok elrejtése
 
 A „+ Új csillagrendszer" / „+ Új misszió" gombokat is el kell rejteni a kadét elől. Enélkül a
