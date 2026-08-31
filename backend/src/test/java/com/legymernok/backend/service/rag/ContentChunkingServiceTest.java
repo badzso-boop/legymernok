@@ -218,4 +218,16 @@ class ContentChunkingServiceTest {
 
         verify(giteaService).collectAllFiles("legymernok_admin", coding.getId().toString());
     }
+
+    @Test
+    @DisplayName("deleteChunks a helyes source_type/source_id paraméterekkel adja ki a DELETE-et")
+    void deleteChunks_callsCorrectSql() {
+        UUID sourceId = UUID.randomUUID();
+
+        service.deleteChunks(ContentChunkingService.SOURCE_FILL_IN_BLANK, sourceId);
+
+        verify(jdbcTemplate).update(
+                "DELETE FROM content_chunks WHERE source_type = ? AND source_id = ?",
+                ContentChunkingService.SOURCE_FILL_IN_BLANK, sourceId);
+    }
 }
