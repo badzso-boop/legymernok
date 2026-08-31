@@ -119,9 +119,9 @@ frontend/src/
 | `/login` | LoginPage | Nem | |
 | `/register` | RegisterPage | Nem | |
 | `/changelog` | ChangelogPage | Nem | |
-| `/forge` | MissionForgePage | Igen | Új mission |
-| `/forge/:missionId` | MissionForgePage | Igen | Meglévő szerkesztés |
-| `/my-forge` | MyForgePage | Igen | Saját missionök |
+| `/forge` | MissionEditorPage | Igen, `mission:create` | Új mission — 2026-08-26 óta permission-gated |
+| `/forge/:missionId` | MissionEditorPage | Igen, `mission:create` | Meglévő szerkesztés |
+| `/my-forge` | MyForgePage | Igen, `mission:create` | Saját missionök |
 | `/play/quiz/:missionId` | QuizPlayerPage | Igen | Kvíz lejátszó |
 | `/star-map` | StarMapPage | Igen | Galaxis térkép |
 | `/star-systems/:id` | StarSystemDetailPage | Igen | Mission lista |

@@ -79,8 +79,12 @@ public class DataInitializer implements CommandLineRunner {
         cadetPermissions.add(missionStart);
         cadetPermissions.add(quizViewResults);
         cadetPermissions.add(starSystemRead);
-        cadetPermissions.add(starSystemCreate);
-        cadetPermissions.add(missionCreate);
+        // 2026-08-26: a kadétok elveszítették a létrehozó jogokat — kizárólag missziókat
+        // teljesítenek. Ezzel megszűnik az a csatorna, amin keresztül kadét által írt
+        // szöveg egy admin chat-kontextusába (RAG-index) kerülhetett volna.
+        // Ld. plans/pr0_retrieval_security_2026.md 2. szakasz.
+        //   cadetPermissions.add(starSystemCreate);
+        //   cadetPermissions.add(missionCreate);
         cadetPermissions.add(groupRead);
         cadetPermissions.add(sectorRead);
         createRoleIfNotFound("ROLE_CADET", cadetPermissions);
