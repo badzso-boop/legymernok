@@ -1,46 +1,49 @@
-# AI Keresés & Embedding — Megvalósítási Terv
+# AI Search & Embedding — Implementation Plan
 
-## Célkitűzés
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-06-20 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-Szemantikus keresés a platform tartalmában (missziók, star system-ek, csoport leírások) helyi LLM-mel és vektoros adatbázissal — külső API-kulcs és hálózat nélkül.
+## Goal
+
+Semantic search over the platform's content (missions, star systems, group descriptions) using
+a local LLM and a vector database — no external API key, no network calls out.
 
 ---
 
-## Architektúra áttekintés
+## Architecture overview
 
 ```
-Felhasználó
+User
     │
     ▼
 Spring Boot (/api/search)
     │
     ├─► PostgreSQL + pgvector   ← embedding index
-    │       (hasonlóság keresés)
+    │       (similarity search)
     │
     └─► ai-service (FastAPI)    ← Python microservice
             │
             ▼
         Ollama container
-        (embedding + generálás)
+        (embedding + generation)
 ```
 
-### Komponensek
+### Components
 
-| Komponens | Technológia | Port | Feladat |
+| Component | Technology | Port | Role |
 |---|---|---|---|
-| `ollama` | `ollama/ollama` Docker | 11434 | Embedding + LLM inferencia |
-| `ai-service` | Python 3.12 + FastAPI | 8081 | Embedding API, keresés |
-| `postgres` | PostgreSQL 16 + pgvector | 5432 | Vektor tárolás + lekérdezés |
-| `backend` | Spring Boot | 8080 | Orchestráció, auth |
+| `ollama` | `ollama/ollama` Docker | 11434 | Embedding + LLM inference |
+| `ai-service` | Python 3.12 + FastAPI | 8081 | Embedding API, search |
+| `postgres` | PostgreSQL 16 + pgvector | 5432 | Vector storage + querying |
+| `backend` | Spring Boot | 8080 | Orchestration, auth |
 
 ---
 
 ## 1. Ollama Docker container
 
-A modell fájlok a Windows fájlrendszeren vannak (`C:\Users\<user>\.ollama`).
+The model files live on the Windows filesystem (`C:\Users\<user>\.ollama`).
 
 ```yaml
-# docker-compose.yml kiegészítés
+# docker-compose.yml addition
 ollama:
   image: ollama/ollama
   volumes:
@@ -51,25 +54,25 @@ ollama:
     - legymernok-net
 ```
 
-### Modell ajánlás
+### Model recommendation
 
-| Feladat | Modell | Miért |
+| Task | Model | Why |
 |---|---|---|
-| Embedding | `nomic-embed-text` | Kis méret, gyors, jó minőség |
-| Keresés + válasz | `gemma3:8b-q4_K_M` | Gyors, 8B param elegendő |
-| Részletes válasz | `llama2:13b-q4_K_M` | Jobb minőség, lassabb |
+| Embedding | `nomic-embed-text` | Small, fast, good quality |
+| Search + answer | `gemma3:8b-q4_K_M` | Fast, 8B params is enough |
+| Detailed answer | `llama2:13b-q4_K_M` | Better quality, slower |
 
-A `gemma3` és `llama2` már le vannak töltve. Az `nomic-embed-text`-et le kell tölteni:
+`gemma3` and `llama2` are already downloaded. `nomic-embed-text` still needs pulling:
 ```bash
-# az ollama container-ben:
+# inside the ollama container:
 ollama pull nomic-embed-text
 ```
 
 ---
 
-## 2. pgvector beállítás
+## 2. pgvector setup
 
-Új Flyway migration (`V_ai__add_embeddings.sql`):
+New Flyway migration (`V_ai__add_embeddings.sql`):
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -87,13 +90,14 @@ CREATE INDEX ON mission USING ivfflat (content_embedding vector_cosine_ops)
   WITH (lists = 100);
 ```
 
-`nomic-embed-text` 768 dimenziós vektort generál. OpenAI ada-002 esetén 1536 kellene — ha modellt váltasz, a dimenzió is változik.
+`nomic-embed-text` produces a 768-dimensional vector. OpenAI's ada-002 would need 1536 — if you
+switch models, the dimension changes too.
 
 ---
 
 ## 3. ai-service (Python FastAPI)
 
-### Mappastruktúra
+### Directory structure
 
 ```
 ai-service/
@@ -109,12 +113,12 @@ fastapi==0.115.0
 uvicorn==0.30.0
 httpx==0.27.0
 pydantic==2.8.0
-asyncpg==0.29.0        # pgvector lekérdezéshez
+asyncpg==0.29.0        # for pgvector queries
 psycopg[binary]==3.2.0
 pgvector==0.3.2
 ```
 
-### `main.py` — fő API
+### `main.py` — the main API
 
 ```python
 from fastapi import FastAPI, HTTPException
@@ -155,7 +159,7 @@ async def embed(req: EmbedRequest):
 @app.post("/generate")
 async def generate(req: GenerateRequest):
     context_block = "\n\n".join(req.context)
-    full_prompt = f"Kontextus:\n{context_block}\n\nKérdés: {req.prompt}" if context_block else req.prompt
+    full_prompt = f"Context:\n{context_block}\n\nQuestion: {req.prompt}" if context_block else req.prompt
     async with httpx.AsyncClient(timeout=120) as client:
         r = await client.post(
             f"{OLLAMA_URL}/api/generate",
@@ -180,7 +184,7 @@ COPY main.py .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]
 ```
 
-### docker-compose kiegészítés
+### docker-compose addition
 
 ```yaml
 ai-service:
@@ -201,12 +205,12 @@ ai-service:
 
 ---
 
-## 4. Spring Boot integráció
+## 4. Spring Boot integration
 
-### Keresési flow
+### Search flow
 
 ```
-GET /api/search?q=elektromos+áramkör
+GET /api/search?q=electric+circuit
     │
     ├─ 1. AI service: POST /embed { text: q } → vector
     │
@@ -216,10 +220,10 @@ GET /api/search?q=elektromos+áramkör
     │    WHERE content_embedding IS NOT NULL
     │    ORDER BY similarity DESC LIMIT 5
     │
-    └─ 3. Visszaad: [{id, name, type, similarity, description}]
+    └─ 3. Returns: [{id, name, type, similarity, description}]
 ```
 
-### Új service osztály (Spring)
+### New service class (Spring)
 
 ```java
 @Service
@@ -262,12 +266,12 @@ public class SemanticSearchService {
 }
 ```
 
-### Indexelés (batch job)
+### Indexing (batch job)
 
-Új `@Scheduled` task, ami az összes content-et nélküli missziót indexeli:
+A new `@Scheduled` task that indexes every mission that has no content embedding yet:
 
 ```java
-@Scheduled(fixedDelay = 3_600_000)  // óránként
+@Scheduled(fixedDelay = 3_600_000)  // hourly
 public void indexMissingEmbeddings() {
     List<Mission> unindexed = missionRepo.findByContentEmbeddingIsNull();
     for (Mission m : unindexed) {
@@ -281,37 +285,41 @@ public void indexMissingEmbeddings() {
 
 ---
 
-## 5. Megvalósítási fázisok
+## 5. Implementation phases
 
-### Fázis 1 — Infrastruktúra (1-2 nap)
-- [ ] `ai-service/` mappa + Dockerfile + `main.py` (embed + health)
-- [ ] Ollama container a docker-compose-ba
+### Phase 1 — Infrastructure (1-2 days)
+- [ ] `ai-service/` directory + Dockerfile + `main.py` (embed + health)
+- [ ] Ollama container in docker-compose
 - [ ] pgvector extension + migration
 - [ ] `nomic-embed-text` model pull
 
-### Fázis 2 — Indexelés (1 nap)
-- [ ] `content_embedding` oszlop + index a releváns táblákban
-- [ ] Spring Boot batch indexelő (missziók, star system-ek)
-- [ ] Manuális trigger endpoint adminoknak (`POST /api/admin/reindex`)
+### Phase 2 — Indexing (1 day)
+- [ ] `content_embedding` column + index on the relevant tables
+- [ ] Spring Boot batch indexer (missions, star systems)
+- [ ] Manual trigger endpoint for admins (`POST /api/admin/reindex`)
 
-### Fázis 3 — Keresés (1 nap)
-- [ ] `SemanticSearchService` Spring-ben
+### Phase 3 — Search (1 day)
+- [ ] `SemanticSearchService` in Spring
 - [ ] `GET /api/search?q=...` endpoint
-- [ ] Frontend: keresősáv + találati lista
+- [ ] Frontend: search bar + results list
 
-### Fázis 4 — RAG (opcionális, 1-2 nap)
-- [ ] `ai-service` `/generate` endpoint kontextussal
-- [ ] Spring: top-K találat → context → Ollama → szöveges válasz
-- [ ] Frontend: "Kérdezz az AI-tól" panel
+### Phase 4 — RAG (optional, 1-2 days)
+- [ ] `ai-service` `/generate` endpoint with context
+- [ ] Spring: top-K results → context → Ollama → text answer
+- [ ] Frontend: "Ask the AI" panel
 
 ---
 
-## Döntési pontok
+## Decision points
 
-**Embedding dimenzió:** `nomic-embed-text` → 768 dim. Ha later OpenAI-ra váltasz, re-index kell (1536 dim).
+**Embedding dimension:** `nomic-embed-text` → 768 dim. If you switch to OpenAI later, a
+re-index is needed (1536 dim).
 
-**pgvector vs. külön vektorDB:** pgvector elégséges ~100K dokumentumig. Qdrant/Weaviate csak akkor érdemes ha külön scaling kell.
+**pgvector vs. a separate vector DB:** pgvector is sufficient up to ~100K documents.
+Qdrant/Weaviate are only worth it if separate scaling is needed.
 
-**Streaming válasz:** Az Ollama `/api/generate` támogatja a stream=true-t — ha a frontend real-time szöveget akar, SSE-vel a Spring-en keresztül meg lehet oldani.
+**Streaming responses:** Ollama's `/api/generate` supports `stream=true` — if the frontend
+wants real-time text, this can be done via SSE through Spring.
 
-**Modell swap:** Az `CHAT_MODEL` és `EMBED_MODEL` env var-ból jön, így a docker-compose-ban cserélhető futás nélkül.
+**Model swap:** `CHAT_MODEL` and `EMBED_MODEL` come from env vars, so they can be swapped in
+docker-compose without a rebuild.

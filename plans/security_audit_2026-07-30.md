@@ -1,260 +1,266 @@
-# Biztonsági és logikai átvilágítás — 2026.07.30
+# Security & Logic Audit — 2026-07-30
 
-Teljes repó-átvilágítás eredménye (backend, frontend, infra/Docker, roadmap-hiányosságok).
-Ez egy **állapotfelmérés**, nem egy javító commit-sorozat — a cél, hogy Norbi priorizálni
-tudja, mit javítunk ki elsőként, kis, önálló PR-ekben (a repo szokásos workflow-ja szerint).
-A findingok fájl:sor hivatkozásai a `main` ág 2026-07-30-i állapotára vonatkoznak, a sorszámok
-kis mértékben eltolódhatnak további commitokkal.
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-08-15 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-Jelmagyarázat: 🔴 kritikus · 🟠 magas · 🟡 közepes · ⚪ alacsony
+Result of a full-repo audit (backend, frontend, infra/Docker, roadmap gaps).
+This is a **state assessment**, not a series of fix commits — the goal is to let Norbi
+prioritize what to fix first, in small, standalone PRs (per the repo's usual workflow).
+The file:line references in the findings apply to `main`'s state as of 2026-07-30; line
+numbers may drift slightly with further commits.
+
+Legend: 🔴 critical · 🟠 high · 🟡 medium · ⚪ low
 
 ---
 
-## 🔴 Kritikus
+## 🔴 Critical
 
-### 1. A teljes szerver-log nyilvánosan, hitelesítés nélkül streamelve
-`config/LoggingConfig.java:38-39` a `WebSocketLogAppender`-t a **ROOT loggerre** akasztja fel —
-minden INFO+ szintű log (HTTP request body-k a `LogFilter`-ből, stack trace-ek, Gitea admin
-username, hibaüzenetek) átmegy rajta a `/topic/logs` csatornára (`WebSocketLogService.java:16`).
-A `/ws-log` STOMP endpoint `SecurityConfig.java:45-48`-ban `permitAll()`, a
-`WebSocketConfig.java:25` pedig `setAllowedOriginPatterns("*")`-gal bármilyen origint enged a
-handshake-hez.
+### 1. The entire server log is streamed publicly, without authentication
+`config/LoggingConfig.java:38-39` attaches the `WebSocketLogAppender` to the **ROOT logger** —
+every INFO+ level log line (HTTP request bodies from `LogFilter`, stack traces, the Gitea admin
+username, error messages) flows through it onto the `/topic/logs` channel
+(`WebSocketLogService.java:16`). The `/ws-log` STOMP endpoint is `permitAll()` in
+`SecurityConfig.java:45-48`, and `WebSocketConfig.java:25` allows any origin for the handshake
+with `setAllowedOriginPatterns("*")`.
 
-**Kockázat:** bárki, az internetről, hitelesítés nélkül feliratkozhat és valós időben látja a
-teljes szerverlogot — beleértve a 9. pontban leírt jelszó-hash szivárgást is.
-**Javaslat:** `/ws-log` és `/ws-mission-logs` kivétele a `permitAll` listából; STOMP CONNECT
-interceptor JWT-ellenőrzéssel + `logs:read` jog; origin pattern szigorítása a valós frontend
-domainre.
+**Risk:** anyone on the internet can subscribe without authentication and watch the full server
+log in real time — including the password-hash leak described in item 9.
+**Recommendation:** exclude `/ws-log` and `/ws-mission-logs` from the `permitAll` list; add a
+STOMP CONNECT interceptor with JWT verification + the `logs:read` permission; restrict the
+origin pattern to the actual frontend domain.
 
-### 2. Kadétok tetszőleges CI-jobot futtathatnak ugyanazon a hálózaton, mint a production DB
-A `plans/mission-forge.md` (99-104. sor) szerint minden template repo (JS/Python) tartalmaz egy
-élő `.gitea/workflows/ci.yml`-t, amit a Gitea Actions runner futtat és visszahív a backendnek.
-A `GiteaService.createMissionRepository()` (`GiteaService.java:547-580`) ezt a workflow-fájlt
-is lemásolja a kadét saját repójába, és a kadétot **write jogú kollaborátorként** adja hozzá
-(576. sor). Write joggal a kadét bármit pushol, **beleértve a `.gitea/workflows/ci.yml`
-módosítását is** — tehát tetszőleges CI-job YAML-t futtathat a runneren.
+### 2. Cadets can run arbitrary CI jobs on the same network as the production DB
+Per `plans/mission-forge.md` (lines 99-104), every template repo (JS/Python) ships a live
+`.gitea/workflows/ci.yml`, which the Gitea Actions runner executes and calls back to the
+backend. `GiteaService.createMissionRepository()` (`GiteaService.java:547-580`) copies this
+workflow file into the cadet's own repo too, and adds the cadet as a **collaborator with write
+access** (line 576). With write access, the cadet can push anything, **including modifying
+`.gitea/workflows/ci.yml`** — meaning they can run an arbitrary CI job YAML on the runner.
 
-A `runner` konténer `/var/run/docker.sock`-ot kap (`docker-compose.yml:166`), és a job-konténerek
-a **`legymernok-net`** hálózaton futnak (`runner-config.yaml:72`) — ugyanazon, mint a `postgres`
-(lásd 3. pont, alapértelmezett `postgres`/`postgres` jelszóval), `backend`, `ai-service`,
-`ollama`. Egy rosszindulatú `ci.yml` minden további nélkül futtathat `psql -h postgres -U
-postgres`-t és **közvetlenül olvashatja/írhatja a teljes production adatbázist**, megkerülve
-minden alkalmazás-szintű RBAC-ot.
+The `runner` container has `/var/run/docker.sock` mounted (`docker-compose.yml:166`), and the
+job containers run on the **`legymernok-net`** network (`runner-config.yaml:72`) — the same
+network as `postgres` (see item 3, with the default `postgres`/`postgres` password), `backend`,
+`ai-service`, and `ollama`. A malicious `ci.yml` could easily run `psql -h postgres -U
+postgres` and **read/write the full production database directly**, bypassing every
+application-level RBAC check.
 
-**Javaslat:** a runner job-konténereit külön, izolált Docker hálózatra tenni (ne
-`legymernok-net`), ahonnan csak a szükséges kimenő hozzáférés (pl. a
-`mission-verification/callback` endpoint) engedélyezett.
+**Recommendation:** put the runner's job containers on a separate, isolated Docker network (not
+`legymernok-net`), from which only the necessary outbound access (e.g. the
+`mission-verification/callback` endpoint) is allowed.
 
-### 3. `docker-compose.yml` — publikált postgres port + hardkódolt gyenge jelszó
-`docker-compose.yml`:
-- `postgres` service: `ports: - "5432:5432"` — a DB port kifelé, a hoszt felé publikálva.
+### 3. `docker-compose.yml` — published postgres port + hardcoded weak password
+In `docker-compose.yml`:
+- `postgres` service: `ports: - "5432:5432"` — the DB port is published outward, to the host.
 - `POSTGRES_PASSWORD: postgres`, `GITEA__database__PASSWD=postgres`,
-  `SPRING_DATASOURCE_PASSWORD: postgres` — **közvetlenül a compose fájlba hardkódolt**, gyenge
-  jelszó (nem `.env`-ből jön, mint a többi secret).
+  `SPRING_DATASOURCE_PASSWORD: postgres` — a weak password **hardcoded directly into the
+  compose file** (unlike other secrets, which come from `.env`).
 
-**Megjegyzés:** a memória szerint Norbi ezt élesben egyszer már eltávolította biztonsági okból,
-de az a módosítás soha nem került be a repóba (egy másik, `3dterv-plan` branch nem-commitolt
-stash-ében ragadt) — a `main` ág, és ezzel minden jövőbeli újratelepítés/rebuild, jelenleg is
-sebezhető állapotban van.
-**Javaslat:** port publikálás eltávolítása (a backend/gitea konténerek a belső hálózaton elérik),
-jelszavak áthelyezése `.env`-be, erős, generált érték.
+**Note:** per memory, Norbi removed this once in production for security reasons, but that
+change never made it into the repo (it's stuck in an uncommitted stash on a different,
+`3dterv-plan` branch) — the `main` branch, and with it every future redeploy/rebuild, is
+currently still in a vulnerable state.
+**Recommendation:** remove the port publication (the backend/Gitea containers can reach it over
+the internal network), move the passwords into `.env`, and use a strong, generated value.
 
-### 4. `/ws-mission-logs` — bármely kadét bármely másik mission build-logját láthatja
-`MissionVerificationController.java:72-104` a Gitea Actions kimenetét a
-`/topic/mission/{missionId}` topicra küldi, de a feliratkozási endpoint (`/ws-mission-logs`)
-szintén `permitAll` + wildcard origin, és **nincs ownership-ellenőrzés** a topic
-feliratkozásnál. Mivel `mission:read` mindenkinek jár, bármely bejelentkezett kadét lekérheti a
-`GET /api/missions` listát, onnan az ID-kat, és végignézheti más kadétok build/teszt logjait.
-**Javaslat:** WS handshake-hez auth kötelező, a topic feliratkozásnál explicit
-owner-vagy-`mission:edit_any` ellenőrzés.
-
----
-
-## 🟠 Magas
-
-### 5. `ai-service` — hitelesítés nélküli, kifelé publikált LLM endpoint
-`ai-service/main.py` `/embed` és `/generate` endpointjai nincsenek auth-hoz kötve, és a
-`docker-compose.yml` a `8081:8081` porton kifelé is publikálja őket. Bárki, aki eléri a hosztot,
-ingyen és korlátlanul (nincs rate limit, nincs input-méret limit) használhatja a helyi LLM-et a
-backend megkerülésével.
-**Javaslat:** port publikálás eltávolítása (csak a `legymernok-net`-ről érhető el), és/vagy egy
-megosztott secret-alapú auth bevezetése backend↔ai-service között.
-
-### 6. `FillInBlankController` — hiányzó owner-ellenőrzés a megoldókulcsnál
-`FillInBlankController.java:37-41`: `@PreAuthorize("hasAuthority('mission:edit')")`, de a
-`MissionService`-ben megszokott "owner VAGY `mission:edit_any`" mintát (lásd
-`requireMissionEditAccess`, `MissionService.java:205-211`) itt nem követi. Bármely
-`mission:edit` jogú felhasználó (akinek nincs `edit_any`-je) lekérheti **más** FILL_IN_BLANK
-missziójának teljes megoldókulcsát (`GET .../fill-in-blank/admin`), sőt a `POST`/`PUT`
-végpontokkal felül is írhatja más tartalmát.
-**Javaslat:** owner-check bevezetése a `FillInBlankService`-be, ugyanazzal a mintával, mint a
-`MissionService`-ben.
-
-### 7. `StarSystemService.reorderItems` — IDOR, nincs owner- és konzisztencia-ellenőrzés
-`StarSystemService.java:201-242`: a `starSystemId` paraméter nincs kihasználva sem
-tulajdonos-ellenőrzésre, sem annak validálására, hogy `item1Id`/`item2Id` valóban ehhez a
-rendszerhez tartozik-e. Kontraszt: `updateStarSystem`/`deleteStarSystem` ugyanebben a fájlban
-owner-check-et végez. Bármely `starsystem:edit` jogú user átrendezheti bármely **más**
-felhasználó star systemjében lévő elemek sorrendjét.
-**Javaslat:** owner-vagy-`edit_any` check + annak validálása, hogy mindkét item a path-beli
-`starSystemId`-hoz tartozik.
-
-### 8. `MissionGroupService` — a group CRUD egyáltalán nem owner-scoped
-A `MissionGroupService` (create/update/delete/reorder) csak a star system létezését nézi,
-tulajdonost sosem — nincs `group:*_any` permission-variáns sem a `DataInitializer`-ben. Bármely
-`group:edit`/`group:delete` jogú felhasználó bármely más content creator csoportját
-szerkesztheti/törölheti.
-**Javaslat:** vagy explicit dokumentálni "collaborative by design"-ként (ha szándékos), vagy
-owner-check hozzáadása, ahogy Mission/StarSystem esetén.
-
-### 9. Jelszó-hash bekerül a logokba (és onnan a 1. pont miatt a nyilvános WS-be is)
-`CadetService.java:74, 128, 175`: `log.info("...Cadet: {}", cadet)` — a `Cadet` entitás
-Lombok `@Data`-generált `toString()`-je **tartalmazza a `passwordHash` mezőt**. A BCrypt hash
-offline crackelésre alkalmas adat, és a 1. pont miatt jelenleg bárki számára látható, aki a
-publikus log-streamre feliratkozik.
-**Javaslat:** dedikált `toString()` (jelszó-mező kizárásával), vagy csak `username` logolása.
-
-### 10. `GlobalExceptionHandler` kiszivárogtatja a nyers kivétel-üzenetet
-`GlobalExceptionHandler.java:81-85`: minden le nem kezelt kivételnél `ex.getMessage()` megy
-vissza a kliensnek 500-ban — NPE mezőnevek, SQL constraint/oszlopnevek, fájlrendszer- vagy
-Gitea-hibaüzenetek szivároghatnak ki.
-**Javaslat:** generikus ág fix, semmitmondó üzenetet adjon vissza; a részletet csak (védett!)
-logba.
-
-### 11. `JwtAuthenticationFilter` — nincs try/catch a user-betöltés körül
-`JwtAuthenticationFilter.java:57`: `userDetailsService.loadUserByUsername(username)` nincs
-try/catch-ben. Ha egy érvényes JWT-vel rendelkező usert időközben törölnek, a
-`UsernameNotFoundException` a `DispatcherServlet` elé (a filter-ben) kezeletlenül dobódik, a
-`@ControllerAdvice` ezt nem kapja el — generikus szervlet-szintű 500 lesz 401 helyett.
-**Javaslat:** try/catch a `loadUserByUsername` köré is, hiba esetén ne állítson be authot.
+### 4. `/ws-mission-logs` — any cadet can see any other cadet's mission build log
+`MissionVerificationController.java:72-104` sends Gitea Actions output to the
+`/topic/mission/{missionId}` topic, but the subscription endpoint (`/ws-mission-logs`) is also
+`permitAll` + wildcard origin, and there's **no ownership check** on the topic subscription.
+Since `mission:read` is granted to everyone, any logged-in cadet can fetch the `GET
+/api/missions` list, grab the IDs from it, and watch other cadets' build/test logs.
+**Recommendation:** require auth for the WS handshake, and add an explicit
+owner-or-`mission:edit_any` check on the topic subscription.
 
 ---
 
-## 🟡 Közepes
+## 🟠 High
 
-### 12. Hiányzó `@Valid` és validációs annotációk
-`MissionController.java:33,48` (`initializeForgeMission`, `saveForgeMissionContent`) nem
-használ `@Valid`-ot, holott a DTO-k (`CreateMissionInitialRequest`,
-`MissionForgeContentRequest`) tartalmaznak `@NotNull`/`@NotBlank` annotációkat — ezek jelenleg
-élesben sosem futnak le. `CreateMissionRequest`, `CreateStarSystemRequest`, `RegisterRequest`,
-`LoginRequest`, `CreateCadetRequest` DTO-kon egyáltalán nincs validációs annotáció, a
-controllerek sem hívnak `@Valid`-ot. Gyakorlati hatás: nincs kikényszerítve jelszóhossz,
-email-formátum, username-hossz szerver oldalon.
-**Javaslat:** `@Valid` pótlása minden POST/PUT-on + minimális `@NotBlank`/`@Size`/`@Email` a
-user/star system/mission DTO-kra.
+### 5. `ai-service` — unauthenticated, externally published LLM endpoint
+The `/embed` and `/generate` endpoints in `ai-service/main.py` aren't gated behind auth, and
+`docker-compose.yml` publishes them outward on port `8081:8081` too. Anyone who can reach the
+host can use the local LLM for free, without limits (no rate limiting, no input-size limit),
+bypassing the backend entirely.
+**Recommendation:** remove the port publication (reachable only from `legymernok-net`), and/or
+introduce a shared-secret-based auth between backend and ai-service.
 
-### 13. Nincs `MethodArgumentNotValidException` handler
-`GlobalExceptionHandler.java`-ban nincs erre külön ág — a (ritka) `@Valid`-dal védett
-endpointoknál egy validációs hiba a generikus 500-as ágra esik a 10. pontban leírt
-üzenet-szivárgással együtt.
-**Javaslat:** külön handler, 400-as válasz mezőnkénti hibaüzenettel.
+### 6. `FillInBlankController` — missing owner check on the answer key
+`FillInBlankController.java:37-41`: `@PreAuthorize("hasAuthority('mission:edit')")`, but it
+doesn't follow the usual "owner OR `mission:edit_any`" pattern used in `MissionService` (see
+`requireMissionEditAccess`, `MissionService.java:205-211`). Any user with `mission:edit` (but
+without `edit_any`) can fetch the full answer key of **someone else's** FILL_IN_BLANK mission
+(`GET .../fill-in-blank/admin`), and even overwrite their content via the `POST`/`PUT`
+endpoints.
+**Recommendation:** add an owner check to `FillInBlankService`, following the same pattern as
+`MissionService`.
 
-### 14. `GiteaService` néhány olvasó metódusa nem hívja a `validateFilePath`-et
-`getFileContent` (516-535), `getFileInfo` (383-397), `getRepoContents` (491-508) nem validál
-útvonalat, szemben `uploadFile`/`uploadFiles`/`deleteFile`/`renameFile`-lel (mind hívja
-`validateFilePath`-et, 622-629. sor). Jelenleg minden hívási hely Gitea-listázásból kapja a
-path-ot, nem közvetlen user inputból — ma nincs kihasználható traversal. Ez viszont pontosan az
-a hibaosztály, ami a projektben már egyszer (PR #21 code review) előfordult: bármely jövőbeli
-hívó, aki user-supplied `filePath`-et ad át, visszahozza a sebezhetőséget.
-**Javaslat:** `validateFilePath` hívása defenzíven mindhárom metódusba.
+### 7. `StarSystemService.reorderItems` — IDOR, no owner or consistency check
+`StarSystemService.java:201-242`: the `starSystemId` parameter is never used to check ownership,
+nor to validate that `item1Id`/`item2Id` actually belong to that system. Contrast:
+`updateStarSystem`/`deleteStarSystem` in the same file do perform an owner check. Any user with
+`starsystem:edit` can reorder the items in **any other** user's star system.
+**Recommendation:** add an owner-or-`edit_any` check + validate that both items belong to the
+`starSystemId` from the path.
 
-### 15. Hiányzó biztonsági HTTP headerek (`frontend/nginx.conf`)
-Nincs `Content-Security-Policy`, `X-Frame-Options`/`frame-ancestors`, `X-Content-Type-Options`,
-`Referrer-Policy`, `Permissions-Policy`. (HSTS-t jellemzően a Cloudflare Tunnel/edge oldja meg,
-de ha ez a nginx valaha közvetlen HTTPS-t szolgálna ki, az is hiányzik.)
-**Javaslat:** `add_header` direktívák a `server {}` blokkba — CSP-nél figyelni kell a Monaco
-Editor worker/blob: forrásaira és a WebSocket `connect-src`-re.
+### 8. `MissionGroupService` — group CRUD isn't owner-scoped at all
+`MissionGroupService` (create/update/delete/reorder) only checks that the star system exists,
+never the owner — there's no `group:*_any` permission variant in `DataInitializer` either. Any
+user with `group:edit`/`group:delete` can edit/delete any other content creator's group.
+**Recommendation:** either explicitly document this as "collaborative by design" (if
+intentional), or add an owner check the same way as for Mission/StarSystem.
 
-### 16. Dockerfile-ok root userként futnak
-`backend/Dockerfile`, `frontend/Dockerfile`, `ai-service/Dockerfile` egyikében sincs `USER`
-direktíva — mindhárom konténer root userként fut belül. Build-time bebakeolt secretet egyikben
-sem találtunk.
-**Javaslat:** nem-root `USER` hozzáadása mindhárom Dockerfile végére.
+### 9. Password hash ends up in the logs (and, per item 1, on the public WS too)
+`CadetService.java:74, 128, 175`: `log.info("...Cadet: {}", cadet)` — Lombok's generated
+`toString()` on the `Cadet` entity's `@Data` annotation **includes the `passwordHash` field**.
+The BCrypt hash is data suitable for offline cracking, and due to item 1 it's currently visible
+to anyone subscribed to the public log stream.
+**Recommendation:** a dedicated `toString()` (excluding the password field), or just log
+`username`.
 
-### 17. CORS allowlist dev-origin-öket tartalmaz élesben
-`SecurityConfig.java:63-74`: `localhost:3000/5173` és `127.0.0.1` variánsok fixen be vannak
-drótozva a production origin mellé, profil-elkülönítés nélkül.
-**Javaslat:** Spring profillal elválasztani dev/prod CORS listát (alacsony gyakorlati kockázat,
-inkább higiénia).
+### 10. `GlobalExceptionHandler` leaks the raw exception message
+`GlobalExceptionHandler.java:81-85`: every unhandled exception returns `ex.getMessage()` to the
+client in a 500 — NPE field names, SQL constraint/column names, filesystem or Gitea error
+messages can all leak.
+**Recommendation:** the generic branch should return a fixed, uninformative message; keep the
+detail only in (protected!) logs.
 
-### 18. Admin oldalak megkerülik a közös API klienst
+### 11. `JwtAuthenticationFilter` — no try/catch around loading the user
+`JwtAuthenticationFilter.java:57`: `userDetailsService.loadUserByUsername(username)` isn't
+wrapped in try/catch. If a user with a valid JWT gets deleted in the meantime, the
+`UsernameNotFoundException` gets thrown unhandled in front of the `DispatcherServlet` (inside
+the filter) — `@ControllerAdvice` never catches it, resulting in a generic servlet-level 500
+instead of a 401.
+**Recommendation:** wrap `loadUserByUsername` in try/catch too, and don't set an auth on
+failure.
+
+---
+
+## 🟡 Medium
+
+### 12. Missing `@Valid` and validation annotations
+`MissionController.java:33,48` (`initializeForgeMission`, `saveForgeMissionContent`) doesn't use
+`@Valid`, even though the DTOs (`CreateMissionInitialRequest`, `MissionForgeContentRequest`) do
+carry `@NotNull`/`@NotBlank` annotations — these currently never run in production. The
+`CreateMissionRequest`, `CreateStarSystemRequest`, `RegisterRequest`, `LoginRequest`,
+`CreateCadetRequest` DTOs have no validation annotations at all, and the controllers don't call
+`@Valid` either. Practical effect: password length, email format, and username length aren't
+enforced server-side.
+**Recommendation:** add `@Valid` to every POST/PUT + minimal `@NotBlank`/`@Size`/`@Email` on the
+user/star system/mission DTOs.
+
+### 13. No `MethodArgumentNotValidException` handler
+`GlobalExceptionHandler.java` has no dedicated branch for this — for the (rare) endpoints
+protected by `@Valid`, a validation error falls into the generic 500 branch, with the message
+leak described in item 10 along with it.
+**Recommendation:** a dedicated handler, returning a 400 with per-field error messages.
+
+### 14. Some `GiteaService` read methods don't call `validateFilePath`
+`getFileContent` (516-535), `getFileInfo` (383-397), `getRepoContents` (491-508) don't validate
+the path, unlike `uploadFile`/`uploadFiles`/`deleteFile`/`renameFile` (all of which call
+`validateFilePath`, line 622-629). Currently every call site gets the path from a Gitea listing,
+not from direct user input — so there's no exploitable traversal today. This is, however,
+exactly the class of bug the project has already hit once before (PR #21 code review): any
+future caller that passes a user-supplied `filePath` would reintroduce the vulnerability.
+**Recommendation:** call `validateFilePath` defensively in all three methods.
+
+### 15. Missing security HTTP headers (`frontend/nginx.conf`)
+No `Content-Security-Policy`, `X-Frame-Options`/`frame-ancestors`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`. (HSTS is typically handled by the Cloudflare
+Tunnel/edge, but if this nginx were ever to serve HTTPS directly, that would be missing too.)
+**Recommendation:** add `add_header` directives to the `server {}` block — with CSP, pay
+attention to the Monaco Editor's worker/blob: sources and the WebSocket `connect-src`.
+
+### 16. Dockerfiles run as root
+None of `backend/Dockerfile`, `frontend/Dockerfile`, `ai-service/Dockerfile` has a `USER`
+directive — all three containers run internally as root. No build-time baked-in secrets were
+found in any of them.
+**Recommendation:** add a non-root `USER` at the end of all three Dockerfiles.
+
+### 17. CORS allowlist contains dev origins in production
+`SecurityConfig.java:63-74`: `localhost:3000/5173` and the `127.0.0.1` variants are hardwired
+alongside the production origin, with no profile separation.
+**Recommendation:** separate dev/prod CORS lists via a Spring profile (low practical risk,
+more of a hygiene item).
+
+### 18. Admin pages bypass the shared API client
 `frontend/src/pages/admin/**` (UserList, UserEdit, MissionList, RoleList, RoleEdit,
-StarSystemList, PermissionList, LogList) nyers `axios`-t használ, manuálisan összerakott
-`Authorization` headerrel — a projekt saját `frontend/CLAUDE.md` konvenciója ellenére. Ez
-kikerüli a `client.ts` response interceptorát, ami 401-nél törli a tokent — lejárt/érvénytelen
-tokennél ezek a nézetek nem jelentkeznek ki automatikusan.
-**Javaslat:** átállítás `api/client.ts`-re a `frontend/CLAUDE.md` saját szabálya szerint.
+StarSystemList, PermissionList, LogList) use raw `axios` with a manually assembled
+`Authorization` header — against the project's own `frontend/CLAUDE.md` convention. This
+bypasses `client.ts`'s response interceptor, which clears the token on a 401 — with an
+expired/invalid token, these views don't automatically log the user out.
+**Recommendation:** switch to `api/client.ts`, per `frontend/CLAUDE.md`'s own rule.
 
 ---
 
-## ⚪ Alacsony
+## ⚪ Low
 
-19. **`application.properties:16`**: `gitea.template-repo-url="asd.com"` — használaton kívüli,
-    semmilyen Java kód nem hivatkozik rá; szó szerinti idézőjelek a value-ban. Törlendő.
-20. **JWT 24 órás lejárat, nincs refresh/logout/revocation** — tervezési korlátnak elfogadható
-    stateless JWT-nél, de egy ellopott token akár egy napig érvényben marad, semmilyen szerver
-    oldali eszköz nincs visszavonásra.
-21. **`LogFilter.java:41`**: naiv `contains("\"password\"")` jelszó-szűrés a naplózásban —
-    case-sensitive, könnyen megkerülhető más elnevezésű/case-elt mezővel.
-22. ~~**`frontend/.env` be van commitolva** (`VITE_API_URL=/api`, nem titkos tartalom), miközben a
-    gyökér `.env` `.gitignore`-olt — inkonzisztens minta, kockázat, ha valaha titkos érték
-    kerülne bele tévedésből.~~ — **JAVÍTVA (2026-08-15).** A `VITE_API_URL` default a kódba
-    került (`|| "/api"`), így a fájlra nincs többé szükség; törölve a verziókövetésből, és a
-    `frontend/.dockerignore` is kizárja, hogy lokális példány beszivárogjon az image-be.
-23. **`.idea/`** mappa (5 fájl) be van commitolva a repo gyökerében.
-24. **`npm audit` javasolt** a build-lánchoz/CI-hoz — a nagy, gyakran frissülő függőségek
-    (Monaco Editor, sockjs-client stb.) miatt megbízható CVE-információt csak ez ad, találgatás
-    helyett.
-25. **`GITEA__server__ROOT_URL=http://localhost:3001/`** (`docker-compose.yml:48`) hardkódolt
-    localhost, holott élesben `legymernok.ujjweb.hu` mögött fut. Jelenlegi funkcionális hatás
-    korlátozott (a Forge/Play flow a Gitea Contents API-n megy, nem clone URL-en), de ha valaha
-    valaki a Gitea webes UI-ját közvetlenül eléri, ott hibás clone URL-eket fog látni.
-
----
-
-## Nyitott, ismert architekturális/logikai hiányosságok
-
-- **Gitea orphan repo**: ha a DB tranzakció a Gitea repo létrehozása UTÁN bukik, a repo árván
-  marad (nincs kompenzáló rollback Gitea felé). Régóta ismert, még nyitott.
-- **`CIRCUIT_SIMULATION` misszió típusnak nincs dedikált kadét-oldali felülete** — a
-  `StarSystemDetailPage.tsx` a régi, PR #21 előtti mintát követve nyers Gitea repót nyit meg új
-  tabban (`window.open`), nem app-on belüli szerkesztőt.
-- **Mobile Coding típus és Blockly/vizuális programozás** (`plans/mobile-friendly.md:379-383`) —
-  a `MissionType` enum és a `package.json` alapján megerősítve, hogy nincs kezdve.
-- **Fill-in-blank admin statisztikák** (`plans/mobile-friendly.md:385-387`) — nincs admin
-  oldali statisztikai UI a `frontend/src/pages/admin` alatt.
-- **PWA / Galaxis Térkép gráf-vizualizáció (react-flow/D3) / Robot-vezérlés** — a 2026-os
-  irányvonal (`plans/new_direction_2026.md`) e részei kódszinten még nem indultak el
-  (`vite-plugin-pwa`, `react-flow`, `d3` egyike sincs a `package.json`-ban).
-- **`cadets`/`roles`/`permissions`/`cadet_roles`/`roles_permissions` táblák Flyway előttiek**
-  (a `V1` migráció `baseline-version=1`-től indul) — ezekhez nincs egyetlen migrációs fájl sem a
-  repóban. Ha ezekhez az entitásokhoz valaha új mező kerül, nincs meglévő minta/history, amit
-  követni kellene — könnyen újratermelheti a korábban 3× előfordult séma-drift hibaosztályt, ha
-  valaki átmenetileg visszaáll `ddl-auto=update`-re.
-
-## Pozitív megállapítások (amiket a review kifejezetten megerősített, NEM hiba)
-
-- `spring.jpa.hibernate.ddl-auto=validate` van élesben (nem `update`) — induláskor hibát dob
-  sémaeltérésnél, ahelyett hogy csendben elrontaná. A `V1`–`V5` migrációk lefedik az összes
-  jelenlegi entitást, nincs új drift.
-- `application.properties`-ben **nincs** hardkódolt secret — minden `${ENV_VAR}`-ból jön. A
-  gyökér `CLAUDE.md` "részben javítva" megjegyzése elavult, ténylegesen teljesen javítva van
-  (frissítve ebben a PR-ben).
-- `react-markdown` `rehype-raw` plugin NÉLKÜL fut — nincs XSS-kockázat a markdown mezőkön
-  (`descriptionMarkdown`, content) keresztül, mert raw HTML nem kerül renderelésre.
-- `postgres-init/init.sql` kizárólag `CREATE DATABASE` parancsokat tartalmaz, nincs benne seed
-  jelszó vagy admin fiók.
-- `.env` soha nem került be a git történetbe (ellenőrizve `git log --all -- .env`-vel).
-- A Quiz-válaszkulcs-szivárgás (korábbi ismert hiba) továbbra is helyesen védett —
-  `stripAnswers()` következetesen fut a kadét-oldali válaszokon.
+19. **`application.properties:16`**: `gitea.template-repo-url="asd.com"` — unused, no Java code
+    references it; literal quote characters in the value. Should be removed.
+20. **JWT has a 24-hour expiry, no refresh/logout/revocation** — an acceptable design
+    limitation for stateless JWT, but a stolen token stays valid for up to a day, with no
+    server-side revocation mechanism.
+21. **`LogFilter.java:41`**: naive `contains("\"password\"")` password filtering in logging —
+    case-sensitive, easily bypassed with a differently named/cased field.
+22. ~~**`frontend/.env` is committed** (`VITE_API_URL=/api`, not sensitive content), while the
+    root `.env` is `.gitignore`d — an inconsistent pattern, a risk if a sensitive value were
+    ever added to it by mistake.~~ — **FIXED (2026-08-15).** The `VITE_API_URL` default moved
+    into the code (`|| "/api"`), so the file is no longer needed; removed from version control,
+    and `frontend/.dockerignore` also excludes it so a local copy can't leak into the image.
+23. **`.idea/`** directory (5 files) is committed at the repo root.
+24. **`npm audit` is recommended** for the build chain/CI — with large, frequently updated
+    dependencies (Monaco Editor, sockjs-client, etc.), this is the only reliable source of
+    CVE information, rather than guessing.
+25. **`GITEA__server__ROOT_URL=http://localhost:3001/`** (`docker-compose.yml:48`) is a
+    hardcoded localhost, even though production runs behind `legymernok.ujjweb.hu`. Current
+    functional impact is limited (the Forge/Play flow goes through the Gitea Contents API, not
+    a clone URL), but if anyone ever accesses the Gitea web UI directly, they'll see incorrect
+    clone URLs there.
 
 ---
 
-## Javasolt következő lépések
+## Open, known architectural/logic gaps
 
-Ez a dokumentum állapotfelmérés, nem tartalmaz kódjavítást. Javasolt sorrend külön PR-ekben:
-1. A négy 🔴 kritikus pont (WS-log auth, CI-runner hálózat-izoláció, postgres port+jelszó,
-   mission-log IDOR) — ezek élesben, azonnal kihasználható, súlyos hozzáférési rések.
-2. A 🟠 magas pontok, elsősorban az IDOR-ok (6-8.) és a jelszó-hash log-szivárgás (9.).
-3. A 🟡/⚪ pontok a csapat kapacitása szerint, illetve a roadmap-hiányosságok priorizálása
-   Norbi döntése alapján.
+- **Gitea orphan repo**: if the DB transaction fails AFTER the Gitea repo is created, the repo
+  is left orphaned (no compensating rollback against Gitea). Long-known, still open.
+- **The `CIRCUIT_SIMULATION` mission type has no dedicated cadet-side UI** —
+  `StarSystemDetailPage.tsx` follows the old, pre-PR #21 pattern of opening the raw Gitea repo
+  in a new tab (`window.open`), rather than an in-app editor.
+- **Mobile Coding type and Blockly/visual programming**
+  (`plans/mobile-friendly.md:379-383`) — confirmed, based on the `MissionType` enum and
+  `package.json`, that this hasn't been started.
+- **Fill-in-blank admin statistics** (`plans/mobile-friendly.md:385-387`) — no admin-side
+  statistics UI under `frontend/src/pages/admin`.
+- **PWA / Galaxy Map graph visualization (react-flow/D3) / Robot control** — these parts of the
+  2026 direction (`plans/new_direction_2026.md`) haven't started at the code level yet
+  (`vite-plugin-pwa`, `react-flow`, `d3` are all absent from `package.json`).
+- **The `cadets`/`roles`/`permissions`/`cadet_roles`/`roles_permissions` tables predate Flyway**
+  (the `V1` migration starts from `baseline-version=1`) — there isn't a single migration file
+  for them in the repo. If a new field is ever added to these entities, there's no existing
+  pattern/history to follow — this could easily reproduce the schema-drift bug class that's
+  already happened 3 times, if someone temporarily switches back to `ddl-auto=update`.
+
+## Positive findings (explicitly confirmed by the review — NOT bugs)
+
+- `spring.jpa.hibernate.ddl-auto=validate` is set in production (not `update`) — it throws an
+  error on startup on a schema mismatch, instead of silently corrupting it. The `V1`–`V5`
+  migrations cover all current entities, no new drift.
+- **No** hardcoded secrets in `application.properties` — everything comes from `${ENV_VAR}`.
+  The root `CLAUDE.md`'s "partially fixed" note is outdated — it's actually been fully fixed
+  (updated in this PR).
+- `react-markdown` runs **without** the `rehype-raw` plugin — no XSS risk through the markdown
+  fields (`descriptionMarkdown`, content), because raw HTML never gets rendered.
+- `postgres-init/init.sql` contains only `CREATE DATABASE` statements, no seed password or
+  admin account.
+- `.env` has never entered the git history (verified with `git log --all -- .env`).
+- The quiz answer-key leak (a previously known bug) remains correctly protected —
+  `stripAnswers()` consistently runs on cadet-facing responses.
+
+---
+
+## Suggested next steps
+
+This document is a state assessment, it contains no code fixes. Suggested order, in separate
+PRs:
+1. The four 🔴 critical items (WS-log auth, CI runner network isolation, postgres port+password,
+   mission-log IDOR) — these are severe, immediately exploitable access holes in production.
+2. The 🟠 high items, primarily the IDORs (6-8) and the password-hash log leak (9).
+3. The 🟡/⚪ items based on the team's capacity, and prioritizing the roadmap gaps based on
+   Norbi's decision.

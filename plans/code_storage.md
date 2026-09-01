@@ -1,25 +1,27 @@
-# Felhasználói Kód Tárolása: Dedikált Git Szerver Implementáció
+# Storing User Code: Dedicated Git Server Implementation
 
-Ez a dokumentum a felhasználói kód tárolására választott, Git-alapú megoldás implementációs tervét részletezi.
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2025-11-29 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-## 1. Választott Technológia: Gitea
+This document details the implementation plan for the Git-based solution chosen for storing user code.
 
-A rendszer egy dedikált, saját hosztolású Git szervert fog használni. A javasolt technológia a **Gitea**.
+## 1. Chosen Technology: Gitea
 
-**Indoklás:**
-- **Könnyűsúlyú:** Go nyelven íródott, lényegesen kevesebb erőforrást igényel, mint pl. a GitLab.
-- **Egyszerű Üzemeltetés:** Docker konténerként egyszerűen futtatható és beilleszthető a meglévő `docker-compose.yml` struktúránkba.
-- **Teljeskörű API:** Minden szükséges funkció (felhasználó- és repo-kezelés, fájlműveletek) elérhető a REST API-ján keresztül, ami elengedhetetlen a backendünk számára.
+The system will use a dedicated, self-hosted Git server. The proposed technology is **Gitea**.
 
-## 2. Architektúra és Folyamatok
+**Rationale:**
+- **Lightweight:** written in Go, needs substantially fewer resources than, say, GitLab.
+- **Simple to operate:** runs easily as a Docker container and slots straight into our existing `docker-compose.yml` setup.
+- **Full-featured API:** every function we need (user and repo management, file operations) is available through its REST API, which is essential for our backend.
 
-### 2.1. Infrastruktúra (`docker-compose.yml`)
+## 2. Architecture and Flows
 
-A `docker-compose.yml` fájl ki lesz egészítve egy új `gitea` szervizzel:
+### 2.1. Infrastructure (`docker-compose.yml`)
+
+`docker-compose.yml` will be extended with a new `gitea` service:
 
 ```yaml
 services:
-  # ... meglévő backend, frontend, db szervizek
+  # ... existing backend, frontend, db services
 
   gitea:
     image: gitea/gitea:latest
@@ -32,7 +34,7 @@ services:
       - GITEA__database__NAME=gitea
       - GITEA__database__USER=gitea
       - GITEA__database__PASSWD=gitea_secret
-      # ... egyéb Gitea beállítások
+      # ... other Gitea settings
     restart: always
     networks:
       - legymernok-network
@@ -42,43 +44,43 @@ services:
       - "3000:3000" # Gitea web UI
       - "2222:22"   # Gitea SSH
 ```
-**Feladat:** A `legymernok-db` Postgres szerverén létre kell hozni egy külön `gitea` adatbázist és felhasználót.
+**Task:** a separate `gitea` database and user need to be created on the `legymernok-db` Postgres server.
 
-### 2.2. Felhasználó-kezelés és Szinkronizáció
+### 2.2. User Management and Synchronization
 
-A `legymernok` és a `gitea` felhasználóinak szinkronban kell lenniük.
+`legymernok` users and Gitea users need to stay in sync.
 
-1.  **Admin Token:** A Gitea telepítése után manuálisan létre kell hozni egy adminisztrátori felhasználót, és generálni kell egy API tokent. Ezt a tokent a `legymernok-backend` fogja használni, hogy adminisztrátori műveleteket végezzen a Gitea-n (pl. felhasználók létrehozása).
-2.  **Regisztráció:** Amikor egy új kadét regisztrál a `legymernok.hu`-n:
-    a. A `legymernok-backend` sikeresen elmenti az új `cadets` rekordot az adatbázisba.
-    b. Közvetlenül ezután a backend meghívja a Gitea API `/api/v1/admin/users` végpontját, hogy létrehozza a Gitea-n is a felhasználót (véletlenszerű jelszóval, mivel a Gitea felületére a kadétnak nem kell belépnie).
-    c. A Gitea válaszából kapott **numerikus user ID**-t a backend elmenti a `cadets` tábla `gitea_user_id` oszlopába.
+1.  **Admin token:** after installing Gitea, an administrator user must be created manually, and an API token generated. `legymernok-backend` will use this token to perform administrative operations on Gitea (e.g. creating users).
+2.  **Registration:** when a new cadet registers on `legymernok.hu`:
+    a. `legymernok-backend` successfully saves the new `cadets` record to the database.
+    b. Right after that, the backend calls the Gitea API's `/api/v1/admin/users` endpoint to create the user on Gitea too (with a random password, since the cadet never needs to log into the Gitea UI directly).
+    c. The backend stores the **numeric user ID** returned by Gitea in the `cadets` table's `gitea_user_id` column.
 
-### 2.3. Küldetés Kezdése: A Repository Létrehozása
+### 2.3. Starting a Mission: Creating the Repository
 
-1.  A kadét a frontend-en rákattint egy küldetés "Indítás" gombjára.
-2.  A frontend lekérdezi a backendet, hogy a kadét elkezdte-e már ezt a küldetést.
-3.  Ha a `cadet_missions` táblában még nincs bejegyzés:
-    a. A backend meghívja a Gitea API `/api/v1/user/repos` végpontját a kadét nevében (vagy adminisztrátorként, megadva a szerző `gitea_user_id`-ját).
-    b. Létrehoz egy **új, privát repository-t**, pl. `python-alapok-valtozok` néven.
-    c. A backend **API-n keresztül feltölti a repo-ba** a küldetéshez tartozó alap fájlokat (pl. `main.py`, `README.md`). Ezt a Gitea fájl API-ja teszi lehetővé, így nem szükséges lokális `git clone`.
-    d. A backend létrehoz egy új rekordot a `cadet_missions` táblában, amiben elmenti a `cadet_id`, `mission_id`, a `status` (`IN_PROGRESS`), és a frissen létrehozott `repository_url`-t.
-4.  A backend visszaadja a repo URL-jét (és a fájlok tartalmát) a frontendnek, ami betölti a kódot a "Szimulátorba".
+1.  The cadet clicks the "Start" button on a mission in the frontend.
+2.  The frontend asks the backend whether the cadet has already started this mission.
+3.  If there is no entry yet in the `cadet_missions` table:
+    a. The backend calls the Gitea API's `/api/v1/user/repos` endpoint on the cadet's behalf (or as an administrator, specifying the author's `gitea_user_id`).
+    b. It creates a **new, private repository**, e.g. named `python-basics-variables`.
+    c. The backend **uploads the mission's starter files via the API** (e.g. `main.py`, `README.md`) into the repo. Gitea's file API makes this possible without needing a local `git clone`.
+    d. The backend creates a new record in the `cadet_missions` table, storing the `cadet_id`, `mission_id`, the `status` (`IN_PROGRESS`), and the freshly created `repository_url`.
+4.  The backend returns the repo URL (and the file contents) to the frontend, which loads the code into the "Simulator".
 
-### 2.4. Kódolás és Mentés: Commit Létrehozása
+### 2.4. Coding and Saving: Creating a Commit
 
-A frontend kód editora **NEM** egy teljes értékű Git kliens. A folyamat sokkal egyszerűbb:
+The frontend's code editor is **NOT** a full-fledged Git client. The flow is much simpler:
 
-1.  A kadét írja a kódot a böngészőben.
-2.  A "Diagnosztika" gomb megnyomásakor (vagy egy periodikus auto-save hatására) a frontend elküldi a **fájl(ok) teljes, aktuális tartalmát** a `legymernok-backend`-nek.
-3.  A backend a kapott tartalommal **meghívja a Gitea API fájl módosító végpontját**, ami atomi módon létrehoz egy új commitot a kadét repo-jában. A commit üzenet lehet pl. `"Szimulátor mentés - 2025.11.28. 15:30"`.
+1.  The cadet writes code in the browser.
+2.  When the "Diagnostics" button is pressed (or on a periodic auto-save), the frontend sends the **full, current contents of the file(s)** to `legymernok-backend`.
+3.  With the received content, the backend **calls Gitea's file-modification API endpoint**, which atomically creates a new commit in the cadet's repo. The commit message might be something like `"Simulator save - 2025-11-28 15:30"`.
 
-### 2.5. Tesztelés: A Kód Futtatása a Sandbox-ban
+### 2.5. Testing: Running the Code in the Sandbox
 
-1.  A commit sikeres létrehozása után a backend elindítja a tesztelési folyamatot.
-2.  Elindít egy **elszigetelt, ideiglenes Docker konténert** (a "sandbox"-ot).
-3.  A konténeren belül egy `git clone <repository_url>` paranccsal letölti a kadét kódjának legfrissebb állapotát.
-4.  A backend lekérdezi a `mission_tests` táblából az adott küldetéshez tartozó tesztkódo(ka)t, és bemásolja a sandbox-ban lévő klónozott repo megfelelő helyére.
-5.  A sandbox-on belül elindítja a teszt futtató parancsot (pl. `pytest`).
-6.  A parancs kimenetét (stdout, stderr) és a kilépési kódját a backend "elfogja", és visszaküldi a frontendnek, ami megjeleníti azt a "Diagnosztikai Jelentés" fülön.
-7.  A tesztelés befejeztével a sandbox Docker konténer leáll és törlődik.
+1.  Once the commit is successfully created, the backend kicks off the testing process.
+2.  It spins up an **isolated, temporary Docker container** (the "sandbox").
+3.  Inside the container, it runs `git clone <repository_url>` to fetch the latest state of the cadet's code.
+4.  The backend looks up the test code(s) belonging to that mission in the `mission_tests` table, and copies them into the appropriate place in the cloned repo inside the sandbox.
+5.  Inside the sandbox it runs the test runner command (e.g. `pytest`).
+6.  The backend captures the command's output (stdout, stderr) and exit code, and sends it back to the frontend, which displays it in the "Diagnostic Report" tab.
+7.  Once testing is finished, the sandbox Docker container is stopped and removed.

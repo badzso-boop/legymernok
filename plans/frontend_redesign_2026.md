@@ -1,666 +1,680 @@
-# LégyMérnök.hu — Frontend Újratervezés és Engagement Funkciók (2026)
+# LégyMérnök.hu — Frontend Redesign and Engagement Features (2026)
 
-## 1. Kiindulási helyzet: a jelenlegi UI egy demó felület
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-08-14 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-A backend funkcionálisan kész és sokrétű (Mission Group, CONTENT, FILL_IN_BLANK, QUIZ, CODING,
-Gitea integráció, RBAC, feature flag-ek), de a frontend eddig kizárólag arra szolgált, hogy ezt a
-backendet tesztelni lehessen — **nem egy végleges, végiggondolt terméki felület**. Ennek konkrét,
-kódban is látható jelei:
+## 1. Starting point: the current UI is a demo surface
 
-- **Egyazon fogalomnak (misszió létrehozása/szerkesztése) két, teljesen különálló UI-ja van.**
-  Az admin `MissionEdit.tsx`-en beállítja a misszió alapadatait, de **QUIZ típusnál egy külön
-  gomb** ("Kvíz szerkesztő") a teljesen más dizájnú, nyers Monaco JSON-szerkesztős
-  `/forge/:missionId` oldalra navigál át — a kadétoknak szánt Mission Forge oldalra. Ugyanez
-  igaz CODING-ra: `MissionEdit.tsx`-ben van egy `MissionFileEditor` tab, DE emellett létezik a
-  teljesen külön `MissionForgePage.tsx` is, ami ugyanazt a repót más UI-val szerkeszti.
-- **A landing oldal és a bejelentkezés utáni "pilótafülke" minimalista, nem egységes vizuális
-  nyelvet használ** — nincs koherens design system, csak Material UI alapértelmezések + pár
-  RetroUI.css class.
-- **A user-oldali misszió-lejátszó felületek (CONTENT, FILL_IN_BLANK, QUIZ, CODING, Group Player)
-  külön-külön lettek megoldva**, saját layout-tal, nem egy közös "player shell" komponensben — ez
-  látszik is: van, ami mobilon használható, van, ami nem (pl. a CODING Monaco Editor).
-- **Nincs semmilyen engagement/visszatérési mechanika** (streak, barát, napi cél) — pedig a projekt
-  eredeti motivációja kifejezetten az volt, hogy a doomscrollingot váltsa ki egy tanulható,
-  "magába húzó" alternatívával (ld. [[project_legymernok]] memória, `new_direction_2026.md`,
+The backend is functionally complete and rich (Mission Group, CONTENT, FILL_IN_BLANK, QUIZ, CODING,
+Gitea integration, RBAC, feature flags), but the frontend has so far served purely to test that
+backend — **it is not a finished, deliberately designed product surface**. Concrete, code-visible
+signs of this:
+
+- **The same concept (creating/editing a mission) has two completely separate UIs.**
+  On `MissionEdit.tsx` the admin sets the mission's base data, but for the **QUIZ type a separate
+  button** ("Quiz editor") navigates away to the completely differently designed, raw Monaco
+  JSON-editor page at `/forge/:missionId` — the Mission Forge page meant for cadets. The same is
+  true for CODING: `MissionEdit.tsx` has a `MissionFileEditor` tab, BUT there's also a completely
+  separate `MissionForgePage.tsx`, which edits the same repo with a different UI.
+- **The landing page and the post-login "cockpit" use a minimalist, non-unified visual
+  language** — there's no coherent design system, just Material UI defaults plus a handful of
+  RetroUI.css classes.
+- **The cadet-facing mission player surfaces (CONTENT, FILL_IN_BLANK, QUIZ, CODING, Group Player)
+  were each built separately**, with their own layout, not inside one shared "player shell"
+  component — and it shows: some work on mobile, some don't (e.g. the CODING Monaco Editor).
+- **There is no engagement/retention mechanic whatsoever** (streak, friends, daily goal) — even
+  though the project's original motivation was explicitly to replace doomscrolling with a
+  learnable, "sticky" alternative (see the [[project_legymernok]] memory, `new_direction_2026.md`,
   `ux_ui_terv.md`).
 
-**A cél ezután:** nem új funkciókat írni a backendbe (az megvan), hanem **egy egységes, mobile-first,
-retro-sci-fi hangulatú, Duolingo-szerűen "sticky" terméki felületet** tervezni és megépíteni a
-meglévő API-k fölé — plusz néhány, kifejezetten az elköteleződést szolgáló új funkciót (streak,
-barátok, saját profil).
+**The goal from here:** not to write new backend features (that's done), but to design and build
+**a unified, mobile-first, retro-sci-fi, Duolingo-style "sticky" product surface** on top of the
+existing APIs — plus a handful of new features specifically aimed at engagement (streak, friends,
+own profile).
 
 ---
 
-## 2. Tervezési alapelvek
+## 2. Design principles
 
-1. **Mobile-first, de desktop-kompatibilis.** Minden új oldal elsőként mobil viewportra
-   (360–430px) tervezve, utána bővítve desktopra — nem fordítva, ahogy eddig.
-   **Fontos árnyalás, hol ér véget a "mobile-first" és hol kezdődik "mobile-usable":**
-   - **Kadét-oldali felületek (landing, dashboard, misszió-lejátszás, profil, barátok,
-     Star Map)** — ezek a termék *core* felülete, a doomscrolling-helyettesítő élmény. Ezeknél
-     a mobile-first nem csak reszponzivitást jelent, hanem hogy a fő interakció (thumb-reach
-     akció-sáv, egy oszlopos layout, nagy touch target, teljes képernyős player) **mobilon lesz
-     elsőként megtervezve és tesztelve**, a desktop nézet ebből származik.
-   - **Admin/content-creation felületek (Mission Editor, QuizBuilder, CodeMissionEditor, Star
-     System fa-szerkesztő)** — ezek **reszponzívak és használhatók** mobilon (nem törnek el, nem
-     kell vízszintesen scrollozni, a form-ok egy oszlopban rendeződnek), de **nem lesznek mobilra
-     optimalizálva elsődlegesen** a mélyebb tartalom-szerkesztésnél. **Ez tudatos, nem hanyagság**
-     — a termék motivációja (doomscrolling-helyettesítés) a *tanulói* oldalra vonatkozik, nem a
-     tartalom-adminisztrációra. Ezen belül két világosan elváló réteg van:
+1. **Mobile-first, but desktop-compatible.** Every new page is designed for mobile viewports
+   (360–430px) first, then extended to desktop — not the other way around, as it's been so far.
+   **An important nuance on where "mobile-first" ends and "mobile-usable" begins:**
+   - **Cadet-facing surfaces (landing, dashboard, mission playback, profile, friends,
+     Star Map)** — these are the product's *core* surface, the doomscrolling-replacement
+     experience. For these, mobile-first doesn't just mean responsiveness — it means the primary
+     interaction (thumb-reach action bar, single-column layout, large touch targets, full-screen
+     player) **is designed and tested on mobile first**, with the desktop view derived from that.
+   - **Admin/content-creation surfaces (Mission Editor, QuizBuilder, CodeMissionEditor, Star
+     System tree editor)** — these are **responsive and usable** on mobile (they don't break, no
+     horizontal scrolling needed, forms stack in a single column), but they **won't be primarily
+     optimized for mobile** when it comes to deeper content editing. **This is a deliberate choice,
+     not neglect** — the product's core motivation (replacing doomscrolling) applies to the
+     *learner* side, not to content administration. Within this there are two clearly separate
+     tiers:
 
-     **Mobilról is teljes értékűen elvégezhető "alap" admin műveletek** (ez a lista NEM
-     kompromisszumos, ugyanolyan jól kell működnie, mint desktopon):
-     - Star System / Group / Mission listák böngészése, keresés, szűrés
-     - Alapadatok szerkesztése bármely misszió-típusnál (név, leírás, nehézség, sorrend) — ez
-       maga a `MissionEditorPage` felső form-ja, ami mindig sima, egy-oszlopos mobil form
-     - Sorrend-módosítás a fa-szerkesztőben (`[↑][↓][→][←]` gombok — ezek eleve gombalapúak, nem
-       drag-and-drop-ra épülnek, így mobilon ugyanolyan jól működnek, mint desktopon)
-     - Feature flag be/kikapcsolása, user lista + role-hozzárendelés, feedback-lista áttekintése
-     - CONTENT szöveg gyors módosítása a `MarkdownStudio`-ban (mobilon tab-váltós
-       szerkesztés/előnézet mód, nem split-view — de a toolbar és a szerkesztés maga teljes
-       értékű)
-     - FILL_IN_BLANK blank/opció hozzáadása-szerkesztése (form-alapú lista, nem drag-heavy — a
-       "Blank hozzáadása" és opció be/ki jelölés mobilon is kényelmes)
-     - `QuizBuilder` alap használata: kérdés/opció hozzáadása, szövegszerkesztés, helyes válasz
-       jelölése — a sorrendezés itt is fel/le gombokkal megy, nem drag handle-lel, kifejezetten
-       azért, hogy mobilon is működjön
+     **"Base" admin operations that work fully on mobile** (this list is NOT a compromise — it
+     must work just as well as on desktop):
+     - Browsing, searching, and filtering Star System / Group / Mission lists
+     - Editing base data for any mission type (name, description, difficulty, order) — this is
+       the top form of `MissionEditorPage`, which is always a plain, single-column mobile form
+     - Reordering in the tree editor (`[↑][↓][→][←]` buttons — these are already button-based
+       rather than drag-and-drop, so they work just as well on mobile as on desktop)
+     - Toggling feature flags, the user list + role assignment, reviewing the feedback list
+     - Quick edits to CONTENT text in `MarkdownStudio` (tab-switching edit/preview mode on
+       mobile, not split-view — but the toolbar and the editing itself are fully functional)
+     - Adding/editing FILL_IN_BLANK blanks/options (a form-based list, not drag-heavy — "Add
+       blank" and toggling options on/off is comfortable on mobile too)
+     - Basic use of `QuizBuilder`: adding questions/options, editing text, marking the correct
+       answer — reordering here also uses up/down buttons rather than a drag handle, specifically
+       so it works on mobile as well
 
-     **Desktop-ajánlott, de mobilon sem törik el, csak szűkebb élmény:**
-     - `CodeMissionEditor` (fájlfa + Monaco) admin oldali, sablon-előkészítő használata — egy
-       fájl tartalmának gyors módosítása mobilon is megy, de a fájlfa böngészése/rendezgetése
-       sok fájlnál kényelmetlenebb egy kis képernyőn
-     - Szélesebb admin táblázatok sok oszloppal (pl. role/permission mátrix) — mobilon
-       vízszintesen scrollozható vagy leegyszerűsített kártyás nézetre vált, de nem elsődleges
-       optimalizálási cél
-2. **Egy fogalom, egy szerkesztő.** Egy misszió (bármilyen típusú) létrehozása és szerkesztése
-   **egyetlen oldalon** történjen, típusfüggő, beágyazott szerkesztő-panellel — sosem kell külön
-   oldalra navigálni "a tényleges tartalom" szerkesztéséhez.
-3. **Egy fogalom, egy lejátszó shell.** A user-oldali misszió-lejátszás (CONTENT, FILL_IN_BLANK,
-   QUIZ, CODING, és ezek Group Player-en belüli megjelenése) egy közös `MissionPlayerShell`
-   layout-ot használjon (fejléc, progress, navigáció egységesen), típusfüggő tartalommal középen.
-4. **A retro-sci-fi hangulat megmarad, de letisztultabban.** Nem "összedobott" pixel art +
-   Material UI keverék, hanem egy tudatos design system: űr-kék/fekete alap, neon accent színek,
-   konzisztens tipográfia (ld. `ux_ui_terv.md` már meglévő irányai), animációk egy helyen
-   definiálva (nem ad-hoc, oldalanként újraírva).
-5. **Duolingo-mintázat:** napi cél, streak, azonnali vizuális visszajelzés minden teljesítésnél,
-   barátok/követés a szociális nyomás miatt, saját profil a láthatóság/büszkeség miatt.
-6. **A meglévő i18n (magyar/angol) végig megmarad — nem visszalépés.** A projekt jelenleg is
-   teljesen kétnyelvű (`src/i18n/config.ts`, `en`/`hu` `resources`, `useTranslation()` hook
-   mindenhol, ld. `frontend/CLAUDE.md` konvenciói). Az újratervezés **egyetlen komponense sem
-   kaphat hardkódolt magyar (vagy angol) szöveget** — minden új UI-elem (a `MissionEditorPage`,
-   `MarkdownStudio`, `QuizBuilder`, `MissionPlayerShell`, a téma-választó, a streak/barátok/profil
-   felületek stb.) új `config.ts` kulcsokat kap **mindkét nyelven egyszerre**, ugyanabban a
-   struktúrában, ahogy eddig (ld. `mobile-friendly.md` "i18n kulcsok" szekciója — ugyanez a
-   minta folytatódik). Ez különösen fontos, mert több komponens **kiváltja** a régi megfelelőjét
-   (pl. `MissionForgePage` → `MissionEditorPage`) — a régi kulcsok csak akkor törölhetők
-   `config.ts`-ből, ha az adott komponens ténylegesen megszűnik és semmi más nem hivatkozik rájuk
-   (ellenőrizve grep-pel a kulcs nevére), különben "élő" fordítási kulcsok vesznek el észrevétlenül.
+     **Desktop-recommended, but doesn't break on mobile — just a narrower experience:**
+     - The admin-side, template-authoring use of `CodeMissionEditor` (file tree + Monaco) — a
+       quick edit to a single file's content works fine on mobile too, but browsing/organizing
+       the file tree with many files is more cumbersome on a small screen
+     - Wide admin tables with many columns (e.g. the role/permission matrix) — on mobile these
+       switch to horizontal scrolling or a simplified card view, but that's not a primary
+       optimization target
+2. **One concept, one editor.** Creating and editing a mission (of any type) happens **on a
+   single page**, with a type-dependent, embedded editor panel — you should never need to
+   navigate to a separate page to edit "the actual content."
+3. **One concept, one player shell.** Cadet-facing mission playback (CONTENT, FILL_IN_BLANK,
+   QUIZ, CODING, and their appearance inside the Group Player) uses a shared `MissionPlayerShell`
+   layout (header, progress, navigation, unified), with type-dependent content in the middle.
+4. **The retro-sci-fi mood stays, but more polished.** Not a "thrown-together" mix of pixel art
+   and Material UI, but a deliberate design system: a deep-space blue/black base, neon accent
+   colors, consistent typography (following the existing direction already set in `ux_ui_terv.md`),
+   animations defined in one place (not ad-hoc, rewritten per page).
+5. **Duolingo pattern:** daily goal, streak, instant visual feedback on every completion, a
+   friends/follow system for social pressure, an own profile for visibility/pride.
+6. **The existing i18n (Hungarian/English) is preserved throughout — not a step back.** The
+   project is already fully bilingual (`src/i18n/config.ts`, `en`/`hu` `resources`,
+   `useTranslation()` hook everywhere — see `frontend/CLAUDE.md` conventions). **No component in
+   the redesign may hardcode a Hungarian (or English) string** — every new UI element
+   (`MissionEditorPage`, `MarkdownStudio`, `QuizBuilder`, `MissionPlayerShell`, the theme picker,
+   the streak/friends/profile surfaces, etc.) gets new `config.ts` keys **in both languages at
+   once**, in the same structure as before (see the "i18n keys" section in `mobile-friendly.md` —
+   the same pattern continues). This matters especially because several components **replace**
+   their old counterpart (e.g. `MissionForgePage` → `MissionEditorPage`) — old keys may only be
+   removed from `config.ts` once the component they belonged to is actually gone and nothing else
+   references them (checked by grepping for the key name), otherwise "live" translation keys get
+   silently lost.
 
 ---
 
-## 3. Theming rendszer — Light / Dark / Space
+## 3. Theming system — Light / Dark / Space
 
-Az eredeti terv egyetlen, mindig-bekapcsolt "sci-fi csillagos háttér" témát feltételezett. Ez két
-szempontból is kevés: (1) nem mindenki akarja a teljes immerzív sci-fi élményt állandóan (pl.
-hosszabb CONTENT-olvasásnál zavaró lehet egy mozgó háttér), (2) egy statikus csillag-minta
-önmagában valóban "olcsónak" hat — egy modern, prémium-érzetű felülethez ennél többre van
-szükség: réteges mélység, finom mozgás, tudatos szín- és fény-nyelv.
+The original plan assumed a single, always-on "sci-fi starfield" theme. That falls short in two
+ways: (1) not everyone wants the full immersive sci-fi experience at all times (e.g. a moving
+background can be distracting during longer CONTENT reading), (2) a static star pattern on its
+own genuinely reads as "cheap" — a modern, premium-feeling surface needs more than that: layered
+depth, subtle motion, a deliberate color and light language.
 
-**Döntés:** három választható téma, a Settings oldalon állítható, alkalmazásindításkor a mentett
-preferenciát (backend `cadets.theme_preference` mező + `localStorage` cache az azonnali
-alkalmazáshoz villanás nélkül) tölti be:
+**Decision:** three selectable themes, configurable on the Settings page; on app startup it loads
+the saved preference (backend `cadets.theme_preference` field + `localStorage` cache for instant
+application without a flash):
 
-| Téma | Kinek | Jelleg |
+| Theme | For whom | Character |
 |---|---|---|
-| **Space** (alapértelmezett) | Az igazi termék-élmény, ez adja a márka identitását | Teljes immerzív sci-fi: réteges parallax csillagmező, nebula-gradiensek, glow/HUD elemek |
-| **Dark** | Aki a funkcionalitást akarja a teljes sci-fi látvány nélkül (pl. hosszú olvasás, akkumulátor-kímélés) | Sötét, letisztult, a márka szín- és tipográfia-nyelvét megtartja, de statikus háttér, nincs animáció |
-| **Light** | Nappali/kültéri használat, elérhetőségi preferencia | Világos alap, ugyanaz a komponens-rendszer, kontraszt-optimalizált |
+| **Space** (default) | The genuine product experience — this carries the brand identity | Fully immersive sci-fi: layered parallax starfield, nebula gradients, glow/HUD elements |
+| **Dark** | Anyone who wants the functionality without the full sci-fi visuals (e.g. long reading sessions, battery saving) | Dark, clean, keeps the brand's color and typography language but with a static background, no animation |
+| **Light** | Daytime/outdoor use, accessibility preference | Light base, same component system, contrast-optimized |
 
-Mindhárom **ugyanazt a komponens-készletet és layoutot** használja — a téma csak szín-tokeneket és
-(Space esetén) egy háttér-réteget cserél, nem külön implementáció.
+All three use **the same component set and layout** — the theme only swaps color tokens and (for
+Space) a background layer, it's not a separate implementation.
 
-### 3.1 Token-architektúra
+### 3.1 Token architecture
 
-- `theme/tokens.ts` — CSS custom property-alapú token-réteg (`--color-bg-base`,
+- `theme/tokens.ts` — a CSS custom-property-based token layer (`--color-bg-base`,
   `--color-accent-primary`, `--color-accent-secondary`, `--glow-sm/md/lg`, `--radius-*`,
-  `--spacing-*`), **témánként külön érték-halmazzal**, hogy a téma-váltás egy `data-theme`
-  attribútum cserével azonnal, újratöltés nélkül megtörténjen (MUI `ThemeProvider` ezekből a CSS
-  változókból építi a saját palettáját, hogy a Material komponensek és a saját komponensek
-  ugyanabból a forrásból színezzenek).
-- `theme/typography.ts` — közös minden témában: fejléc `Space Grotesk`, body `Inter`, kód
-  `Fira Code`. A tipográfia NEM téma-függő — a márka konzisztenciája a betűkészleten és a
-  spacing-en keresztül is érvényesül, nem csak a Space témán.
-- `theme/components.ts` — MUI komponens-override-ok egy helyen (`MuiButton`, `MuiCard`,
-  `MuiTextField` stb.), a fenti tokenekre hivatkozva — sosem hardkódolt szín/árnyék egy adott
-  komponensben.
+  `--spacing-*`), with **a separate value set per theme**, so a theme switch happens instantly
+  via a `data-theme` attribute swap, without a reload (the MUI `ThemeProvider` builds its own
+  palette from these CSS variables, so both Material components and our own components draw
+  color from the same source).
+- `theme/typography.ts` — shared across every theme: `Space Grotesk` for headings, `Inter` for
+  body text, `Fira Code` for code. Typography is NOT theme-dependent — brand consistency comes
+  through the typeface and spacing too, not just through the Space theme.
+- `theme/components.ts` — MUI component overrides in one place (`MuiButton`, `MuiCard`,
+  `MuiTextField`, etc.), referencing the tokens above — never a hardcoded color/shadow inside a
+  specific component.
 
-### 3.2 A "Space" téma kidolgozása — miért nem lesz "olcsó" hatású
+### 3.2 Fleshing out the "Space" theme — why it won't feel "cheap"
 
-A cél nem egy PNG csillag-tapéta, hanem **réteges mélység + finom, ambient mozgás + fény-nyelv**,
-a mai prémium UI-trendek (Linear, Arc Browser, Stripe gradiens-hátterek) mintájára, sci-fi
-színvilágba öntve:
+The goal isn't a PNG star wallpaper, but **layered depth + subtle, ambient motion + a light
+language**, following today's premium UI trends (Linear, Arc Browser, Stripe's gradient
+backgrounds), poured into a sci-fi palette:
 
-1. **Réteges parallax csillagmező** (nem egy statikus kép): 3 réteg, eltérő sebességgel/mérettel —
-   távoli réteg (apró, halvány pontok, alig látható mozgás), középső réteg (közepes csillagok,
-   lassú, folyamatos "twinkle" — opacity-pulzálás, nem pozíció-animáció, hogy ne legyen zavaró),
-   közeli réteg (néhány nagyobb, halvány fényudvaros csillag, nagyon lassú driftel). CSS
-   transform + `requestAnimationFrame` throttle-lel, **canvas helyett DOM/SVG réteg** — kevesebb
-   akkumulátor-terhelés mobilon, és `prefers-reduced-motion`-nál egyetlen kapcsolóval teljesen
-   kikapcsolható (statikus csillagmezőre esik vissza).
-2. **Nebula-gradiens foltok a háttérben** — nagy, elmosott (`filter: blur()`), lassan pozíciót
-   váltó radiális gradiens-foltok (indigo → magenta → cián, alacsony opacitással), NEM éles
-   csillag-pontok, hanem szín-mélység a háttérnek — ez adja a "drága" érzetet a lapos fekete
-   helyett. A bázisszín is változik: nem tiszta fekete (`#000`), hanem mély indigo-fekete
-   (`#05040F`-hez közeli), ami melegebb, kevésbé "üres" hatású.
-3. **Alkalmi "hulló csillag"** — ritkán (30–90 másodpercenként, randomizált késleltetéssel), egy
-   rövid, halvány csóva-animáció fut át a képernyőn — `aria-hidden`, dekoratív, és
-   `prefers-reduced-motion`-nál teljesen kikapcsolva.
-4. **Glassmorphism HUD-panelek** — a kártyák (`GlowCard`) nem tömör Material-kártyák, hanem
-   félig-áttetsző, `backdrop-filter: blur()` panelek finom, halványan izzó szegéllyel — mintha egy
-   űrhajó kijelzőjén lenne az adott panel, nem "rálapozva" a háttérre.
-5. **Konzisztens glow-nyelv interakcióknál** — fókusz/hover/aktív állapotok egységes,
-   token-vezérelt glow-val (`--glow-accent`), nem oldalanként újra kitalált `box-shadow` értékek.
-6. **Mobil teljesítmény-védelem** — a rétegek száma és a csillag-darabszám kisebb viewport-on
-   automatikusan csökken (pl. mobil: 1-2 réteg, kevesebb elem), hogy alacsonyabb kategóriás
-   telefonokon se legyen frame-drop vagy érezhető akkumulátor-terhelés.
+1. **Layered parallax starfield** (not a static image): 3 layers at different speeds/sizes — a
+   far layer (tiny, faint dots, barely-visible motion), a mid layer (medium stars, a slow,
+   continuous "twinkle" — an opacity pulse, not a position animation, so it isn't distracting), a
+   near layer (a few larger, faint, glowing stars that drift very slowly). CSS transforms with
+   `requestAnimationFrame` throttling, **a DOM/SVG layer instead of canvas** — lighter on mobile
+   battery, and fully switchable off with a single flag under `prefers-reduced-motion` (falls
+   back to a static starfield).
+2. **Nebula gradient patches in the background** — large, blurred (`filter: blur()`), slowly
+   drifting radial gradient patches (indigo → magenta → cyan, low opacity), NOT sharp star points
+   but color depth for the background — this is what gives the "premium" feel instead of flat
+   black. The base color changes too: not pure black (`#000`), but a deep indigo-black (close to
+   `#05040F`), which feels warmer and less "empty."
+3. **Occasional "shooting star"** — rarely (every 30–90 seconds, with randomized delay), a short,
+   faint streak animation crosses the screen — `aria-hidden`, purely decorative, and fully
+   disabled under `prefers-reduced-motion`.
+4. **Glassmorphism HUD panels** — cards (`GlowCard`) aren't solid Material cards, but
+   semi-transparent, `backdrop-filter: blur()` panels with a subtle, faintly glowing border — as
+   if the panel sits on a spacecraft display, not "pasted onto" the background.
+5. **A consistent glow language for interactions** — focus/hover/active states use a unified,
+   token-driven glow (`--glow-accent`), not `box-shadow` values reinvented per page.
+6. **Mobile performance protection** — the number of layers and the star count automatically
+   scale down on smaller viewports (e.g. mobile: 1–2 layers, fewer elements), so lower-end phones
+   don't get frame drops or a noticeable battery hit.
 
-A `StarfieldBackground`/`NebulaLayer` komponensek **paraméterezhetők** (réteg-szám, intenzitás),
-így a landing oldal kaphat egy teltebb, "hero" verziót, a dashboard/player felületek egy
-visszafogottabb, kevésbé figyelemelvonó verziót — ugyanabból a komponensből.
+The `StarfieldBackground`/`NebulaLayer` components are **parameterizable** (layer count,
+intensity), so the landing page can get a fuller, "hero" version while the dashboard/player
+surfaces get a more restrained, less distracting version — all from the same component.
 
-### 3.3 Dark és Light téma
+### 3.3 Dark and Light themes
 
-Nem "Space téma mínusz animáció" egyszerű levágás, hanem saját, tudatos szín-döntés:
+Not "Space theme minus the animation," but their own deliberate color decisions:
 
-- **Dark:** a Space téma alap-paletta-családjából indul (indigo-fekete alap, ugyanazok az accent
-  színek), de **statikus** háttér (nincs parallax/nebula-animáció), a glassmorphism helyett sima,
-  enyhén emelt felületű kártyák (`elevation`, nem `backdrop-blur`) — letisztultabb, kevésbé
-  figyelemelvonó, de vizuálisan még mindig egyértelműen "ugyanaz a márka".
-- **Light:** világos alap (nem tiszta fehér, enyhén hűvös szürkésfehér a szemkímélés miatt), az
-  accent-színek (cián/magenta) sötétebb, kontrasztosabb változatban (WCAG AA kontraszt-arány
-  ellenőrizve szöveg/háttér párokra), a márka-elemek (logó, ikonok) light-variánsban.
+- **Dark:** starts from the same base palette family as Space (indigo-black base, the same accent
+  colors), but with a **static** background (no parallax/nebula animation), plain, slightly
+  raised cards instead of glassmorphism (`elevation`, not `backdrop-blur`) — cleaner, less
+  distracting, but still visually unmistakably "the same brand."
+- **Light:** a light base (not pure white — a slightly cool off-white, easier on the eyes), the
+  accent colors (cyan/magenta) in a darker, higher-contrast variant (WCAG AA contrast ratio
+  checked for text/background pairs), brand elements (logo, icons) in a light variant.
 
-### 3.4 Közös komponensek (`components/shared/`)
+### 3.4 Shared components (`components/shared/`)
 
 `GlowCard`, `NeonButton`, `ProgressRing`, `StreakFlame`, `XpBadge`, `StarfieldBackground`,
-`NebulaLayer` — mind a token-rendszerből színeznek, egyik téma sincs beléjük hardkódolva.
-**`framer-motion`** egységesen az átmenetekhez/mikroanimációkhoz (már használatban, de
-konzisztensen kell alkalmazni, nem csak néhol).
+`NebulaLayer` — all draw their color from the token system, none of them hardcodes a theme.
+**`framer-motion`** is used consistently for transitions/micro-animations (already in use, but
+needs to be applied consistently rather than only in some places).
 
-### 3.5 Backend — téma-preferencia perzisztálása
+### 3.5 Backend — persisting the theme preference
 
-- `Cadet` entitás bővítés: `themePreference VARCHAR(10) DEFAULT 'SPACE'` (`SPACE`/`DARK`/`LIGHT`).
-- `PUT /api/auth/me/theme` — egyszerű, saját-magára szűkített frissítés (nincs szükség admin
-  jogosultságra, mindenki csak a saját preferenciáját írja).
-- A Settings oldalon egy 3-állású választó (kártyás preview-val, nem sima dropdown-nal — a user
-  lássa is, mit választ).
+- `Cadet` entity extension: `themePreference VARCHAR(10) DEFAULT 'SPACE'` (`SPACE`/`DARK`/`LIGHT`).
+- `PUT /api/auth/me/theme` — a simple, self-scoped update (no admin permission needed, everyone
+  only writes their own preference).
+- A three-way switcher on the Settings page (with a card-based preview, not a plain dropdown — so
+  the user can actually see what they're picking).
 
 ---
 
-## 4. Admin oldal — egységes tartalom-szerkesztő
+## 4. Admin page — a unified content editor
 
-### 4.1 A jelenlegi szétforgácsolt flow megszüntetése
+### 4.1 Eliminating today's fragmented flow
 
-| Ma | Új |
+| Today | New |
 |---|---|
-| `MissionEdit.tsx` alapadatok + `/forge/:id` külön oldal a QUIZ JSON-hoz | Egy `MissionEditorPage`, ahol a QUIZ típusnál egy beágyazott **`QuizBuilder`** komponens jelenik meg (kérdés/opció UI, nem nyers JSON) |
-| `MissionEdit.tsx` fájl-tab + külön `MissionForgePage.tsx` a CODING repóhoz | Egy beágyazott **`CodeMissionEditor`** komponens (fájlfa + Monaco), ugyanazon az oldalon |
-| `ContentEditor` külön tab-on, sima textarea | Beágyazott **`MarkdownStudio`** (ld. 4.2) |
-| `FillInBlankEditor` külön tab-on | Marad beágyazva, de a `MarkdownStudio` toolbar-elemeit is megkapja a template szöveg szerkesztéséhez |
+| `MissionEdit.tsx` for base data + a separate `/forge/:id` page for the QUIZ JSON | A single `MissionEditorPage`, where for the QUIZ type an embedded **`QuizBuilder`** component appears (a question/option UI, not raw JSON) |
+| `MissionEdit.tsx`'s file tab + a completely separate `MissionForgePage.tsx` for the CODING repo | An embedded **`CodeMissionEditor`** component (file tree + Monaco), on the same page |
+| `ContentEditor` on a separate tab, a plain textarea | An embedded **`MarkdownStudio`** (see 4.2) |
+| `FillInBlankEditor` on a separate tab | Stays embedded, but also gets `MarkdownStudio`'s toolbar elements for editing the template text |
 
-**Elv:** a `MissionEditorPage` egyetlen komponens, ami az alapadat-form alatt **közvetlenül**
-megjeleníti a típusfüggő tartalom-szerkesztőt (nem tab-váltással eldugva, nem külön route-ra
-navigálva) — a szerkesztő és a preview mindig látható, amint a típus ki van választva.
+**Principle:** `MissionEditorPage` is a single component that displays the type-dependent content
+editor **directly** below the base-data form (not hidden behind a tab switch, not navigated to on
+a separate route) — the editor and the preview are always visible as soon as the type is
+selected.
 
-Ez a komponens-réteg **közös a kadét Mission Forge-dzsal is** — a `MissionEditorPage` ugyanazokat
-az építőelemeket (`QuizBuilder`, `CodeMissionEditor`, `MarkdownStudio`) használja, csak más
-jogosultsági/route kontextusban (`/forge/new`, `/forge/:id` a kadétoknak, `/admin/missions/:id` az
-adminnak) — **nem két külön implementáció**, hanem egy komponens-készlet, két belépési ponttal.
+This component layer is **shared with the cadet-facing Mission Forge as well** — `MissionEditorPage`
+uses the same building blocks (`QuizBuilder`, `CodeMissionEditor`, `MarkdownStudio`), just in a
+different permission/route context (`/forge/new`, `/forge/:id` for cadets, `/admin/missions/:id`
+for admins) — **not two separate implementations**, but one component set with two entry points.
 
-### 4.2 `MarkdownStudio` — intuitívabb tartalom-szerkesztő
+### 4.2 `MarkdownStudio` — a more intuitive content editor
 
-A jelenlegi `ContentEditor`/`MarkdownEditor` egy sima textarea + preview. Az új verzió:
+The current `ContentEditor`/`MarkdownEditor` is a plain textarea + preview. The new version:
 
-- **Formázó toolbar** a textarea felett: H1/H2/H3, félkövér, dőlt, lista, számozott lista,
-  kódblokk, idézet, link, kép — mindegyik a kurzor/kijelölés köré szúrja be a megfelelő markdown
-  szintaxist (pl. kijelölt szöveg + Bold gomb → `**kijelölt szöveg**`).
-- **Split view desktopon** (szerkesztő | élő preview egymás mellett), **tab-váltás mobilon**
-  (Szerkesztés / Előnézet tab, mert egymás mellett nem fér el).
-- **"Blank hozzáadása" gomb** (FILL_IN_BLANK-nál) ugyanebbe a toolbar-ba integrálva, nem külön UI.
-- **Döntés: saját, kézzel írt toolbar + a már meglévő `react-markdown` (a projekt már használja,
-  nincs hozzá új dependency).** Nem `@mdxeditor/editor` vagy hasonló kész könyvtár, két okból:
-  (1) a "Blank hozzáadása" gomb (FILL_IN_BLANK) egy projekt-specifikus, nem szabványos markdown-
-  elem — ezt egy kész szerkesztő-könyvtárba is csak plugin-nal/megkerüléssel lehetne beépíteni,
-  míg egy saját toolbar-nál ez ugyanolyan gomb, mint a H1 vagy a Bold; (2) egy kész, önálló
-  stílus-rendszerrel érkező editor-könyvtár állandó küzdelmet jelentene a 3-témás (Space/Dark/
-  Light) token-rendszerrel való összehangolásban — egy saját toolbar a `theme/tokens.ts`-ből
-  színez, nincs mit felülírni.
+- **A formatting toolbar** above the textarea: H1/H2/H3, bold, italic, list, numbered list, code
+  block, quote, link, image — each one inserts the corresponding markdown syntax around the
+  cursor/selection (e.g. selected text + Bold button → `**selected text**`).
+- **Split view on desktop** (editor | live preview side by side), **tab switching on mobile**
+  (Edit / Preview tab, since side-by-side doesn't fit).
+- The **"Add blank" button** (for FILL_IN_BLANK) is integrated into this same toolbar, not a
+  separate UI.
+- **Decision: a hand-built toolbar plus the already-present `react-markdown` (the project already
+  uses it, no new dependency needed).** Not `@mdxeditor/editor` or a similar off-the-shelf
+  library, for two reasons: (1) the "Add blank" button (FILL_IN_BLANK) is a project-specific,
+  non-standard markdown element — this could only be added to an off-the-shelf editor library via
+  a plugin or workaround, whereas with a custom toolbar it's just another button, like H1 or Bold;
+  (2) a ready-made editor library with its own styling system would mean a constant fight to keep
+  it in sync with the 3-theme (Space/Dark/Light) token system — a custom toolbar draws its color
+  from `theme/tokens.ts`, nothing to override.
 
-### 4.3 `QuizBuilder` — a jelenlegi nyers JSON-szerkesztés helyett
+### 4.3 `QuizBuilder` — replacing the current raw JSON editing
 
-Egy tényleges form-alapú UI: kérdések listája, mindegyikhez szöveg + pontszám + opciók
-(szöveg + helyes/helytelen checkbox), drag-handle a sorrendhez, "+ Kérdés hozzáadása" /
-"+ Opció hozzáadása" gombok. A `quiz.json` struktúra (ld. `backend/CLAUDE.md`) változatlan marad —
-csak a szerkesztő UI vált nyers Monaco-ról form-ra. Mentéskor a builder állítja össze a JSON-t és
-ugyanazon a `/forge/{missionId}/save` endpointon küldi, mint eddig.
+An actual form-based UI: a list of questions, each with text + points + options (text +
+correct/incorrect checkbox), a drag handle for reordering, "+ Add question" / "+ Add option"
+buttons. The `quiz.json` structure (see `backend/CLAUDE.md`) stays unchanged — only the editor UI
+switches from raw Monaco to a form. On save, the builder assembles the JSON and sends it to the
+same `/forge/{missionId}/save` endpoint as before.
 
-### 4.4 Star System fa-szerkesztő — megmarad, finomodik
+### 4.4 Star System tree editor — stays, gets refined
 
-A `mobile-friendly.md`-ben már megtervezett fa-struktúra (Star System → Group → Mission,
-`[↑][↓][→][←]` gombokkal) koncepcionálisan jó és marad — csak vizuálisan kap egy retro-sci-fi
-átdolgozást (a jelenlegi Material UI lista helyett kártyás, ikonos, drag-and-drop-ra előkészített
-fa nézet).
+The tree structure already designed in `mobile-friendly.md` (Star System → Group → Mission, with
+`[↑][↓][→][←]` buttons) is conceptually sound and stays — it just gets a retro-sci-fi visual
+overhaul (a card-based, icon-driven, drag-and-drop-ready tree view instead of the current
+Material UI list).
 
-### 4.5 Meglévő admin felületek, amik megmaradnak — csak jól látható helyen
+### 4.5 Existing admin surfaces that stay — just in a more visible place
 
-Van néhány admin funkció, ami **funkcionálisan ma is teljes értékű**, csak a jelenlegi
-kaotikus/hosszú sidebar-listában könnyen elvész, és emiatt nem is triviális megtalálni:
+There are a few admin features that are **already functionally complete today**, but easily get
+lost in the current chaotic/long sidebar list, which makes them non-trivial to even find:
 
-- **Feature Flag kezelés** (`/admin/feature-flags`, `FeatureFlagList.tsx`) — táblázatos nézet,
-  soronként valódi `Switch`-csel be/ki kapcsolható flag, optimista UI-frissítéssel. Backend oldal
-  (`FeatureFlagController`/`Service`) teljes CRUD-dal már kész. **Ehhez a redesign-ban nincs
-  funkcionális teendő** — csak az egységesített admin navigációban (ld. 4.4-hez hasonlóan
-  kártyás/csoportosított menü, nem egy hosszú, differenciálatlan lista) kap egyértelmű, könnyen
-  megtalálható helyet, hogy ne kelljen "elveszni" benne, mint ma.
-- Hasonlóan megtartandó, csak navigációban jobban rendszerezendő: user/role/permission kezelés,
-  admin logok (WebSocket real-time nézet) — ezek se kapnak új funkciót ebben a körben, csak új
-  helyet az egységes admin navigációs struktúrában.
-
----
-
-## 5. Landing oldal és dashboard
-
-### 5.1 Landing (nem authentikált)
-
-A jelenlegi `HeroSection`/`FeaturesSection`/`AboutSection`/`FaqSection` szerkezet marad
-(tartalmilag jó bontás), de vizuálisan újratervezve:
-
-- A landing mindig a **Space téma "hero" intenzitású** `StarfieldBackground`/`NebulaLayer`
-  párosát kapja (ld. 3.2) — nem regisztrált látogatónak ez a téma-választó nem is jelenik meg
-  még, ez a márka bemutatkozó élménye. A mai `SpaceStationCanvas.tsx` izolált, csak-landing
-  megoldását váltja ki a közös, paraméterezett komponens.
-- A hero szekció kap egy karakter-animációt (a `new_direction_2026.md`-ben már megtervezett
-  "barátságos robot"). **Döntés: egyszerű SVG placeholder-rel indulunk** (nem várunk kész
-  illusztrátori assetre) — egyszerű geometrikus/vonalas SVG karakter, `framer-motion`-nal
-  animálva (integetés, lebegés), később cserélhető egy végleges illusztrációra anélkül, hogy a
-  layout/animációs logika változna.
-- CTA-k, kártyák a fenti design system komponenseivel (`GlowCard`, `NeonButton`).
-
-### 5.2 Dashboard (authentikált "pilótafülke")
-
-Jelenleg minimális. Új felépítés, Duolingo-inspirált információs hierarchiával felülről lefelé:
-
-1. **Streak + napi cél sáv** (ld. 7.1) — a legfelső, legszembetűnőbb elem.
-2. **"Folytasd onnan, ahol abbahagytad"** kártya — az utolsó aktív Star System/Group/Mission.
-3. **Star Map előnézet** — a felfedezett rendszerek mini-térképe, "Térkép megnyitása" CTA-val,
-   ugyanabból a komponensből, mint a 5.3-ban leírt teljes Star Map (kicsinyítve, nem interaktív).
-4. **Barátok aktivitása** (ld. 7.2) — kompakt lista, ki mit teljesített mostanában.
-
-**Backend — mindkét kártyához ÚJ endpoint kell, ma egyik sem létezik:**
-- **"Folytasd onnan" kártya:** `GET /api/dashboard/continue` — megkeresi a kadét legutóbb
-  módosított `CadetMission`/`MissionGroupProgress` rekordját (`lastUpdatedAt`/`startedAt` szerint
-  a legfrissebb, mindkét táblát figyelembe véve), és visszaadja a folytatáshoz szükséges
-  minimális adatot (`type`, `missionId`/`groupId`, `starSystemId`, `name`). Ma **semmilyen
-  aggregáló lekérdezés nem létezik erre** — a `MissionService.startMission()`-ben van egy
-  "resumed mission" log-sor, de az csak logol, nem query-zhető adat.
-- **Barátok aktivitása:** `GET /api/social/activity-feed` — a kadét által követett cadet-ek
-  (`follows` tábla, ld. 7.2) legutóbbi N teljesítése, időrendben csökkenő sorrendben,
-  `UNION`-szerűen összefésülve a `MissionGroupStepCompletion`, `FillInBlankAttempt`,
-  `MissionResult` táblákat (mindegyikhez `completedAt`/`submittedAt`/`completedAt` időbélyeg
-  van már). Egyszerű, de új service-metódus és DTO.
-
-### 5.3 Star Map (csillagtérkép) — teljes újragondolás
-
-A jelenlegi `StarMapCanvas.tsx` egy kézzel írt Canvas 2D rendering, ami konkrétan **nem illeszkedik
-sem a design system-hez, sem a mobile-first elvhez**:
-
-- **Vizuálisan zöld "radar/mátrix" stílus** (`VT323` monospace font, zöld szkennelő-vonal,
-  koncentrikus radar-körök) — teljesen más nyelvet beszél, mint a többi felület tervezett
-  cián/magenta neon sci-fi világa (`ux_ui_terv.md`). Ez egy izolált, sosem összehangolt dizájn-
-  sziget.
-- **A rendszerek pozíciója `hash(rendszer-id)` alapú pszeudo-random** — nincs mögötte valódi
-  struktúra vagy kapcsolat (bár a `new_direction_2026.md` eredetileg gráf-éleket és
-  előfeltétel-viszonyokat tervezett a rendszerek közé).
-- **Kizárólag egér-eseményekkel működik** (`onMouseMove`/`onClick`) — nincs touch/pinch/pan
-  kezelés. Mobilon ez azt jelenti, hogy egy tap találhat egy csillagot (a `onClick` browser-szinten
-  fut touch-on is), de a hover-alapú név/koordináta-felfedés és a nagyítás/pásztázás **egyáltalán
-  nem működik** — pont a legfontosabb, mobil-only felhasználói rétegnél törik el legjobban.
-- **A csillag színe mindig ugyanaz** (`#0f0`, statikus) — nincs vizuális állapot-visszajelzés
-  (folyamatban / teljesítve / még el sem kezdett), pedig ez az adat már létezik
-  (`CadetMission`/`MissionGroupProgress` rekordok) — az `ux_ui_terv.md` eredeti terve
-  ("Villog = Aktuális, Szürke = Zárt, Zöld = Kész") sosem lett ténylegesen bekötve.
-
-**Az új megközelítés:**
-
-1. **A kézzel írt Canvas lecserélése egy dedikált, touch-first gráf-vizualizációs könyvtárra** —
-   `react-flow` javasolt (ezt már a `new_direction_2026.md` is megcélozta korábban): natívan van
-   pan/zoom/pinch támogatása, node-click/tap kezelés, jól tesztelt mobilon is. Ez önmagában
-   megoldja a touch-interakció hiányát, kézzel írt gesztus-kezelés nélkül.
-2. **A csillag node-ok a Space-téma design nyelvét kapják** (`GlowCard`/glow-effektek, cián/magenta
-   paletta) a zöld radar-stílus helyett — vizuálisan egységes a landing/dashboard/player
-   felületekkel, nem egy elszigetelt "más app" érzés.
-3. **Valós állapot-alapú node-színezés**: szürke = még nem kezdett, pulzáló cián/glow = aktuális/
-   folytatható, zöld pipa-jelvény = teljesítve. **Ehhez ÚJ backend endpoint kell** — jelenleg
-   NINCS olyan lekérdezés, ami egy adott kadét összes Star System-jéhez egyben visszaadná az
-   összesített állapotot (a meglévő `with-missions` egy adott rendszer BELSEJÉT adja vissza,
-   nem az összes rendszer áttekintő státuszát). Új endpoint:
-   `GET /api/star-systems/with-progress` — minden Star System-hez hozzáadva egy számított
-   `status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"` mezőt, a `cadet_missions` és
-   `mission_group_progress` táblák aggregálásával (egyszerű szabály: ha a rendszer összes
-   missziója/group-ja COMPLETED → COMPLETED; ha legalább egy elindult → IN_PROGRESS; egyébként
-   NOT_STARTED). Nincs szükség új táblához, csak egy aggregáló service-metódushoz és DTO-bővítéshez.
-4. **Pozicionálás MVP-ben marad egyszerű, determinisztikus elrendezés** (radiális vagy grid-layout
-   az id alapján, hasonlóan a mostanihoz, csak `react-flow` node-koordinátaként) — a valódi
-   "előfeltétel-gráf" (melyik rendszer nyit meg melyiket, gráf-élekkel összekötve) egy külön,
-   **Stage 2 backend-munka** lenne (`StarSystem.prerequisiteId` mező bevezetése + zárolási logika)
-   — ld. 8. szekció, tudatosan NEM ebben a körben.
-5. **Dashboard preview** (5.2, 3. pont) ugyanebből a komponensből jön, csak kicsinyítve és
-   nem-interaktív módban paraméterezve — nem külön implementáció.
+- **Feature flag management** (`/admin/feature-flags`, `FeatureFlagList.tsx`) — a table view, each
+  row with an actual `Switch` for on/off, with optimistic UI updates. The backend side
+  (`FeatureFlagController`/`Service`) already has full CRUD. **There's no functional work needed
+  for this in the redesign** — it just gets a clear, easy-to-find spot in the unified admin
+  navigation (similar to 4.4, a card-based/grouped menu instead of one long, undifferentiated
+  list), so it doesn't get "lost" the way it does today.
+- Similarly kept, just better organized in the navigation: user/role/permission management, admin
+  logs (the real-time WebSocket view) — these don't get new functionality in this round either,
+  just a new place in the unified admin navigation structure.
 
 ---
 
-## 6. User-oldali misszió-lejátszás — egységes, mobil-first shell
+## 5. Landing page and dashboard
+
+### 5.1 Landing (unauthenticated)
+
+The current `HeroSection`/`FeaturesSection`/`AboutSection`/`FaqSection` structure stays (the
+content breakdown is sound), but is visually redesigned:
+
+- The landing page always gets the Space theme's **"hero" intensity** `StarfieldBackground`/
+  `NebulaLayer` pairing (see 3.2) — an unregistered visitor doesn't even see the theme picker
+  yet, this is the brand's introductory experience. This replaces the current, isolated,
+  landing-only `SpaceStationCanvas.tsx` solution with the shared, parameterized component.
+- The hero section gets a character animation (the "friendly robot" already planned in
+  `new_direction_2026.md`). **Decision: start with a simple SVG placeholder** (no waiting for a
+  finished illustrator asset) — a simple geometric/line-art SVG character, animated with
+  `framer-motion` (waving, floating), swappable later for a final illustration without changing
+  the layout/animation logic.
+- CTAs and cards use the design system components above (`GlowCard`, `NeonButton`).
+
+### 5.2 Dashboard (authenticated "cockpit")
+
+Currently minimal. New structure, with a Duolingo-inspired information hierarchy from top to
+bottom:
+
+1. **Streak + daily goal bar** (see 7.1) — the topmost, most prominent element.
+2. **"Continue where you left off"** card — the last active Star System/Group/Mission.
+3. **Star Map preview** — a mini-map of discovered systems, with an "Open map" CTA, from the same
+   component as the full Star Map described in 5.3 (scaled down, non-interactive).
+4. **Friends' activity** (see 7.2) — a compact list of who did what recently.
+
+**Backend — BOTH cards need a NEW endpoint, neither exists today:**
+- **"Continue where you left off" card:** `GET /api/dashboard/continue` — finds the cadet's most
+  recently modified `CadetMission`/`MissionGroupProgress` record (the most recent by
+  `lastUpdatedAt`/`startedAt`, considering both tables), and returns the minimal data needed to
+  continue (`type`, `missionId`/`groupId`, `starSystemId`, `name`). Today **no aggregating query
+  exists for this** — `MissionService.startMission()` has a "resumed mission" log line, but that's
+  only logged, not queryable data.
+- **Friends' activity:** `GET /api/social/activity-feed` — the most recent N completions by
+  cadets the current cadet follows (the `follows` table, see 7.2), in reverse chronological order,
+  merged `UNION`-style from the `MissionGroupStepCompletion`, `FillInBlankAttempt`, and
+  `MissionResult` tables (each already has a `completedAt`/`submittedAt`/`completedAt` timestamp).
+  A simple but new service method and DTO.
+
+### 5.3 Star Map — a full rethink
+
+The current `StarMapCanvas.tsx` is a hand-written Canvas 2D rendering that **fits neither the
+design system nor the mobile-first principle**:
+
+- **Visually a green "radar/matrix" style** (`VT323` monospace font, a green scanning line,
+  concentric radar circles) — a completely different language from the cyan/magenta neon sci-fi
+  world planned for every other surface (`ux_ui_terv.md`). It's an isolated, never-aligned design
+  island.
+- **System positions are `hash(system-id)`-based pseudo-random** — there's no real structure or
+  relationship behind them (even though `new_direction_2026.md` originally planned graph edges
+  and prerequisite relationships between systems).
+- **Works with mouse events only** (`onMouseMove`/`onClick`) — no touch/pinch/pan handling. On
+  mobile this means a tap can hit a star (since `onClick` also fires on touch at the browser
+  level), but hover-driven name/coordinate reveal and zoom/pan **don't work at all** — breaking
+  down hardest exactly for the most important, mobile-only user segment.
+- **A star's color is always the same** (`#0f0`, static) — there's no visual status feedback
+  (in progress / completed / not started yet), even though that data already exists
+  (`CadetMission`/`MissionGroupProgress` records) — the original plan in `ux_ui_terv.md`
+  ("Blinking = current, gray = locked, green = done") was never actually wired up.
+
+**The new approach:**
+
+1. **Replace the hand-written Canvas with a dedicated, touch-first graph visualization
+   library** — `react-flow` is recommended (already targeted earlier by `new_direction_2026.md`
+   too): it natively supports pan/zoom/pinch, node click/tap handling, and is well tested on
+   mobile. This alone solves the missing touch interaction, without hand-rolled gesture handling.
+2. **Star nodes get the Space theme's design language** (`GlowCard`/glow effects, the
+   cyan/magenta palette) instead of the green radar style — visually unified with the
+   landing/dashboard/player surfaces, not an isolated "different app" feel.
+3. **Real status-based node coloring**: gray = not started yet, a pulsing cyan/glow = current/
+   resumable, a green checkmark badge = completed. **This needs a NEW backend endpoint** —
+   currently there's NO query that returns the aggregated status for all of a given cadet's Star
+   Systems at once (the existing `with-missions` returns the INSIDE of one given system, not an
+   overview status across all systems). New endpoint:
+   `GET /api/star-systems/with-progress` — adds a computed `status: "NOT_STARTED" |
+   "IN_PROGRESS" | "COMPLETED"` field to every Star System, aggregated from the `cadet_missions`
+   and `mission_group_progress` tables (a simple rule: if every mission/group in the system is
+   COMPLETED → COMPLETED; if at least one has started → IN_PROGRESS; otherwise NOT_STARTED). No
+   new table needed, just an aggregating service method and a DTO extension.
+4. **Positioning stays a simple, deterministic layout in the MVP** (radial or grid layout based on
+   the id, similar to today, just as `react-flow` node coordinates) — the real "prerequisite
+   graph" (which system unlocks which, connected by graph edges) would be a separate,
+   **Stage 2 backend effort** (introducing a `StarSystem.prerequisiteId` field plus locking
+   logic) — see section 8, deliberately NOT part of this round.
+5. **The dashboard preview** (5.2, item 3) comes from this same component, just scaled down and
+   parameterized as non-interactive — not a separate implementation.
+
+---
+
+## 6. Cadet-facing mission playback — a unified, mobile-first shell
 
 ### 6.1 `MissionPlayerShell`
 
-Egy közös layout-komponens minden lejátszási módhoz (standalone CONTENT/QUIZ, Group Player belső
-lépései, CODING):
+One shared layout component for every playback mode (standalone CONTENT/QUIZ, the Group Player's
+internal steps, CODING):
 
-- Fejléc: vissza-gomb, misszió/csoport neve, progress indikátor (`x / y lépés`, vagy CODING esetén
-  "mentve" állapot).
-- Középső terület: a típusfüggő tartalom (ma is megvan komponensenként, csak közös keret nélkül).
-- Alsó akció-sáv: "Következő" / "Beküldés" / "Mentés" — mindig ugyanabban a pozícióban, mobilon a
-  képernyő aljához rögzítve (thumb-reach zóna), nem a tartalom végén elszórva.
+- Header: back button, mission/group name, a progress indicator (`x / y steps`, or a "saved"
+  status for CODING).
+- Middle area: the type-dependent content (already exists per component, just without a shared
+  frame).
+- Bottom action bar: "Next" / "Submit" / "Save" — always in the same position, pinned to the
+  bottom of the screen on mobile (the thumb-reach zone), not scattered at the end of the content.
 
-Ez az egy komponens váltja ki a jelenlegi `ContentMissionPage`, `GroupPlayerPage`,
-`QuizPlayerPage`, `CodingMissionPage` egymástól független layout-jait — mindegyik csak a
-*középső tartalmat* adja a shell-nek.
+This single component replaces the currently independent layouts of `ContentMissionPage`,
+`GroupPlayerPage`, `QuizPlayerPage`, and `CodingMissionPage` — each of them just supplies the
+*middle content* to the shell.
 
-### 6.2 CODING misszió mobilon
+### 6.2 CODING missions on mobile
 
-A Monaco Editor marad (döntés: nem váltunk CodeMirror-ra — kevesebb migrációs kockázat, a
-desktop UX nem sérül), de köré:
+Monaco Editor stays (decision: not switching to CodeMirror — less migration risk, and the desktop
+UX doesn't suffer), but around it:
 
-- **Teljes képernyős szerkesztő mód mobilon** — a fájlfa és a diagnosztikai panel alapból
-  összecsukva, bottom-sheet-ként előhúzható, hogy a szerkesztő maga kapja a maximális helyet.
-- **Virtuális billentyűzet feletti gyorsgombok sáv** (zárójelek, tab, indentálás) — mobil kódolás
-  legnagyobb súrlódási pontja jelenleg ez, nem maga a Monaco.
-- A "Mentés" / "Diagnosztika futtatása" gombok a `MissionPlayerShell` alsó akció-sávjában, nem a
-  fájlfa fölött elrejtve.
+- **A full-screen editor mode on mobile** — the file tree and the diagnostics panel are collapsed
+  by default, pullable up as a bottom sheet, so the editor itself gets the maximum available
+  space.
+- **A quick-action bar above the virtual keyboard** (brackets, tab, indentation) — this is
+  currently mobile coding's biggest friction point, not Monaco itself.
+- The "Save" / "Run diagnostics" buttons live in `MissionPlayerShell`'s bottom action bar, not
+  hidden above the file tree.
 
-### 6.3 Star System Detail nézet
+### 6.3 Star System detail view
 
-A `mobile-friendly.md`-ben tervezett progress-badge-es lista (Group/standalone Mission státusszal)
-tartalmilag jó, csak vizuálisan igazodik az új design system-hez, és a kártyák mobilon egy
-oszlopban, nagy touch targettel jelennek meg.
+The progress-badge list planned in `mobile-friendly.md` (Group/standalone Mission with status) is
+sound content-wise, it just gets aligned visually with the new design system, and the cards
+appear in a single column with large touch targets on mobile.
 
 ---
 
-## 7. Új engagement funkciók
+## 7. New engagement features
 
-### 7.1 Streak (napi sorozat)
+### 7.1 Streak
 
 **Backend:**
-- `Cadet` entitás bővítése: `currentStreak INT DEFAULT 0`, `longestStreak INT DEFAULT 0`,
+- `Cadet` entity extension: `currentStreak INT DEFAULT 0`, `longestStreak INT DEFAULT 0`,
   `lastActivityDate DATE`.
-- Egy countable "aktivitás" = bármilyen teljesített lépés (Group step complete, standalone
-  CONTENT elolvasva/"Következő", QUIZ beküldés, FILL_IN_BLANK sikeres beküldés, CODING sikeres
-  verifikáció). Ezekhez a meglévő endpointokhoz (`complete-step`, quiz submit, fill-in-blank
-  submit, mission-verification callback) egy közös `StreakService.recordActivity(cadetId)` hívás
-  kerül.
-- `recordActivity` logika: ha `lastActivityDate == ma` → nincs teendő. Ha `== tegnap` →
-  `currentStreak++`. Ha korábbi vagy null → `currentStreak = 1`. `longestStreak = max(longestStreak,
-  currentStreak)`. `lastActivityDate = ma`.
-- **Nincs külön ütemezett job** — a streak-törés (ha valaki kihagy egy napot) nem aktívan
-  detektálva "éjfélkor törik", hanem lustán: a következő aktivitáskor derül ki, hogy a
-  `lastActivityDate` nem tegnapi, és akkor nullázódik 1-re. A frontend-en megjelenő "jelenlegi
-  streak" mindig ezt az utoljára számolt értéket mutatja — MVP-ben elfogadható egyszerűsítés,
-  Stage 2-ben jöhet "streak freeze"/emlékeztető push.
-- `GET /api/auth/me` válasz bővül `currentStreak`, `longestStreak` mezőkkel (már úgyis minden
-  oldal lekéri ezt bejelentkezve).
+- A countable "activity" = any completed step (a Group step completion, standalone CONTENT
+  read/"Next", a QUIZ submission, a successful FILL_IN_BLANK submission, a successful CODING
+  verification). A shared `StreakService.recordActivity(cadetId)` call is added to the existing
+  endpoints for these (`complete-step`, quiz submit, fill-in-blank submit, the mission-verification
+  callback).
+- `recordActivity` logic: if `lastActivityDate == today` → nothing to do. If `== yesterday` →
+  `currentStreak++`. If earlier or null → `currentStreak = 1`. `longestStreak = max(longestStreak,
+  currentStreak)`. `lastActivityDate = today`.
+- **No separate scheduled job** — a broken streak (missing a day) isn't actively detected as
+  "breaking at midnight," but lazily: on the next activity it becomes clear that
+  `lastActivityDate` isn't yesterday, and it resets to 1. The "current streak" shown on the
+  frontend always reflects this last-computed value — an acceptable MVP simplification; Stage 2
+  could add a "streak freeze"/reminder push.
+- The `GET /api/auth/me` response gains `currentStreak` and `longestStreak` fields (every page
+  already fetches this when logged in anyway).
 
 **Frontend:**
-- `StreakFlame` komponens a dashboard tetején és a `MissionPlayerShell` fejlécében — lángikon +
-  szám, teljesítéskor rövid "streak +1" mikroanimáció.
+- A `StreakFlame` component at the top of the dashboard and in `MissionPlayerShell`'s header — a
+  flame icon + number, with a short "streak +1" micro-animation on completion.
 
-### 7.2 Barátok / követés
+### 7.2 Friends / following
 
-**Döntés a mechanikára:** a user kifejezetten Duolingo-analógiát adott referenciaként — a Duolingo
-**egyirányú követést** használ (nincs elfogadás, mint egy Twitter follow), ez egyszerűbb és jobban
-illik a "szociális nyomás, ki hol tart" motivációhoz, mint egy kétirányú barát-kérés/elfogadás
-flow. **Javaslat: egyirányú `Follow` reláció**, nem a Wrenchly-stílusú kétirányú
-`FriendRequest`/PENDING-ACCEPTED modell.
+**Decision on the mechanic:** the user explicitly gave Duolingo as a reference — Duolingo uses
+**one-way following** (no acceptance step, unlike a Twitter follow), which is simpler and fits the
+"social pressure, see where everyone stands" motivation better than a two-way friend
+request/accept flow. **Recommendation: a one-way `Follow` relation**, not the Wrenchly-style
+two-way `FriendRequest`/PENDING-ACCEPTED model.
 
 **Backend:**
-- Új tábla: `follows (follower_id UUID, followee_id UUID, created_at TIMESTAMPTZ, PRIMARY KEY
-  (follower_id, followee_id))` — mindkét irányú FK `cadets(id)`-re.
-- `FollowService`: `follow(followerId, followeeId)`, `unfollow(...)`,
-  `getFollowing(cadetId)`, `getFollowers(cadetId)`.
-- `GET /api/cadets/search?username=...` — username-alapú keresés (a `cadets.username` már unique
-  és indexelt).
-- `POST /api/cadets/{id}/follow` / `DELETE /api/cadets/{id}/follow` — a `GET /api/auth/me`-hez
-  hasonlóan **csak bejelentkezett állapot szükséges**, nincs finomszemcsés permission hozzárendelve
-  (ld. 11. szekció a pontos indoklásért — ez nem `mission:start`-hoz kapcsolódó jogosultság).
+- New table: `follows (follower_id UUID, followee_id UUID, created_at TIMESTAMPTZ, PRIMARY KEY
+  (follower_id, followee_id))` — both FKs pointing to `cadets(id)`.
+- `FollowService`: `follow(followerId, followeeId)`, `unfollow(...)`, `getFollowing(cadetId)`,
+  `getFollowers(cadetId)`.
+- `GET /api/cadets/search?username=...` — username-based search (`cadets.username` is already
+  unique and indexed).
+- `POST /api/cadets/{id}/follow` / `DELETE /api/cadets/{id}/follow` — similar to
+  `GET /api/auth/me`, **just being logged in is enough**, no fine-grained permission is attached
+  (see section 11 for the exact reasoning — this isn't a permission that belongs in the
+  `mission:start` category).
 
 **Frontend:**
-- Felhasználó-kereső (profil oldalon vagy külön "Flotta" oldalon).
-- Dashboard "Barátok aktivitása" kártya — a `GET /api/social/activity-feed` endpointot hívja
-  (ld. 5.2-nél a backend leírását, ne itt duplikálva).
+- A user search (on the profile page, or a separate "Fleet" page).
+- The dashboard's "Friends' activity" card — calls the `GET /api/social/activity-feed` endpoint
+  (backend described in 5.2, not duplicated here).
 
-### 7.3 Saját profil oldal
+### 7.3 Own profile page
 
 **Backend:**
-- `GET /api/cadets/{id}/profile` — publikus (bejelentkezve bárki más profilját is megnézheti):
+- `GET /api/cadets/{id}/profile` — public (any logged-in user can view anyone else's profile too):
   `username`, `fullName`, `avatarUrl`, `currentStreak`, `longestStreak`, `totalCompletedMissions`,
   `totalCompletedGroups`, `followerCount`, `followingCount`, `memberSince`.
-- A számított mezők (`totalCompletedMissions` stb.) egyszerű aggregáló query-k a meglévő
-  `cadet_missions`/`mission_group_progress` táblákon — nem kell hozzá új tábla.
+- The computed fields (`totalCompletedMissions`, etc.) are simple aggregating queries over the
+  existing `cadet_missions`/`mission_group_progress` tables — no new table needed.
 
 **Frontend:**
-- `ProfilePage` — avatar, alapadatok, streak, statisztika-kártyák, "Kövess" gomb (ha nem saját
-  profil), badge-ek helye (Stage 2-ben bővíthető, MVP-ben elég a számok).
-- Saját profil szerkesztése (avatar, fullName, username) — ez a Settings oldalon már részben
-  létezik, csak összekötve a ProfilePage-dzsel.
+- `ProfilePage` — avatar, base data, streak, stat cards, a "Follow" button (if not your own
+  profile), a place for badges (expandable in Stage 2, the numbers are enough for the MVP).
+- Editing your own profile (avatar, fullName, username) — this already partly exists on the
+  Settings page, just needs to be connected to `ProfilePage`.
 
 ---
 
-## 8. Nem ebben a körben (tudatosan kizárva)
+## 8. Not part of this round (deliberately excluded)
 
-- **Star System előfeltétel-gráf** (5.3) — a rendszerek közötti valódi "melyik nyit meg melyiket"
-  kapcsolat és zárolási logika (`StarSystem.prerequisiteId` + backend jogosultsági logika) külön
-  backend-munka; ebben a körben a Star Map csak vizuálisan/interakciósan újul meg, a pozíciók
-  MVP-ben továbbra is egyszerű, determinisztikus elrendezésből jönnek.
-- **XP/pontszám-rendszer és jelvények** — a `gamification_roadmap.md`-ben tervezett `reward_xp`
-  mechanika nem része ennek a körnek; a streak és a barát-rendszer önmagában is jelentős
-  engagement-javulást hoz, az XP-rendszer egy jól elkülöníthető, külön feature.
-- **Squad/csapat rendszer** (`gamification_roadmap.md` Fázis 2) — külön, nagyobb terv.
-- **`subscription_box_pivot.md`** fizikai termék iránya — ez egy más léptékű üzleti döntés, nem
-  frontend munka, nincs átfedés ezzel a tervvel.
-- **Blockly/vizuális programozás, Mobile Coding kártya-alapú mód** (`mobile-friendly.md` Stage 2) —
-  a CODING mobil-UX javítása (ld. 6.2) ebben a körben elég; a teljes alternatív interakciós mód
-  külön terv.
-- **AI keresés (`ai_embedding.md`), Social AI (`social_ai.md`)** — függetlenek ettől a körtől.
-- **Streak "freeze" és emlékeztető push-notifikáció** (7.1) — az MVP streak-logika lustán, a
-  következő aktivitáskor számol (ld. 7.1 részletesen), ez elég ehhez a körhöz; a
-  megszakadás-védelem és a push-emlékeztető külön, jól elkülöníthető feature.
+- **Star System prerequisite graph** (5.3) — the real "which system unlocks which" relationship
+  and locking logic between systems (`StarSystem.prerequisiteId` plus backend permission logic)
+  is separate backend work; in this round the Star Map only gets a visual/interaction refresh,
+  positions in the MVP still come from a simple, deterministic layout.
+- **XP/score system and badges** — the `reward_xp` mechanic planned in `gamification_roadmap.md`
+  is not part of this round; the streak and friends system alone already brings a significant
+  engagement improvement, the XP system is a well-separable, standalone feature.
+- **Squad/team system** (`gamification_roadmap.md` Phase 2) — a separate, larger plan.
+- **`subscription_box_pivot.md`'s physical-product direction** — this is a business decision at a
+  different scale, not frontend work, and has no overlap with this plan.
+- **Blockly/visual programming, the card-based mobile coding mode** (`mobile-friendly.md` Stage 2)
+  — the mobile UX improvement for CODING (see 6.2) is enough for this round; a full alternative
+  interaction mode is a separate plan.
+- **AI search (`ai_embedding.md`), Social AI (`social_ai.md`)** — independent of this round.
+- **Streak "freeze" and reminder push notifications** (7.1) — the MVP streak logic computes
+  lazily on the next activity (see 7.1 for details), which is enough for this round; breakage
+  protection and reminder pushes are a separate, well-separable feature.
 
 ---
 
-## 9. Megvalósítási sorrend (egy PR-on belül, checklist-szerűen)
+## 9. Implementation order (within a single PR, as a checklist)
 
-A user döntése alapján ez **egyetlen nagy PR**-ban valósul meg (nem külön fázis-PR-ok), de a
-munka belső sorrendje logikailag így épül egymásra:
+Per the user's decision, this ships as **one large PR** (not separate phase-PRs), but the internal
+work order builds up logically like this:
 
-1. **Téma-rendszer és design system alapok** — `theme/tokens.ts` mindhárom témával (Space/Dark/
-   Light), `theme/components.ts`, közös `components/shared/` komponensek (`StarfieldBackground`,
-   `NebulaLayer`, `GlowCard`, `NeonButton`, `StreakFlame`, `ProgressRing`), téma-váltó logika
-   (`data-theme` attribútum + `localStorage` + backend perzisztálás). Ez az alap, minden más erre
-   épül.
-2. **Backend: téma-preferencia + streak + follow + profil + dashboard/star-map aggregáló
-   endpointok** — a fenti 3.5, 5.2, 5.3, 7.1–7.3 szerint. Egy közös Flyway migrációval (`cadets`
-   tábla bővítés: `theme_preference`, `current_streak`, `longest_streak`, `last_activity_date` +
-   `follows` tábla) és 4 ÚJ endpoint, ami ma egyáltalán nem létezik:
+1. **Theme system and design system foundations** — `theme/tokens.ts` with all three themes
+   (Space/Dark/Light), `theme/components.ts`, shared `components/shared/` components
+   (`StarfieldBackground`, `NebulaLayer`, `GlowCard`, `NeonButton`, `StreakFlame`, `ProgressRing`),
+   theme-switching logic (`data-theme` attribute + `localStorage` + backend persistence). This is
+   the foundation everything else builds on.
+2. **Backend: theme preference + streak + follow + profile + dashboard/star-map aggregating
+   endpoints** — per sections 3.5, 5.2, 5.3, 7.1–7.3 above. One shared Flyway migration (`cadets`
+   table extension: `theme_preference`, `current_streak`, `longest_streak`,
+   `last_activity_date` + the `follows` table) and 4 NEW endpoints that don't exist at all today:
    `PUT /api/auth/me/theme`, `GET /api/dashboard/continue`, `GET /api/social/activity-feed`,
-   `GET /api/star-systems/with-progress` — mind egyszerű, meglévő táblákra épülő aggregáció,
-   nem igényel új domain-modellt (a `follows` tábla az egyetlen valódi új tábla). Párhuzamosan
-   futtatható a frontend munkával.
-3. **`MissionPlayerShell`** + a 4 meglévő lejátszó-oldal átalakítása, hogy csak a tartalmat adják.
-4. **`MarkdownStudio`, `QuizBuilder`, `CodeMissionEditor`** komponensek + **`MissionEditorPage`**
-   egyesítése (ez váltja ki a `MissionForgePage`/`MissionEdit` kettősséget).
-5. **Landing + Dashboard újratervezés** a design systemre + streak/barátok kártyákra építve.
-6. **Profil oldal + felhasználó-kereső.**
-7. **Mobil CODING UX finomítás** (bottom-sheet fájlfa, gyorsgomb-sáv).
-8. **Star System fa-szerkesztő vizuális átdolgozása.**
-9. **Star Map lecserélése `react-flow`-alapú, touch-first vizualizációra** (5.3) — a Canvas 2D
-   render megszűnik, node-színezés valós progress-adatból.
-10. Végigtesztelés mobil viewporton (360px, 390px, 430px) minden érintett oldalon + meglévő
-    Cypress/Vitest tesztek frissítése az átalakított komponensekre.
+   `GET /api/star-systems/with-progress` — all simple aggregations over existing tables, no new
+   domain model needed (the `follows` table is the only genuinely new table). Can run in parallel
+   with the frontend work.
+3. **`MissionPlayerShell`** + reworking the 4 existing player pages so they only supply content.
+4. **`MarkdownStudio`, `QuizBuilder`, `CodeMissionEditor`** components + unifying them into
+   **`MissionEditorPage`** (this replaces the `MissionForgePage`/`MissionEdit` duality).
+5. **Landing + dashboard redesign**, built on the design system plus the streak/friends cards.
+6. **Profile page + user search.**
+7. **Mobile CODING UX refinement** (bottom-sheet file tree, quick-action bar).
+8. **Visual overhaul of the Star System tree editor.**
+9. **Replacing the Star Map with a `react-flow`-based, touch-first visualization** (5.3) — the
+   Canvas 2D rendering goes away, node coloring comes from real progress data.
+10. End-to-end testing on mobile viewports (360px, 390px, 430px) on every affected page, plus
+    updating the existing Cypress/Vitest tests for the reworked components.
 
-**Minden fenti lépés keresztmetsző követelménye (nem külön lépés, hanem folyamatos elvárás):**
-minden új szöveg azonnal bekerül `config.ts`-be **mindkét nyelven** (`en`/`hu`), a komponens
-`useTranslation()`-t használ, sosem hardkódolt stringet — ahogy ma is elvárt konvenció
-(`frontend/CLAUDE.md`). Amikor egy régi komponens (pl. `MissionForgePage`) ténylegesen megszűnik
-és lecserélődik, az utolsó lépés a hozzá tartozó, máshol nem hivatkozott `config.ts` kulcsok
-törlése — nem hagyjuk se élő kódot fordítás nélkül, se holt fordítási kulcsokat a fájlban.
+**A cross-cutting requirement for every step above (not a separate step, but a continuous
+expectation):** every new string immediately goes into `config.ts` **in both languages** (`en`/`hu`),
+the component uses `useTranslation()`, never a hardcoded string — the same convention already
+required today (`frontend/CLAUDE.md`). When an old component (e.g. `MissionForgePage`) is actually
+retired and replaced, the last step is removing its `config.ts` keys once nothing else references
+them — leaving neither unlocalized live code nor dead translation keys in the file.
 
 ---
 
-## 10. Frontend architektúra és minták — megbízhatóbb, átláthatóbb kód
+## 10. Frontend architecture and patterns — more reliable, more readable code
 
-Ez nem csak vizuális újratervezés — a mostani frontend kód **következetlensége nem csak dizájn-
-szinten** van jelen, hanem architektúra-szinten is, és ez ugyanolyan valós minőségi kockázat, mint
-a szétforgácsolt UI. Konkrét, kód-szinten ellenőrzött bizonyíték a mai állapotra:
+This isn't just a visual redesign — the current frontend code's inconsistency **isn't only at the
+design level**, it's also at the architecture level, and that's just as real a quality risk as the
+fragmented UI. Concrete, code-level evidence of the current state:
 
-- **11 fájl megkerüli a központi `api/client.ts`-t**, közvetlen `axios`-t importálva
+- **11 files bypass the central `api/client.ts`**, importing `axios` directly
   (`MissionList.tsx`, `UserEdit.tsx`, `PermissionList.tsx`, `StarSystemList.tsx`, `UserList.tsx`,
-  `RoleList.tsx`, `RoleEdit.tsx` és a hozzájuk tartozó tesztek) — ez azt jelenti, hogy ezek az
-  oldalak **kikerülik a 401-interceptort**, tehát lejárt tokennél nem jelentkeztetik ki a usert
-  automatikusan, ellentétben a `frontend/CLAUDE.md`-ben már dokumentált elvárással.
-- **A `@tanstack/react-query` már telepítve és bekötve van** (`QueryClientProvider` a
-  `main.tsx`-ben), és a **újabb** felületek (Mission Forge, Play oldalak, `FillInBlankEditor`,
-  `ContentEditor`, `MissionFileEditor`, Feedback oldal) már ezt használják — DE a **régebbi** admin
-  CRUD-listák (`MissionList`, `StarSystemList`, `UserList`, `RoleList`, `PermissionList`,
-  `LogList`, `FeatureFlagList`) mind kézzel írt `useEffect` + `useState(loading/error/data)`
-  boilerplate-et ismételnek, oldalanként enyhén eltérő hibakezeléssel. Ez pontosan az a fajta
-  következetlenség, ami miatt az egész kódbázis nehezen átlátható — **két különböző adatlekérési
-  minta él egymás mellett, ugyanarra a problémára**.
-- **`react-hook-form` + `zod`** (a `frontend/CLAUDE.md` szerint már a választott form-stack) csak
-  3 helyen van ténylegesen használva (`LoginPage`, `RegisterPage`, `ForgeConfigPanel`) — a többi
-  form (pl. `MissionEdit.tsx`) nyers `useState`-objektummal és kézi `onChange`-kel van megírva,
-  validáció nélkül vagy ad-hoc validációval.
+  `RoleList.tsx`, `RoleEdit.tsx` and their tests) — meaning these pages **bypass the 401
+  interceptor**, so on an expired token they don't automatically log the user out, contrary to the
+  behavior already documented as expected in `frontend/CLAUDE.md`.
+- **`@tanstack/react-query` is already installed and wired up** (`QueryClientProvider` in
+  `main.tsx`), and the **newer** surfaces (Mission Forge, the Play pages, `FillInBlankEditor`,
+  `ContentEditor`, `MissionFileEditor`, the Feedback page) already use it — BUT the **older**
+  admin CRUD lists (`MissionList`, `StarSystemList`, `UserList`, `RoleList`, `PermissionList`,
+  `LogList`, `FeatureFlagList`) all repeat hand-written `useEffect` + `useState(loading/error/data)`
+  boilerplate, with slightly different error handling per page. This is exactly the kind of
+  inconsistency that makes the whole codebase hard to follow — **two different data-fetching
+  patterns coexist for the same problem**.
+- **`react-hook-form` + `zod`** (already the chosen form stack per `frontend/CLAUDE.md`) is only
+  actually used in 3 places (`LoginPage`, `RegisterPage`, `ForgeConfigPanel`) — the remaining
+  forms (e.g. `MissionEdit.tsx`) are written with a raw `useState` object and manual `onChange`
+  handlers, with no validation or only ad-hoc validation.
 
-**Ezért a redesign explicit architektúra-minták bevezetését is jelenti, nem csak vizuális munkát:**
+**That's why the redesign also means introducing explicit architecture patterns, not just visual
+work:**
 
-### 10.1 Adatlekérés — kizárólag React Query, mindenhol
+### 10.1 Data fetching — React Query everywhere, no exceptions
 
-Minden, ami eddig `useEffect` + `useState` + kézi `loading`/`error` kombinációval volt megoldva
-(a fenti admin listák is), **átkerül `useQuery`/`useMutation`-ra**. Ez nem új könyvtár bevezetése
-— a projekt már használja, csak nem konzisztensen. Konkrét haszon: automatikus cache, retry,
-race-condition-mentes state (a kézzel írt verzióknál valós kockázat, hogy egy gyors egymás utáni
-navigáció közben egy elavult response felülírja a state-et — React Query ezt garantáltan kezeli),
-és **egyetlen, közös hibakezelési minta** minden oldalon (ld. 10.3).
+Everything that's currently solved with `useEffect` + `useState` + manual `loading`/`error`
+handling (including the admin lists above) **moves to `useQuery`/`useMutation`**. This isn't a new
+library — the project already uses it, just not consistently. Concrete benefit: automatic
+caching, retries, and race-condition-free state (with the hand-written versions there's a real
+risk that a fast back-to-back navigation lets a stale response overwrite state — React Query
+guarantees this is handled), and **a single, shared error-handling pattern** across every page
+(see 10.3).
 
-### 10.2 API réteg fegyelme — `client.ts` kizárólagossága
+### 10.2 Discipline in the API layer — `client.ts` as the only way in
 
-A közvetlen `axios` import **megszűnik minden komponensben** — ez a redesign explicit takarítási
-feladata is (nem csak az új felületeknél kell betartani, a meglévő 11 érintett fájlt is át kell
-írni, amint hozzájuk nyúlunk). Javasolt: egy ESLint szabály (`no-restricted-imports` az `axios`
-csomagra, kivéve magát a `client.ts`-t), hogy ez a hiba a jövőben build/lint-időben kiderüljön,
-ne csak egy auditban.
+Direct `axios` imports **disappear from every component** — this is an explicit cleanup task of
+the redesign too (not just something to follow on new surfaces, the existing 11 affected files
+get rewritten as they're touched). Recommended: an ESLint rule (`no-restricted-imports` on the
+`axios` package, except inside `client.ts` itself), so this mistake surfaces at build/lint time
+going forward, not just in an audit.
 
-### 10.3 Egységes betöltés-/hiba-állapot komponens
+### 10.3 A unified loading/error state component
 
-Egy közös `components/shared/QueryStateHandler.tsx` (vagy hasonló) — betölti a `useQuery` state-jét
-(`isLoading`/`isError`/`data`), és egységesen jelenít meg skeleton/spinner-t, illetve hiba esetén
-egy retry-gombos `Alert`-et a Space design system nyelvén. Minden lista/detail oldal ezt használja
-a saját, kézzel írt loading/error JSX helyett — ez önmagában megszünteti azt a fajta
-következetlenséget, hogy ma minden oldal kicsit másképp néz ki betöltéskor/hibánál.
+A shared `components/shared/QueryStateHandler.tsx` (or similar) — takes a `useQuery` state
+(`isLoading`/`isError`/`data`) and consistently renders a skeleton/spinner, or a retry-button
+`Alert` on error, in the Space design system's language. Every list/detail page uses this instead
+of its own hand-written loading/error JSX — on its own, this eliminates the kind of inconsistency
+where every page currently looks slightly different while loading or erroring.
 
-### 10.4 Form-ok — `react-hook-form` + `zod` mindenhol
+### 10.4 Forms — `react-hook-form` + `zod` everywhere
 
-Minden új/átalakított form (`MissionEditorPage` alapadat-form, `QuizBuilder`, `FillInBlankEditor`,
-Settings, téma-választó, felhasználó-kereső) `react-hook-form`-mal és `zod` séma-validációval
-készül — nem nyers `useState`-objektummal, ahogy a mai `MissionEdit.tsx`. A validációs sémák
-`types/` mellé, egy `schemas/` mappába kerülnek, hogy a frontend és a backend `@Valid`
-validációja (ld. 11. szekció) tudatosan tükrözze egymást (pl. ugyanaz a max hossz mindkét oldalon).
+Every new/reworked form (`MissionEditorPage`'s base-data form, `QuizBuilder`, `FillInBlankEditor`,
+Settings, the theme picker, the user search) is built with `react-hook-form` and `zod` schema
+validation — not a raw `useState` object, the way today's `MissionEdit.tsx` is. Validation schemas
+go into a `schemas/` folder next to `types/`, so the frontend and the backend's `@Valid`
+validation (see section 11) deliberately mirror each other (e.g. the same max length on both
+sides).
 
-### 10.5 Mappastruktúra finomítás
+### 10.5 Folder structure refinement
 
-A jelenlegi `pages/`/`components/` felosztás alapvetően jó, csak jobban be kell tartani:
-- **`pages/`** — kizárólag route-szintű összeállítás (layout + a megfelelő domain-komponensek
-  behívása), **nincs bennük üzleti logika vagy közvetlen API-hívás**.
-- **`hooks/`** — minden adat-lekérési/üzleti logika ide kerül, domain szerint elnevezve
-  (`useMissionEditor`, `useStarMap`, `useDashboard`, `useFollowList` stb.) — ezek hívják a
-  `useQuery`/`useMutation`-t és az `api/client.ts` modulokat, a `pages/` csak ezt a hook-ot hívja
-  meg és a visszakapott state-et adja a komponenseknek.
-- **`components/shared/`** — design system primitívek (3.4 szekció).
-- **`components/domain/<domain>/`** (pl. `components/domain/mission/`, `components/domain/social/`)
-  — domain-specifikus, több oldal között újrafelhasználható UI-darabok (pl. `QuizBuilder`,
-  `MarkdownStudio`, `StreakFlame` felhasználási helyei, `FriendCard`).
+The current `pages/`/`components/` split is fundamentally sound, it just needs to be followed more
+strictly:
+- **`pages/`** — purely route-level composition (layout + pulling in the right domain
+  components), **no business logic or direct API calls inside them**.
+- **`hooks/`** — all data-fetching/business logic moves here, named by domain
+  (`useMissionEditor`, `useStarMap`, `useDashboard`, `useFollowList`, etc.) — these call
+  `useQuery`/`useMutation` and the `api/client.ts` modules, and `pages/` just calls this hook and
+  passes the resulting state down to components.
+- **`components/shared/`** — design system primitives (section 3.4).
+- **`components/domain/<domain>/`** (e.g. `components/domain/mission/`,
+  `components/domain/social/`) — domain-specific UI pieces reused across multiple pages (e.g.
+  `QuizBuilder`, `MarkdownStudio`'s usage sites, `FriendCard`).
 
-Ez a réteg-szétválasztás (pages = vékony összeállítás, hooks = logika, components = megjelenítés)
-az, ami a "megbízhatóbb, átláthatóbb kód" konkrét, számonkérhető definíciója ebben a körben — nem
-elvont minőségi cél, hanem minden PR review-nál ellenőrizhető szabály.
+This layer separation (pages = thin composition, hooks = logic, components = presentation) is the
+concrete, checkable definition of "more reliable, more readable code" for this round — not an
+abstract quality goal, but a rule that can be checked in every PR review.
 
-### 10.6 Tesztelési elvárás új/átalakított komponenseknél
+### 10.6 Testing expectations for new/reworked components
 
-Követve a meglévő konvenciót (`pages/admin/__tests__/`, `components/forge/quiz/__tests__/`): minden
-új megosztott komponens (`GlowCard`, `MissionPlayerShell`, `QuizBuilder` stb.) Vitest unit tesztet
-kap, minden új user-flow (téma-váltás, streak-növekedés, follow/unfollow, Star Map interakció)
-legalább egy Cypress E2E happy-path tesztet — ugyanabba a `cypress/e2e/` struktúrába, ahogy a
-meglévő `admin_missions.cy.ts` stb.
+Following the existing convention (`pages/admin/__tests__/`, `components/forge/quiz/__tests__/`):
+every new shared component (`GlowCard`, `MissionPlayerShell`, `QuizBuilder`, etc.) gets a Vitest
+unit test, every new user flow (theme switching, streak increment, follow/unfollow, Star Map
+interaction) gets at least one Cypress E2E happy-path test — in the same `cypress/e2e/` structure
+as the existing `admin_missions.cy.ts`, etc.
 
 ---
 
-## 11. Backend — meglévő minták követése, nem újak bevezetése
+## 11. Backend — following existing patterns, not introducing new ones
 
-A 7. és a frissített 5.2/5.3 szekcióban felsorolt új backend munka (streak, follow, profil,
-téma-preferencia, dashboard/continue, activity-feed, star-systems/with-progress) **mind a
-projektben már bevett, dokumentált mintákat követi** (`backend/CLAUDE.md`, `api_spec.md`) — nincs
-új architekturális döntés, csak a meglévő réteg-struktúra bővítése:
+The new backend work listed in section 7 and the updated 5.2/5.3 (streak, follow, profile, theme
+preference, dashboard/continue, activity-feed, star-systems/with-progress) **all follows patterns
+already established and documented in the project** (`backend/CLAUDE.md`, `api_spec.md`) — there's
+no new architectural decision here, just an extension of the existing layer structure:
 
-- **Réteg-felépítés változatlan:** minden új funkció `web/<domain>` (Controller) →
+- **The layering stays unchanged:** every new feature gets a `web/<domain>` (Controller) →
   `service/<domain>` (Service) → `repository/<domain>` (Repository) → `model/<domain>` (Entity)
-  → `dto/<domain>` (Request/Response) csomagszerkezetet kap, pontosan úgy, ahogy pl. a
-  `featureflag` vagy `fillinblank` domain már fel van építve. Konkrétan: `service/social/`
-  (`FollowService`, `ActivityFeedService`), `service/dashboard/` (`DashboardService`),
-  `web/social/` (`FollowController`, `SocialController`), `web/dashboard/`
-  (`DashboardController`).
-- **Kivétel-kezelés a meglévő egyedi osztályokkal** (`exception/` csomag) — pl. "nem követheted
-  saját magad" → `ResourceConflictException` vagy egy új, hasonlóan egyszerű `IllegalStateException`-
-  alapú business-kivétel, **nem** nyers `ex.getMessage()` a kliens felé (ld. a
-  `GlobalExceptionHandler`-re vonatkozó, már meglévő biztonsági szabály).
-- **`@Transactional` fegyelem** — write-műveletek (`follow`, `unfollow`, streak-frissítés,
-  téma-preferencia mentés) sima `@Transactional`, olvasó aggregációk (`with-progress`,
-  `dashboard/continue`, `activity-feed`) `@Transactional(readOnly = true)`, a meglévő szabály
-  szerint (write sose fusson `readOnly` outer tranzakcióból).
-- **Owner/permission-minta pontosítás:** a korábbi tervezetben tévesen a `mission:start`
-  permission-t neveztük meg a `follow`/`unfollow` végpontokhoz — ez félrevezető lenne, mert az
-  a `mission:start`-hoz sem tartalmilag, sem jogosultsági kategóriában nem kapcsolódik. A helyes
-  minta a meglévő `GET /api/auth/me`-hez hasonló: **egyszerűen bejelentkezett állapot elég, nincs
-  szükség finomszemcsés permission-re** (`@PreAuthorize` nélkül, csak a JWT-filter által biztosított
-  autentikáció). Ugyanez igaz a `dashboard/continue`, `activity-feed`, `star-systems/with-progress`,
-  `auth/me/theme` végpontokra — mind "a saját, bejelentkezett kadétra vonatkozó" adat, nem
-  admin-szintű vagy tulajdonos-ellenőrzést igénylő erőforrás.
-- **DTO + `@Valid` fegyelem** — minden új request DTO-n (`FollowRequest` ha szükséges,
-  `ThemePreferenceRequest`) Bean Validation annotációk, a controller metóduson `@Valid`, a már
-  dokumentált biztonsági minta szerint.
-- **Flyway migráció, additív, egy logikai egység egy fájlban** — a `cadets` tábla bővítése és a
-  `follows` tábla létrehozása **két külön migrációs fájl** lehet (`Vn__add_cadet_engagement_fields.sql`,
-  `Vn+1__create_follows_table.sql`), a projekt eddigi "egy logikai változás, jól követhető
-  migráció" gyakorlatát folytatva (ld. `V1`–`V6` jelenlegi migrációk).
-- **Teszt-lefedettség a meglévő minta szerint:** minden új service-hez `*ServiceTest.java`
-  (JUnit5 + Mockito, `MockDatabaseTest` minta), minden új controllerhez
-  `*ControllerSecurityTest.java` (a `@PreAuthorize`/auth-viselkedés ellenőrzésére) — pontosan
-  ahogy a `FeatureFlagServiceTest`/`FeatureFlagControllerSecurityTest` pár is fel van építve.
-- **Code review kötelezettség változatlan:** 3+ fájl módosítása esetén a `code-quality-reviewer`
-  agent, a repo gyökér `CLAUDE.md`-jében rögzített szabály szerint — ez az új backend munkára is
-  ugyanúgy vonatkozik, mint bármelyik korábbi feature-re.
+  → `dto/<domain>` (Request/Response) package structure, exactly like e.g. the `featureflag` or
+  `fillinblank` domain is already built. Specifically: `service/social/` (`FollowService`,
+  `ActivityFeedService`), `service/dashboard/` (`DashboardService`), `web/social/`
+  (`FollowController`, `SocialController`), `web/dashboard/` (`DashboardController`).
+- **Exception handling with the existing custom classes** (`exception/` package) — e.g. "you
+  can't follow yourself" → `ResourceConflictException` or a new, similarly simple
+  `IllegalStateException`-based business exception, **not** a raw `ex.getMessage()` sent to the
+  client (per the existing security rule for `GlobalExceptionHandler`).
+- **`@Transactional` discipline** — write operations (`follow`, `unfollow`, streak update, theme
+  preference save) get a plain `@Transactional`, read-only aggregations (`with-progress`,
+  `dashboard/continue`, `activity-feed`) get `@Transactional(readOnly = true)`, per the existing
+  rule (a write should never run inside a `readOnly` outer transaction).
+- **Owner/permission pattern correction:** an earlier draft of this plan mistakenly named the
+  `mission:start` permission for the `follow`/`unfollow` endpoints — that would be misleading,
+  since it's related to `mission:start` neither in content nor in permission category. The
+  correct pattern mirrors `GET /api/auth/me`: **simply being logged in is enough, no
+  fine-grained permission is needed** (no `@PreAuthorize`, just the authentication the JWT filter
+  already provides). The same applies to the `dashboard/continue`, `activity-feed`,
+  `star-systems/with-progress`, and `auth/me/theme` endpoints — all of them are data "about the
+  logged-in cadet themself," not an admin-level or ownership-checked resource.
+- **DTO + `@Valid` discipline** — every new request DTO (`FollowRequest` if needed,
+  `ThemePreferenceRequest`) gets Bean Validation annotations, `@Valid` on the controller method,
+  per the already documented security pattern.
+- **Flyway migration, additive, one logical unit per file** — extending the `cadets` table and
+  creating the `follows` table can be **two separate migration files**
+  (`Vn__add_cadet_engagement_fields.sql`, `Vn+1__create_follows_table.sql`), continuing the
+  project's existing "one logical change, easy-to-follow migration" practice (see the current
+  `V1`–`V6` migrations).
+- **Test coverage per the existing pattern:** every new service gets a `*ServiceTest.java`
+  (JUnit5 + Mockito, the `MockDatabaseTest` pattern), every new controller gets a
+  `*ControllerSecurityTest.java` (to verify `@PreAuthorize`/auth behavior) — exactly like the
+  `FeatureFlagServiceTest`/`FeatureFlagControllerSecurityTest` pair is already built.
+- **The code review requirement is unchanged:** for 3+ modified files, the
+  `code-quality-reviewer` agent runs, per the rule set in the repo root `CLAUDE.md` — this applies
+  to this new backend work exactly as it does to any earlier feature.
 
 ---
 
-## 12. Nyitott kérdések
+## 12. Open questions
 
-Nincs több nyitott kérdés — mindhárom korábbi pont eldőlt: `MarkdownStudio` alapja és a streak
-freeze scope-ja (ld. 4.2, illetve 8. szekció), a robot-karakter pedig SVG placeholder-rel indul
-(ld. 5.1). Ezzel a terv teljes egészében megvalósítás-kész.
+No open questions remain — all three earlier points have been settled: the basis for
+`MarkdownStudio` and the scope of streak freeze (see 4.2 and section 8 respectively), and the
+robot character starts out as an SVG placeholder (see 5.1). With that, the plan is fully ready for
+implementation.

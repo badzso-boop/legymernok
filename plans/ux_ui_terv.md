@@ -1,76 +1,78 @@
-# LégyMérnök.hu - UX és UI Terv (Űrhajós Kiadás)
+# LégyMérnök.hu - UX and UI Plan (Spaceship Edition)
 
-Ez a dokumentum a `legymernok.hu` platform felhasználói élményének (UX) és felhasználói felületének (UI) alapkoncepcióját vázolja fel, egy űrutazásos narratívára építve.
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2025-11-29 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-## 1. UX Alapelvek: A Kadét Utazása
+This document outlines the core user experience (UX) and user interface (UI) concept for the `legymernok.hu` platform, built around a space-travel narrative.
 
-- **Felfedezés és Kaland:** A tanulás nem feladat, hanem egy kaland a kozmoszban. A felhasználó (a "kadét") új csillagrendszereket fedez fel, miközben elsajátítja a mérnöki tudást.
-- **Építkezés és Haladás:** A kadét a nulláról építi fel a saját űrhajóját (a tudását). Minden sikeres küldetés egy új alkatrész, egy fejlettebb rendszer, ami közelebb viszi a végső célhoz. A haladást látványos animációk és jelvények kísérik.
-- **Közösségi Élmény:** A kadétok egy flotta tagjai, akik segítik egymást. Később fórumok, közös projektek erősíthetik ezt.
+## 1. UX principles: the Cadet's journey
 
-## 2. Főbb Képernyők (Hajónaplók)
+- **Exploration and adventure:** learning isn't a chore, it's an adventure across the cosmos. The user (the "cadet") discovers new star systems while acquiring engineering knowledge.
+- **Building and progress:** the cadet builds their own spaceship (their knowledge) from scratch. Every successful mission is a new component, a more advanced system, bringing them closer to the ultimate goal. Progress is accompanied by eye-catching animations and badges.
+- **Community experience:** cadets are members of a fleet who help each other. Forums and shared projects can reinforce this further down the line.
 
-### A) Érkezés a Hangárba (Nem Authentikált Felhasználó)
+## 2. Main screens (ship's logs)
 
-#### 1. Dokkoló Kapu (Főoldal)
-*Cél: A kadét beszervezése, a kaland ígéretének felvillantása.*
-- **Konzol (Header):** Logó, "Csillagtérkép", "Dokkolás" (Bejelentkezés), "Besorozás" (Regisztráció) gomb.
-- **Központi Kivető (Hero szekció):** Látványos, barátságos animáció: a Föld, mellette egy épülő űrhajó, háttérben a csillagok. Egy kedves asztronauta karakter integet.
-    - Főcím: **"Programozd be a saját űrutazásod!"**
-    - Alcím: "Tanuld meg a mérnöki alapokat küldetéseken keresztül, és építsd meg az űrhajót, ami eljuttat a csillagokig."
-    - CTA gomb: **"Hajtóművek Indítása!"**
-- **Kiképzési Terv ("Hogyan működik?"):**
-    1.  **Tervezőasztal:** Építsd meg az űrhajód vázát (tanuld meg az alapokat).
-    2.  **Szimulátor:** Teljesíts küldetéseket a Földön és a Holdon (oldj meg problémákat).
-    3.  **Csillagközi Ugrás:** Fedezd fel a galaxist (juss el a haladóbb témákig).
-- **Felfedezhető Csillagrendszerek (Kiemelt Kurzusok):** 3-4 kártya, csillagrendszerek látványos képeivel.
-    - "A Python-köd" (Python Alapok)
-    - "A Java Galaxis" (Java a Gyakorlatban)
+### A) Arriving at the hangar (unauthenticated user)
 
-#### 2. Csillagtérkép (Kurzusok Oldal)
-*Cél: A galaxis és a benne rejlő tudás felfedezése.*
-- **Navigációs Konzol:** Kereső és szűrők (pl. technológia: `Python`, `Java`; típus: `Űrhajó Rendszerek`, `Űrállomás Menedzsment`).
-- **Csillagrendszerek Listája:** A kurzusok mint csillagrendszerek vagy galaxisok jelennek meg látványos kártyákon.
-    - **Egy kártya tartalma:** Csillagrendszer neve, rövid leírás ("Ebben a rendszerben a Python hajtóanyagot állíthatod elő..."), nehézségi szint (pl. "Biztonságos zóna"), benne rejlő küldetések száma.
+#### 1. Docking gate (homepage)
+*Goal: recruit the cadet, give a glimpse of the promised adventure.*
+- **Console (header):** logo, "Star Map", "Dock" (login), "Enlist" (registration) button.
+- **Central viewport (hero section):** an eye-catching, friendly animation: Earth, a spaceship under construction next to it, stars in the background. A friendly astronaut character waves.
+    - Headline: **"Program your own space voyage!"**
+    - Subheadline: "Learn engineering fundamentals through missions, and build the spaceship that will take you to the stars."
+    - CTA button: **"Ignite the Engines!"**
+- **Training plan ("How does it work?"):**
+    1.  **Drafting table:** build the frame of your spaceship (learn the fundamentals).
+    2.  **Simulator:** complete missions on Earth and the Moon (solve problems).
+    3.  **Interstellar jump:** explore the galaxy (reach more advanced topics).
+- **Discoverable star systems (featured courses):** 3-4 cards, with eye-catching star system images.
+    - "The Python Nebula" (Python Fundamentals)
+    - "The Java Galaxy" (Java in Practice)
 
-#### 3. Besorozás / Dokkolás (Regisztráció / Bejelentkezés)
-*Cél: Belépés a flottába.*
-- Tematikus űrlapok.
-    - **Besorozás:** Kadét azonosító, Kommunikációs csatorna (E-mail), Biztonsági kód (Jelszó)...
-    - **Dokkolás:** Azonosító és kód a belépéshez.
+#### 2. Star map (courses page)
+*Goal: explore the galaxy and the knowledge hidden within it.*
+- **Navigation console:** search and filters (e.g. technology: `Python`, `Java`; type: `Spaceship Systems`, `Space Station Management`).
+- **Star system list:** courses appear as star systems or galaxies on eye-catching cards.
+    - **Card contents:** star system name, short description ("In this system you can produce Python fuel..."), difficulty level (e.g. "Safe zone"), number of missions it contains.
 
-### B) A Pilótafülkében (Authentikált Felhasználó)
+#### 3. Enlist / Dock (registration / login)
+*Goal: join the fleet.*
+- Themed forms.
+    - **Enlist:** Cadet ID, communication channel (email), security code (password)...
+    - **Dock:** ID and code to log in.
 
-#### 1. Pilótafülke (Dashboard)
-*Cél: A kadét személyes irányítópultja, minden fontos információ egy helyen.*
-- **Konzol:** Logó, "Navigáció", "Csillagtérkép", Profil ikon (lenyíló menü: Hajónapló, Kijelentkezés).
-- **Üdvözlő üzenet:** "Üdv a fedélzeten, [Kadét Név] kapitány!"
-- **Aktuális Küldetés:** Egy nagy panel, ami a legutóbbi küldetést mutatja. "Vissza a szimulátorba!" gombbal.
-- **Navigációs Célpontok:** A megkezdett csillagrendszerek listája. A progress bar egy hiperhajtómű töltöttségét jelző csík.
-- **Felderítési Javaslatok:** A rendszer által ajánlott új csillagrendszerek.
+### B) In the cockpit (authenticated user)
 
-#### 2. Navigációs Térkép (Kurzus Részletező Oldal)
-*Cél: Egy csillagrendszer bolygóinak (küldetéseinek) áttekintése.*
-- **Háttér:** Az adott csillagrendszer térképe.
-- **Küldetés-lánc:** A küldetések mint bolygók vagy aszteroidák jelennek meg egy útvonalon.
-    - **Egy bolygó (küldetés) a térképen:** Sorszám, név ("1. Bolygó: A 'Változók' légkörének elemzése"). A már meglátogatott bolygók színesek és egy kis zászló van rajtuk (✅). A következő bolygó villog. A távolabbiak még szürkék (🔒).
+#### 1. Cockpit (dashboard)
+*Goal: the cadet's personal control panel, all important information in one place.*
+- **Console:** logo, "Navigation", "Star Map", profile icon (dropdown menu: ship's log, log out).
+- **Welcome message:** "Welcome aboard, Captain [Cadet Name]!"
+- **Current mission:** a large panel showing the most recent mission, with a "Back to the simulator!" button.
+- **Navigation targets:** list of star systems already started. The progress bar is styled as a hyperdrive charge indicator.
+- **Exploration suggestions:** new star systems recommended by the system.
 
-#### 3. Szimulátor (Workspace)
-*Cél: A tényleges tanulási és kódolási felület, egy űrhajó konzoljának kinézetével.*
-- **Háromosztatú, futurisztikus design:**
-    1.  **Küldetési Napló (Leírás):**
-        - A küldetés célja, a bolygó leírása.
-        - Lépésről-lépésre instrukciók, mint egy hivatalos küldetési parancs.
-    2.  **Parancssori Interfész (IDE):**
-        - Beágyazott kód editor futurisztikus kerettel.
-        - Gombok: "Szimuláció Futtatása", "Diagnosztika" (Tesztelés).
-    3.  **Szenzorok (Kimenet):**
-        - Fülek: "Telemetria" (Konzol) és "Diagnosztikai Jelentés" (Tesztek).
-        - **Diagnosztikai Jelentés:** A tesztek eredményei. `RENDSZER OK` (zöld) vagy `KRITIKUS HIBA` (piros) üzenetekkel.
-        - **Sikeres megoldás esetén:** Animáció: **"Küldetés Teljesítve! Hiperhajtómű feltöltve. Ugrás a következő koordinátára!"**. A "Tovább" gomb felirata: **"UGRÁS!"**
+#### 2. Navigation map (course detail page)
+*Goal: an overview of a star system's planets (missions).*
+- **Background:** the map of the given star system.
+- **Mission chain:** missions appear as planets or asteroids along a route.
+    - **A planet (mission) on the map:** number, name ("Planet 1: Analyzing the atmosphere of 'Variables'"). Already-visited planets are colored and carry a small flag (✅). The next planet blinks. Further-away planets are still grey (🔒).
 
-## 3. UI Stílusjegyek
+#### 3. Simulator (workspace)
+*Goal: the actual learning and coding interface, styled to look like a spaceship console.*
+- **Three-pane, futuristic design:**
+    1.  **Mission log (description):**
+        - The mission's goal, the planet's description.
+        - Step-by-step instructions, presented like an official mission order.
+    2.  **Command-line interface (IDE):**
+        - Embedded code editor with a futuristic frame.
+        - Buttons: "Run Simulation", "Diagnostics" (testing).
+    3.  **Sensors (output):**
+        - Tabs: "Telemetry" (console) and "Diagnostic Report" (tests).
+        - **Diagnostic report:** test results, with `SYSTEM OK` (green) or `CRITICAL FAILURE` (red) messages.
+        - **On a successful solution:** animation: **"Mission Complete! Hyperdrive recharged. Jumping to next coordinates!"**. The "Next" button reads: **"JUMP!"**
 
-- **Színpaletta:** Mély űr-kék és fekete háttér. Élénk, neon színek (cián, magenta, zöld) a szövegekhez, gombokhoz és aktív elemekhez, mintha egy hologram lenne.
-- **Tipográfia:** Modern, sci-fi hatású, de jól olvasható betűtípus (pl. Orbitron, Space Grotesk). A kódhoz monospace (Fira Code).
-- **Ikonok és Animációk:** Letisztult, futurisztikus ikonok. Finom animációk: pulzáló fények, scannelési vonalak, a hajó mozgása a térképen.
+## 3. UI style guide
+
+- **Color palette:** deep space-blue and black background. Vivid neon colors (cyan, magenta, green) for text, buttons, and active elements, as if projected as a hologram.
+- **Typography:** a modern, sci-fi-flavored but well-readable typeface (e.g. Orbitron, Space Grotesk). Monospace for code (Fira Code).
+- **Icons and animations:** clean, futuristic icons. Subtle animations: pulsing lights, scanning lines, the ship moving across the map.

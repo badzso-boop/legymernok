@@ -1,105 +1,104 @@
 # Mission Forge Feature Design Document
 
-## I. Core Koncepció
+> **📜 Historical planning document — not necessarily current.** This reflects the state of the project as of 2026-08-15 (its last edit), and may be superseded by later decisions or the actual implementation. Check the code or more recent docs in `plans/` before relying on a specific claim here.
 
-A Mission Forge egy felhasználói felület, amely lehetővé teszi a kadétok számára, hogy saját egyedi missziókat és (a jövőben) csillagrendszereket hozzanak létre. Ezáltal aktív résztvevőivé válnak a játék
-világának formálásában és a programozási tudásukat valós projektekben kamatoztathatják. A létrehozott kódokat Gitea repository-kban tároljuk, automatizált teszteléssel (Gitea Actions) validáljuk, és a usern
-valós Gitea portfóliót építünk.
+## I. Core Concept
 
-## II. User Flow (Felhasználói élmény)
+Mission Forge is a user interface that lets cadets create their own custom missions and (in the future) star systems. This turns them into active participants in shaping the game world, letting them put their programming knowledge to use on real projects. The code they create is stored in Gitea repositories, validated through automated testing (Gitea Actions), and builds up a real Gitea portfolio for the user.
 
-1.  **Navigáció:** A felhasználó belép a Mission Forge oldalra.
-2.  **Inicializálás (Bal oldali konfigurációs panel):**
-    - **Választó:** Ki kell választani, hogy "New Star System" vagy "New Mission" készül. (Kezdetben csak a "New Mission" lesz implementálva).
-    - **Új Küldetés létrehozása esetén:**
-      - Felhasználó kiválasztja saját csillagrendszerét egy legördülő menüből (adatok a `GET /api/star-systems/my-systems` hívás alapján).
-      - Megadja a misszió nevét, leírását, nehézségét, típusát, sorrendjét (űrlap mezők).
-      - Programozási nyelvet választ (`JavaScript` vagy `Python`).
-    - **"Initialize Mission" (vagy "Create Mission") gomb:** Ezt megnyomva történik az első API hívás a backend felé.
-3.  **Editor Fázis (Jobb oldali Monaco Editor):**
-    _ Miután a backend sikeresen inicializálta a missziót és a Gitea repót, a frontend betölti a Monaco Editorba a template fájlokat (`solution.js`/`.py`, `solution.test.js`/`.py`, `README.md`) a Gitea
-    repóból (`GET /api/missions/{missionId}/forge/files`).
-    _ A felhasználó szerkeszti a fájlokat. \* **"Save" gomb:** Elmenti a módosított fájlokat a Giteába (`POST /api/missions/{missionId}/forge/save`).
-4.  **Tesztelés és Visszajelzés:**
-    - Minden "Save" után a Gitea Action automatikusan futtatja a teszteket a user repójában.
-    - A Gitea Action visszajelez a Backendnek a tesztek eredményéről (`POST /api/mission-verification/{missionId}/callback`).
-    - A Frontend a misszió `verificationStatus` mezője alapján visszajelzést ad a felhasználónak (pl. `PENDING`, `SUCCESS`, `FAILED`).
+## II. User Flow
 
-## III. Frontend Tervezés és Implementáció
+1.  **Navigation:** The user opens the Mission Forge page.
+2.  **Initialization (left-hand configuration panel):**
+    - **Selector:** Choose whether a "New Star System" or a "New Mission" is being created. (Initially only "New Mission" will be implemented.)
+    - **When creating a new mission:**
+      - The user picks their own star system from a dropdown (data from the `GET /api/star-systems/my-systems` call).
+      - They enter the mission's name, description, difficulty, type, and order (form fields).
+      - They pick a programming language (`JavaScript` or `Python`).
+    - **"Initialize Mission" (or "Create Mission") button:** Pressing this triggers the first API call to the backend.
+3.  **Editor phase (right-hand Monaco Editor):**
+    - Once the backend has successfully initialized the mission and the Gitea repo, the frontend loads the template files (`solution.js`/`.py`, `solution.test.js`/`.py`, `README.md`) from the Gitea repo into the Monaco Editor (`GET /api/missions/{missionId}/forge/files`).
+    - The user edits the files.
+    - **"Save" button:** saves the modified files back to Gitea (`POST /api/missions/{missionId}/forge/save`).
+4.  **Testing and feedback:**
+    - After every "Save", a Gitea Action automatically runs the tests in the user's repo.
+    - The Gitea Action reports the test results back to the backend (`POST /api/mission-verification/{missionId}/callback`).
+    - The frontend shows the user feedback based on the mission's `verificationStatus` field (e.g. `PENDING`, `SUCCESS`, `FAILED`).
 
-1.  **Függőségek:**
-    - `@monaco-editor/react`: A kódeditor komponenshez.
-    - `framer-motion`: (Már telepítve) Animációkhoz.
-2.  **Fő Komponens:** `MissionForgePage.tsx`
-    - **Elrendezés:** Teljes képernyős, `RetroUI.css` stílusokat használva egy fémes, csavaros kerettel és terminál hatású háttérrel.
-    - **Két oszlopos felosztás (`Material UI Grid`):**
-      - **Bal oldal (vékonyabb, kb. 1/3 szélesség): `ForgeConfigPanel.tsx`**
-        - Felül: Választó (Star System / Mission).
-        - Alatta: Form a kiválasztott entitás létrehozásához.
-          - `New Mission` form elemei: `starSystemId` (dropdown), `name`, `descriptionMarkdown`, `missionType`, `difficulty`, `orderInSystem` inputok.
-          - Nyelvválasztó (`JavaScript` / `Python`).
-          - "Initialize Mission" gomb.
-      - **Jobb oldal (szélesebb, kb. 2/3 szélesség): `ForgeEditor.tsx`**
-        - **Monaco Editor:** Kódszerkesztő.
-        - **Fájlkezelés:** Tabok vagy legördülő menü a `solution.*`, `solution.test.*`, `README.md` fájlok közötti váltáshoz.
-        - **Gombok:** "Save" gomb a módosítások Giteába küldéséhez.
-        - **Státusz Kijelzés:** A `Mission` `verificationStatus` (DRAFT, PENDING, SUCCESS, FAILED) és az utolsó tesztfutás eredményének (ha van) megjelenítése.
-3.  **API Integráció:**
-    - `POST /api/missions/forge/initialize`: A `ForgeConfigPanel` hívja meg a misszió inicializálására.
-    - `GET /api/missions/{missionId}/forge/files`: A `ForgeEditor` hívja meg a fájlok betöltésére.
-    - `POST /api/missions/{missionId}/forge/save`: A `ForgeEditor` hívja meg a fájlok mentésére.
-    - `GET /api/star-systems/my-systems`: A `ForgeConfigPanel` hívja meg a felhasználó saját csillagrendszereinek listázására.
-4.  **Lokalizáció (i18n):** Minden felhasználói felület elem lefordítható.
+## III. Frontend Design and Implementation
 
-## IV. Backend Tervezés és Implementáció
+1.  **Dependencies:**
+    - `@monaco-editor/react`: for the code editor component.
+    - `framer-motion`: (already installed) for animations.
+2.  **Main component:** `MissionForgePage.tsx`
+    - **Layout:** Full-screen, using `RetroUI.css` styles with a metallic, screwed-together frame and a terminal-style background.
+    - **Two-column split (`Material UI Grid`):**
+      - **Left side (narrower, roughly 1/3 width): `ForgeConfigPanel.tsx`**
+        - Top: selector (Star System / Mission).
+        - Below: a form for creating the selected entity.
+          - `New Mission` form fields: `starSystemId` (dropdown), `name`, `descriptionMarkdown`, `missionType`, `difficulty`, `orderInSystem` inputs.
+          - Language selector (`JavaScript` / `Python`).
+          - "Initialize Mission" button.
+      - **Right side (wider, roughly 2/3 width): `ForgeEditor.tsx`**
+        - **Monaco Editor:** code editor.
+        - **File handling:** tabs or a dropdown to switch between the `solution.*`, `solution.test.*`, `README.md` files.
+        - **Buttons:** a "Save" button to push changes to Gitea.
+        - **Status display:** shows the `Mission`'s `verificationStatus` (DRAFT, PENDING, SUCCESS, FAILED) and the result of the last test run, if any.
+3.  **API integration:**
+    - `POST /api/missions/forge/initialize`: called by `ForgeConfigPanel` to initialize the mission.
+    - `GET /api/missions/{missionId}/forge/files`: called by `ForgeEditor` to load the files.
+    - `POST /api/missions/{missionId}/forge/save`: called by `ForgeEditor` to save the files.
+    - `GET /api/star-systems/my-systems`: called by `ForgeConfigPanel` to list the user's own star systems.
+4.  **Localization (i18n):** every UI element is translatable.
 
-1.  **Gitea Integráció Stratégia ("Admin-Owned, User-Collaborator"):**
-    - Minden user-generált Gitea repository az **admin felhasználó** tulajdonában marad.
-    - A felhasználó `write` joggal `collaborator`-ként lesz hozzáadva a repository-jához.
-    - Ez egyszerűsíti a CI/CD secrets kezelését és az admin kontrollját.
+## IV. Backend Design and Implementation
 
-2.  **Data Modellek és DTO-k (`backend/src/main/java/...`):**
-    - **`Cadet`:** `getAuthorities()` a részletes jogosultságkezeléshez.
-    - **`Permission` & `Role`:** RBAC rendszerhez.
+1.  **Gitea integration strategy ("Admin-Owned, User-Collaborator"):**
+    - Every user-generated Gitea repository stays owned by the **admin user**.
+    - The user is added as a `collaborator` with `write` access to the repository.
+    - This simplifies CI/CD secrets management and keeps the admin in control.
+
+2.  **Data models and DTOs (`backend/src/main/java/...`):**
+    - **`Cadet`:** `getAuthorities()` for fine-grained permission handling.
+    - **`Permission` & `Role`:** for the RBAC system.
     - **`Mission`:**
-      - `owner: Cadet` mező.
-      - `verificationStatus: VerificationStatus` mező (`DRAFT`, `PENDING`, `SUCCESS`, `FAILED`, `REVIEW_NEEDED`).
-      - `templateRepositoryUrl`: Az admin által birtokolt user-specifikus Gitea repó URL-je.
-    - **`StarSystem`:** `owner: Cadet` mező.
-    - **`CreateMissionInitialRequest`:** DTO a misszió inicializálásához.
-    - **`MissionForgeContentRequest`:** DTO a fájlok tartalmának mentéséhez.
-    - **`MissionResponse`:** Bővült `ownerId`, `ownerUsername`, `verificationStatus` mezőkkel.
+      - `owner: Cadet` field.
+      - `verificationStatus: VerificationStatus` field (`DRAFT`, `PENDING`, `SUCCESS`, `FAILED`, `REVIEW_NEEDED`).
+      - `templateRepositoryUrl`: the URL of the user-specific Gitea repo owned by the admin.
+    - **`StarSystem`:** `owner: Cadet` field.
+    - **`CreateMissionInitialRequest`:** DTO for initializing a mission.
+    - **`MissionForgeContentRequest`:** DTO for saving file contents.
+    - **`MissionResponse`:** extended with `ownerId`, `ownerUsername`, `verificationStatus` fields.
 
-3.  **Service Réteg (`backend/src/main/java/com/legymernok/backend/service/mission/MissionService.java`):**
-    - **`initializeForgeMission(CreateMissionInitialRequest request)`:** Inicializálja a missziót (DB rekord, Gitea repó létrehozása template alapján, user hozzáadása kollaborátorként).
-    - **`saveForgeMissionContent(MissionForgeContentRequest request)`:** Menti a user által szerkesztett fájlokat a Gitea repóba, frissíti a misszió `verificationStatus`-át `PENDING`-re.
-    - **`getMissionFiles(UUID missionId)`:** Lekéri egy misszióhoz tartozó Gitea repó fájljainak tartalmát.
-    - **`startMission(UUID missionId, String username)`:** Módosítva: az admin által birtokolt **eredeti misszió repójából** másolja a tartalmat a Cadet saját (admin-owned) repójába.
-    - **`deleteMission(UUID id)`:** Törli a missziót és a Gitea repóját (admin alól).
-    - **`updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus)`:** Frissíti a misszió státuszát (Gitea Action callback).
+3.  **Service layer (`backend/src/main/java/com/legymernok/backend/service/mission/MissionService.java`):**
+    - **`initializeForgeMission(CreateMissionInitialRequest request)`:** initializes the mission (DB record, creating the Gitea repo from a template, adding the user as a collaborator).
+    - **`saveForgeMissionContent(MissionForgeContentRequest request)`:** saves the user-edited files to the Gitea repo, sets the mission's `verificationStatus` to `PENDING`.
+    - **`getMissionFiles(UUID missionId)`:** fetches the contents of the files in a mission's Gitea repo.
+    - **`startMission(UUID missionId, String username)`:** updated to copy content from the **original mission repo** owned by the admin into the cadet's own (admin-owned) repo.
+    - **`deleteMission(UUID id)`:** deletes the mission and its Gitea repo (from under the admin account).
+    - **`updateMissionVerificationStatus(UUID missionId, VerificationStatus newStatus)`:** updates the mission's status (Gitea Action callback).
 
-4.  **Controller Réteg (`backend/src/main/java/com/legymernok/backend/web/mission/MissionController.java`):**
-    - **`POST /api/missions/forge/initialize`:** Végpont a misszió inicializálására.
-    - **`POST /api/missions/{missionId}/forge/save`:** Végpont a fájlok mentésére.
-    - **`GET /api/missions/{missionId}/forge/files`:** Végpont a fájlok lekérésére.
-    - A régi `POST /api/missions` végpont eltávolítva.
+4.  **Controller layer (`backend/src/main/java/com/legymernok/backend/web/mission/MissionController.java`):**
+    - **`POST /api/missions/forge/initialize`:** endpoint to initialize a mission.
+    - **`POST /api/missions/{missionId}/forge/save`:** endpoint to save files.
+    - **`GET /api/missions/{missionId}/forge/files`:** endpoint to fetch files.
+    - The old `POST /api/missions` endpoint has been removed.
 
-5.  **Gitea Integráció (`backend/src/main/java/com/legymernok/backend/integration/GiteaService.java`):**
-    _ **Konfiguráció:** Injektálja a JS és Python template repók tulajdonosát és nevét az `application.properties`-ből.
-    _ **`createMissionRepository(String missionIdString, String templateLanguage, Cadet user)`:**
-    _ Létrehoz egy üres repót az admin alatt.
-    _ Kiválasztja a megfelelő template repót.
-    _ Meghívja a `copyRepositoryContents()`-t (rekurzív fájlmásolás a template-ből az új repóba).
-    _ Meghívja az `addCollaborator()`-t (user hozzáadása write joggal).
-    _ **`uploadFile(String repoOwner, String repoName, String filePath, String content)`:** Egységesített metódus fájlok feltöltésére/frissítésére (létrehozás/módosítás).
-    _ **`copyRepositoryContents(String sourceOwner, String sourceRepoName, String targetOwner, String targetRepoName)`:** Rekurzív másoló metódus fájlok és mappák másolására. \* **Egyéb metódusok:** `createGiteaUser`, `deleteGiteaUser`, `createEmptyRepository`, `deleteRepository`, `getRepository`, `getRepoContents`, `getFileContent`, `addCollaborator` (mind rugalmasabb,
-    `owner` paraméterrel, ahol indokolt).
+5.  **Gitea integration (`backend/src/main/java/com/legymernok/backend/integration/GiteaService.java`):**
+    - **Configuration:** injects the owner and name of the JS and Python template repos from `application.properties`.
+    - **`createMissionRepository(String missionIdString, String templateLanguage, Cadet user)`:**
+      - Creates an empty repo under the admin account.
+      - Picks the matching template repo.
+      - Calls `copyRepositoryContents()` (recursive file copy from the template into the new repo).
+      - Calls `addCollaborator()` (adds the user with write access).
+    - **`uploadFile(String repoOwner, String repoName, String filePath, String content)`:** unified method for uploading/updating files (create or modify).
+    - **`copyRepositoryContents(String sourceOwner, String sourceRepoName, String targetOwner, String targetRepoName)`:** recursive method for copying files and folders.
+    - **Other methods:** `createGiteaUser`, `deleteGiteaUser`, `createEmptyRepository`, `deleteRepository`, `getRepository`, `getRepoContents`, `getFileContent`, `addCollaborator` (all made more flexible, taking an `owner` parameter where it makes sense).
 
 6.  **CI/CD Gitea Actions:**
-    _ **Template Repókban:** Minden template repó (JS és Python) tartalmaz egy `.gitea/workflows/ci.yml` fájlt.
-    _ **Tartalom:** Checkout, Node/Python setup, install dependencies, run tests, `determine status` (`SUCCESS`/`FAILED`), `send status to backend webhook` (`POST
-/api/mission-verification/{missionId}/callback`).
-    _ **`MISSION_ID`:** A Gitea repository neve maga a `Mission UUID`.
-    _ **Secret:** `MISSION_VERIFICATION_SECRET` a Gitea `Secrets`-ben beállítva.
+    - **In the template repos:** every template repo (JS and Python) contains a `.gitea/workflows/ci.yml` file.
+    - **Contents:** checkout, Node/Python setup, install dependencies, run tests, `determine status` (`SUCCESS`/`FAILED`), `send status to backend webhook` (`POST /api/mission-verification/{missionId}/callback`).
+    - **`MISSION_ID`:** the Gitea repository name is itself the `Mission UUID`.
+    - **Secret:** `MISSION_VERIFICATION_SECRET`, set in Gitea's `Secrets`.
 
-7.  **`MissionVerificationController`:** Fogadja a Gitea Actions callback-eket és frissíti a `Mission` `verificationStatus`-át.
+7.  **`MissionVerificationController`:** receives the Gitea Actions callbacks and updates the `Mission`'s `verificationStatus`.
