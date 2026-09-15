@@ -6,19 +6,24 @@ import com.legymernok.backend.dto.user.RegisterRequest;
 import com.legymernok.backend.dto.user.RegisterResponse;
 import com.legymernok.backend.exception.*;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.audience.Audience;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.cadet.GuardianConsentStatus;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.security.JwtService;
+import com.legymernok.backend.service.featureflag.FeatureFlagService;
 import com.legymernok.backend.service.user.AuthService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Year;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,6 +47,9 @@ class AuthServiceTest {
 
     @Mock
     private RoleRepository roleRepository;
+
+    @Mock
+    private FeatureFlagService featureFlagService;
 
     @InjectMocks
     private AuthService authService;
@@ -115,7 +123,93 @@ class AuthServiceTest {
         assertEquals("jwt_token", response.getToken());
 
         verify(giteaService).createGiteaUser("newuser", "new@example.com", "password");
-        verify(cadetRepository).save(any(Cadet.class));
+        ArgumentCaptor<Cadet> captor = ArgumentCaptor.forClass(Cadet.class);
+        verify(cadetRepository).save(captor.capture());
+        assertEquals(Audience.ENGINEER, captor.getValue().getAudience());
+        assertNull(captor.getValue().getBirthYear());
+        assertEquals(GuardianConsentStatus.NOT_REQUIRED, captor.getValue().getGuardianConsentStatus());
+    }
+
+    @Test
+    void register_AcademyMinor_ShouldStoreAudienceAndPendingConsent() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("kid");
+        request.setEmail("kid@example.com");
+        request.setPassword("password");
+        request.setAudience(Audience.ACADEMY);
+        request.setBirthYear((short) (Year.now().getValue() - 12));
+
+        when(featureFlagService.isEnabled("navigator_academy")).thenReturn(true);
+        stubSuccessfulRegistration("kid", "kid@example.com");
+
+        authService.register(request);
+
+        ArgumentCaptor<Cadet> captor = ArgumentCaptor.forClass(Cadet.class);
+        verify(cadetRepository).save(captor.capture());
+        assertEquals(Audience.ACADEMY, captor.getValue().getAudience());
+        assertEquals(request.getBirthYear(), captor.getValue().getBirthYear());
+        assertEquals(GuardianConsentStatus.PENDING, captor.getValue().getGuardianConsentStatus());
+    }
+
+    @Test
+    void register_AdultWithBirthYear_ShouldNotRequireConsent() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("adult");
+        request.setEmail("adult@example.com");
+        request.setPassword("password");
+        request.setBirthYear((short) (Year.now().getValue() - 30));
+
+        stubSuccessfulRegistration("adult", "adult@example.com");
+
+        authService.register(request);
+
+        ArgumentCaptor<Cadet> captor = ArgumentCaptor.forClass(Cadet.class);
+        verify(cadetRepository).save(captor.capture());
+        assertEquals(Audience.ENGINEER, captor.getValue().getAudience());
+        assertEquals(GuardianConsentStatus.NOT_REQUIRED, captor.getValue().getGuardianConsentStatus());
+    }
+
+    @Test
+    void register_AcademyWhenFlagDisabled_ShouldRejectBeforeCreatingAnything() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("kid");
+        request.setEmail("kid@example.com");
+        request.setPassword("password");
+        request.setAudience(Audience.ACADEMY);
+        request.setBirthYear((short) (Year.now().getValue() - 12));
+
+        when(cadetRepository.existsByUsername("kid")).thenReturn(false);
+        when(cadetRepository.existsByEmail("kid@example.com")).thenReturn(false);
+        when(featureFlagService.isEnabled("navigator_academy")).thenReturn(false);
+
+        assertThrows(InvalidRequestException.class, () -> authService.register(request));
+
+        verify(giteaService, never()).createGiteaUser(any(), any(), any());
+        verify(cadetRepository, never()).save(any());
+    }
+
+    @Test
+    void register_EngineerWhenFlagDisabled_ShouldNotCheckFlag() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("student");
+        request.setEmail("student@example.com");
+        request.setPassword("password");
+
+        stubSuccessfulRegistration("student", "student@example.com");
+
+        authService.register(request);
+
+        verifyNoInteractions(featureFlagService);
+    }
+
+    private void stubSuccessfulRegistration(String username, String email) {
+        when(cadetRepository.existsByUsername(username)).thenReturn(false);
+        when(cadetRepository.existsByEmail(email)).thenReturn(false);
+        when(giteaService.createGiteaUser(username, email, "password")).thenReturn(100L);
+        when(roleRepository.findByName("ROLE_CADET")).thenReturn(Optional.of(Role.builder().name("ROLE_CADET").build()));
+        when(passwordEncoder.encode("password")).thenReturn("hashed_password");
+        when(cadetRepository.save(any(Cadet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtService.generateToken(any(Cadet.class))).thenReturn("jwt_token");
     }
 
     @Test

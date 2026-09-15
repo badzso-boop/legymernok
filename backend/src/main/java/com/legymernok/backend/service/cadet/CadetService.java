@@ -216,6 +216,9 @@ public class CadetService {
                 .fullName(cadet.getFullName())
                 .roles(cadet.getRoles().stream().map(Role::getName).collect(Collectors.toSet()))
                 .giteaUserId(cadet.getGiteaUserId())
+                .audience(cadet.getAudience())
+                .birthYear(cadet.getBirthYear())
+                .guardianConsentStatus(cadet.getGuardianConsentStatus())
                 .createdAt(cadet.getCreatedAt())
                 .updatedAt(cadet.getUpdatedAt())
                 .build();

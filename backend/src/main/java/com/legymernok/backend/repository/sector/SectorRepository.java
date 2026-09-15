@@ -1,5 +1,6 @@
 package com.legymernok.backend.repository.sector;
 
+import com.legymernok.backend.model.audience.Audience;
 import com.legymernok.backend.model.sector.Sector;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,8 @@ public interface SectorRepository extends JpaRepository<Sector, UUID> {
     Optional<Sector> findByName(String name);
 
     List<Sector> findAllByOrderByOrderIndexAsc();
+
+    List<Sector> findAllByAudienceOrderByOrderIndexAsc(Audience audience);
 
     @Query("SELECT COALESCE(MAX(s.orderIndex), -1) FROM Sector s")
     int findMaxOrderIndex();

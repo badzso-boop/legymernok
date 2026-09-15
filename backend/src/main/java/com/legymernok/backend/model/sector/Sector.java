@@ -1,5 +1,6 @@
 package com.legymernok.backend.model.sector;
 
+import com.legymernok.backend.model.audience.Audience;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,6 +35,11 @@ public class Sector {
     @Column(nullable = false)
     @Builder.Default
     private Integer orderIndex = 0;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Audience audience = Audience.ENGINEER;
 
     @CreationTimestamp
     @Column(updatable = false)

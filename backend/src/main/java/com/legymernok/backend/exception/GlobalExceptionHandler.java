@@ -3,6 +3,7 @@ package com.legymernok.backend.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -78,6 +79,20 @@ public class GlobalExceptionHandler {
         log.warn("Missing request parameter: {}", ex.getMessage());
         String message = String.format("Hiányzó kötelező paraméter: '%s'", ex.getParameterName());
         return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<Object> handleInvalidRequestException(InvalidRequestException ex) {
+        log.warn("Invalid request: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    }
+
+    // Olvashatatlan JSON vagy ismeretlen enum-érték (pl. audience: "FOO") — enélkül a generikus
+    // Exception-ág 500-at adna. A Jackson-üzenet belső osztályneveket tartalmaz, ezért fix szöveg.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        log.warn("Unreadable request body: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", "A kérés törzse érvénytelen vagy hibás formátumú.");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
