@@ -1,6 +1,8 @@
 package com.legymernok.backend.dto.cadet;
 
+import com.legymernok.backend.model.audience.Audience;
 import com.legymernok.backend.model.cadet.CadetRole;
+import com.legymernok.backend.model.cadet.GuardianConsentStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -20,6 +22,9 @@ public class CadetResponse {
     private String themePreference;
     private int currentStreak;
     private int longestStreak;
+    private Audience audience;
+    private Short birthYear;
+    private GuardianConsentStatus guardianConsentStatus;
     private Instant createdAt;
     private Instant updatedAt;
 }

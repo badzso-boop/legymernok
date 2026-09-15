@@ -85,6 +85,60 @@ class AuthControllerSecurityTest {
     }
 
     @Test
+    @DisplayName("POST /api/auth/register - ACADEMY születési év nélkül → 400")
+    void register_AcademyWithoutBirthYear_ShouldReturn400() throws Exception {
+        String body = "{\"username\":\"kid\",\"password\":\"pass\",\"email\":\"kid@test.com\",\"audience\":\"ACADEMY\"}";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.birthYearProvidedForAcademy").exists());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register - ACADEMY születési évvel → 201")
+    void register_AcademyWithBirthYear_ShouldSucceed() throws Exception {
+        String body = "{\"username\":\"kid\",\"password\":\"pass\",\"email\":\"kid@test.com\","
+                + "\"audience\":\"ACADEMY\",\"birthYear\":2013}";
+        when(authService.register(any(RegisterRequest.class))).thenReturn(
+                RegisterResponse.builder().username("kid").token("mock-token").build()
+        );
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register - ismeretlen audience → 400, nem 500")
+    void register_UnknownAudience_ShouldReturn400() throws Exception {
+        String body = "{\"username\":\"x\",\"password\":\"pass\",\"email\":\"x@test.com\",\"audience\":\"FOO\"}";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A kérés törzse érvénytelen vagy hibás formátumú."));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register - jövőbeli születési év → 400")
+    void register_FutureBirthYear_ShouldReturn400() throws Exception {
+        String body = "{\"username\":\"x\",\"password\":\"pass\",\"email\":\"x@test.com\",\"birthYear\":2099}";
+
+        mockMvc.perform(post("/api/auth/register")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("GET /api/auth/me - Authenticated user should succeed")
     @WithMockUser(username = "testuser")
     void getMe_ShouldSucceed() throws Exception {

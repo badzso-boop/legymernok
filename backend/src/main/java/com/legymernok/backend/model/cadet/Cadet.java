@@ -1,5 +1,6 @@
 package com.legymernok.backend.model.cadet;
 
+import com.legymernok.backend.model.audience.Audience;
 import com.legymernok.backend.model.auth.Permission;
 import com.legymernok.backend.model.auth.Role;
 import jakarta.persistence.*;
@@ -65,6 +66,19 @@ public class Cadet implements UserDetails {
 
     @Column(name = "last_activity_date")
     private java.time.LocalDate lastActivityDate;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Audience audience = Audience.ENGINEER;
+
+    @Column(name = "birth_year")
+    private Short birthYear;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "guardian_consent_status", nullable = false, length = 20)
+    private GuardianConsentStatus guardianConsentStatus = GuardianConsentStatus.NOT_REQUIRED;
 
     @CreationTimestamp
     @Column(updatable = false)

@@ -6,12 +6,17 @@ import com.legymernok.backend.dto.sector.SectorResponse;
 import com.legymernok.backend.dto.starsystem.StarSystemResponse;
 import com.legymernok.backend.exception.ResourceConflictException;
 import com.legymernok.backend.exception.ResourceNotFoundException;
+import com.legymernok.backend.model.audience.Audience;
+import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.sector.Sector;
+import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.model.starsystem.StarSystem;
 import com.legymernok.backend.repository.sector.SectorRepository;
 import com.legymernok.backend.repository.starsystem.StarSystemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +36,10 @@ import java.util.stream.Collectors;
 public class SectorService {
 
     private final SectorRepository sectorRepository;
+    private static final String SECTOR_WRITE = "sector:write";
+
     private final StarSystemRepository starSystemRepository;
+    private final CadetRepository cadetRepository;
 
     @Transactional
     public SectorResponse createSector(CreateSectorRequest request) {
@@ -46,6 +54,7 @@ public class SectorService {
                 .description(request.getDescription())
                 .iconUrl(request.getIconUrl())
                 .orderIndex(orderIndex)
+                .audience(request.getAudience() != null ? request.getAudience() : Audience.ENGINEER)
                 .build();
 
         Sector saved = sectorRepository.save(sector);
@@ -53,9 +62,27 @@ public class SectorService {
         return mapToResponse(saved);
     }
 
+    /**
+     * Szektorkezelő (sector:write) mindent lát; mindenki más csak a saját audience-éhez tartozó
+     * szektorokat (a mérnöki felületen nem jelennek meg az akadémiás szektorok és fordítva).
+     */
     @Transactional(readOnly = true)
     public List<SectorResponse> getAllSectors() {
-        return sectorRepository.findAllByOrderByOrderIndexAsc().stream()
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean canManage = auth.getAuthorities().stream()
+                .anyMatch(a -> SECTOR_WRITE.equals(a.getAuthority()));
+
+        List<Sector> sectors;
+        if (canManage) {
+            sectors = sectorRepository.findAllByOrderByOrderIndexAsc();
+        } else {
+            Audience audience = cadetRepository.findByUsername(auth.getName())
+                    .map(Cadet::getAudience)
+                    .orElseThrow(() -> new ResourceNotFoundException("Cadet", "username", auth.getName()));
+            sectors = sectorRepository.findAllByAudienceOrderByOrderIndexAsc(audience);
+        }
+
+        return sectors.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -78,6 +105,9 @@ public class SectorService {
         sector.setName(request.getName());
         sector.setDescription(request.getDescription());
         sector.setIconUrl(request.getIconUrl());
+        if (request.getAudience() != null) {
+            sector.setAudience(request.getAudience());
+        }
 
         return mapToResponse(sectorRepository.save(sector));
     }
@@ -129,6 +159,7 @@ public class SectorService {
                 .description(sector.getDescription())
                 .iconUrl(sector.getIconUrl())
                 .orderIndex(sector.getOrderIndex())
+                .audience(sector.getAudience())
                 .starSystemCount(starSystemRepository.countBySectorId(sector.getId()))
                 .createdAt(sector.getCreatedAt())
                 .updatedAt(sector.getUpdatedAt())

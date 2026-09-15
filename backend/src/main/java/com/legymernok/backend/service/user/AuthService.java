@@ -8,8 +8,10 @@ import com.legymernok.backend.dto.user.RegisterResponse;
 import com.legymernok.backend.dto.user.UpdateThemePreferenceRequest;
 import com.legymernok.backend.exception.*;
 import com.legymernok.backend.integration.GiteaService;
+import com.legymernok.backend.model.audience.Audience;
 import com.legymernok.backend.model.auth.Role;
 import com.legymernok.backend.model.cadet.Cadet;
+import com.legymernok.backend.model.cadet.GuardianConsentPolicy;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.security.JwtService;
@@ -22,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.Year;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -76,6 +79,7 @@ public class AuthService {
         roles.add(cadetRole);
 
         // 4. Cadet mentése
+        Audience audience = request.getAudience() != null ? request.getAudience() : Audience.ENGINEER;
         Cadet cadet = Cadet.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
@@ -83,6 +87,9 @@ public class AuthService {
                 .fullName(request.getFullName())
                 .roles(roles)
                 .giteaUserId(giteaId)
+                .audience(audience)
+                .birthYear(request.getBirthYear())
+                .guardianConsentStatus(GuardianConsentPolicy.initialStatus(request.getBirthYear(), Year.now().getValue()))
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -123,6 +130,9 @@ public class AuthService {
                 .themePreference(cadet.getThemePreference())
                 .currentStreak(cadet.getCurrentStreak())
                 .longestStreak(cadet.getLongestStreak())
+                .audience(cadet.getAudience())
+                .birthYear(cadet.getBirthYear())
+                .guardianConsentStatus(cadet.getGuardianConsentStatus())
                 .createdAt(cadet.getCreatedAt())
                 .updatedAt(cadet.getUpdatedAt())
                 .build();
