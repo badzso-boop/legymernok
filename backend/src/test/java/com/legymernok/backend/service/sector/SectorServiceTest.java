@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 
 import java.util.List;
 import java.util.Optional;
@@ -165,6 +166,54 @@ class SectorServiceTest {
     }
 
     @Test
+    void getAllSectors_AsContentCreator_ShouldReturnAllAudiences() {
+        authenticateAs("author", "sector:read", "starsystem:create", "starsystem:edit");
+        when(sectorRepository.findAllByOrderByOrderIndexAsc()).thenReturn(List.of(physics));
+
+        sectorService.getAllSectors();
+
+        verify(sectorRepository).findAllByOrderByOrderIndexAsc();
+        verifyNoInteractions(cadetRepository);
+    }
+
+    @Test
+    void getSectorById_AsEngineerCadet_ForAcademySector_ShouldReturn404() {
+        Sector academy = Sector.builder().id(UUID.randomUUID()).name("Navigátor Akadémia")
+                .orderIndex(1).audience(Audience.ACADEMY).build();
+        authenticateAs("student", "sector:read");
+        when(sectorRepository.findById(academy.getId())).thenReturn(Optional.of(academy));
+        when(cadetRepository.findByUsername("student"))
+                .thenReturn(Optional.of(Cadet.builder().username("student").build()));
+
+        assertThrows(ResourceNotFoundException.class, () -> sectorService.getSectorById(academy.getId()));
+    }
+
+    @Test
+    void getSectorStarSystems_AsEngineerCadet_ForAcademySector_ShouldReturn404() {
+        Sector academy = Sector.builder().id(UUID.randomUUID()).name("Navigátor Akadémia")
+                .orderIndex(1).audience(Audience.ACADEMY).build();
+        authenticateAs("student", "sector:read");
+        when(sectorRepository.findById(academy.getId())).thenReturn(Optional.of(academy));
+        when(cadetRepository.findByUsername("student"))
+                .thenReturn(Optional.of(Cadet.builder().username("student").build()));
+
+        assertThrows(ResourceNotFoundException.class, () -> sectorService.getSectorStarSystems(academy.getId()));
+        verify(starSystemRepository, never()).findAllBySectorId(any());
+    }
+
+    @Test
+    void getSectorById_AsAcademyCadet_ForAcademySector_ShouldSucceed() {
+        Sector academy = Sector.builder().id(UUID.randomUUID()).name("Navigátor Akadémia")
+                .orderIndex(1).audience(Audience.ACADEMY).build();
+        authenticateAs("kid", "sector:read");
+        when(sectorRepository.findById(academy.getId())).thenReturn(Optional.of(academy));
+        when(cadetRepository.findByUsername("kid"))
+                .thenReturn(Optional.of(Cadet.builder().username("kid").audience(Audience.ACADEMY).build()));
+
+        assertEquals(academy.getId(), sectorService.getSectorById(academy.getId()).getId());
+    }
+
+    @Test
     void createSector_WithoutAudience_ShouldDefaultToEngineer() {
         CreateSectorRequest request = new CreateSectorRequest();
         request.setName("Új szektor");
@@ -192,9 +241,11 @@ class SectorServiceTest {
         assertEquals(Audience.ACADEMY, response.getAudience());
     }
 
+    // Új context kell, nem a getContext() módosítása: más tesztosztályok mockolt SecurityContext-et
+    // hagyhatnak a szálon, amin a setAuthentication() hatástalan.
     private void authenticateAs(String username, String... authorities) {
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+        SecurityContextHolder.setContext(new SecurityContextImpl(new UsernamePasswordAuthenticationToken(
                 username, null,
-                java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList()));
+                java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList())));
     }
 }

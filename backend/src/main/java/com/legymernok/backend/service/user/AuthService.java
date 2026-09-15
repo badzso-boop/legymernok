@@ -14,8 +14,10 @@ import com.legymernok.backend.model.cadet.Cadet;
 import com.legymernok.backend.model.cadet.GuardianConsentPolicy;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.security.AcademyFeatureGateFilter;
 import com.legymernok.backend.security.JwtService;
 import com.legymernok.backend.service.cadet.CadetService;
+import com.legymernok.backend.service.featureflag.FeatureFlagService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +26,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.Year;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,6 +40,7 @@ public class AuthService {
     private final GiteaService giteaService;
     private final RoleRepository roleRepository;
     private final JwtService jwtService;
+    private final FeatureFlagService featureFlagService;
 
     public LoginResponse login(LoginRequest request) {
         Cadet cadet = cadetRepository.findByUsername(request.getUsername())
@@ -65,6 +67,12 @@ public class AuthService {
             throw new ResourceConflictException("Cadet", "email", request.getEmail());
         }
 
+        // Akadémiás (jellemzően kiskorú) fiók csak bekapcsolt navigator_academy flag mellett jöhet létre —
+        // a flag különben csak a /api/academy/** végpontokat zárná, a publikus regisztrációt nem.
+        if (request.getAudience() == Audience.ACADEMY && !featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)) {
+            throw new InvalidRequestException("Az akadémiás regisztráció jelenleg nem érhető el.");
+        }
+
         // 2. Gitea User létrehozása
         Long giteaId = giteaService.createGiteaUser(
                 request.getUsername(),
@@ -89,7 +97,7 @@ public class AuthService {
                 .giteaUserId(giteaId)
                 .audience(audience)
                 .birthYear(request.getBirthYear())
-                .guardianConsentStatus(GuardianConsentPolicy.initialStatus(request.getBirthYear(), Year.now().getValue()))
+                .guardianConsentStatus(GuardianConsentPolicy.initialStatus(request.getBirthYear(), GuardianConsentPolicy.currentYear()))
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();

@@ -81,6 +81,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", message);
     }
 
+    @ExceptionHandler(InvalidRequestException.class)
+    public ResponseEntity<Object> handleInvalidRequestException(InvalidRequestException ex) {
+        log.warn("Invalid request: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage());
+    }
+
     // Olvashatatlan JSON vagy ismeretlen enum-érték (pl. audience: "FOO") — enélkül a generikus
     // Exception-ág 500-at adna. A Jackson-üzenet belső osztályneveket tartalmaz, ezért fix szöveg.
     @ExceptionHandler(HttpMessageNotReadableException.class)

@@ -13,6 +13,7 @@ import com.legymernok.backend.model.cadet.GuardianConsentStatus;
 import com.legymernok.backend.repository.auth.RoleRepository;
 import com.legymernok.backend.repository.cadet.CadetRepository;
 import com.legymernok.backend.security.JwtService;
+import com.legymernok.backend.service.featureflag.FeatureFlagService;
 import com.legymernok.backend.service.user.AuthService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,9 @@ class AuthServiceTest {
 
     @Mock
     private RoleRepository roleRepository;
+
+    @Mock
+    private FeatureFlagService featureFlagService;
 
     @InjectMocks
     private AuthService authService;
@@ -135,6 +139,7 @@ class AuthServiceTest {
         request.setAudience(Audience.ACADEMY);
         request.setBirthYear((short) (Year.now().getValue() - 12));
 
+        when(featureFlagService.isEnabled("navigator_academy")).thenReturn(true);
         stubSuccessfulRegistration("kid", "kid@example.com");
 
         authService.register(request);
@@ -162,6 +167,39 @@ class AuthServiceTest {
         verify(cadetRepository).save(captor.capture());
         assertEquals(Audience.ENGINEER, captor.getValue().getAudience());
         assertEquals(GuardianConsentStatus.NOT_REQUIRED, captor.getValue().getGuardianConsentStatus());
+    }
+
+    @Test
+    void register_AcademyWhenFlagDisabled_ShouldRejectBeforeCreatingAnything() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("kid");
+        request.setEmail("kid@example.com");
+        request.setPassword("password");
+        request.setAudience(Audience.ACADEMY);
+        request.setBirthYear((short) (Year.now().getValue() - 12));
+
+        when(cadetRepository.existsByUsername("kid")).thenReturn(false);
+        when(cadetRepository.existsByEmail("kid@example.com")).thenReturn(false);
+        when(featureFlagService.isEnabled("navigator_academy")).thenReturn(false);
+
+        assertThrows(InvalidRequestException.class, () -> authService.register(request));
+
+        verify(giteaService, never()).createGiteaUser(any(), any(), any());
+        verify(cadetRepository, never()).save(any());
+    }
+
+    @Test
+    void register_EngineerWhenFlagDisabled_ShouldNotCheckFlag() {
+        RegisterRequest request = new RegisterRequest();
+        request.setUsername("student");
+        request.setEmail("student@example.com");
+        request.setPassword("password");
+
+        stubSuccessfulRegistration("student", "student@example.com");
+
+        authService.register(request);
+
+        verifyNoInteractions(featureFlagService);
     }
 
     private void stubSuccessfulRegistration(String username, String email) {

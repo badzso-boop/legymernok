@@ -2,12 +2,12 @@ package com.legymernok.backend.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.legymernok.backend.model.audience.Audience;
+import com.legymernok.backend.model.cadet.GuardianConsentPolicy;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 
-import java.time.Year;
 
 @Data
 public class RegisterRequest {
@@ -32,6 +32,6 @@ public class RegisterRequest {
     @JsonIgnore
     @AssertTrue(message = "A születési év nem lehet a jövőben.")
     public boolean isBirthYearNotInFuture() {
-        return birthYear == null || birthYear <= Year.now().getValue();
+        return birthYear == null || birthYear <= GuardianConsentPolicy.currentYear();
     }
 }
