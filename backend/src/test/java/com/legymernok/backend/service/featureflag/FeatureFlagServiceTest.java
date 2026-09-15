@@ -107,4 +107,27 @@ class FeatureFlagServiceTest {
                 () -> featureFlagService.updateFlag("unknown", request));
         verify(featureFlagRepository, never()).save(any());
     }
+
+    @Test
+    void isEnabled_WhenFlagEnabled_ReturnsTrue() {
+        FeatureFlag flag = FeatureFlag.builder().key("navigator_academy").enabled(true).build();
+        when(featureFlagRepository.findByKey("navigator_academy")).thenReturn(Optional.of(flag));
+
+        assertTrue(featureFlagService.isEnabled("navigator_academy"));
+    }
+
+    @Test
+    void isEnabled_WhenFlagDisabled_ReturnsFalse() {
+        FeatureFlag flag = FeatureFlag.builder().key("navigator_academy").enabled(false).build();
+        when(featureFlagRepository.findByKey("navigator_academy")).thenReturn(Optional.of(flag));
+
+        assertFalse(featureFlagService.isEnabled("navigator_academy"));
+    }
+
+    @Test
+    void isEnabled_WhenFlagMissing_ReturnsFalse() {
+        when(featureFlagRepository.findByKey("unknown")).thenReturn(Optional.empty());
+
+        assertFalse(featureFlagService.isEnabled("unknown"));
+    }
 }
