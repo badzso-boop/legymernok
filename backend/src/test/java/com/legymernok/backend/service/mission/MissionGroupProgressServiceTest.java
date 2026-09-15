@@ -7,7 +7,10 @@ import com.legymernok.backend.model.mission.Mission;
 import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.mission.MissionGroupProgress;
 import com.legymernok.backend.model.mission.MissionGroupStepCompletion;
+import com.legymernok.backend.model.mission.MissionType;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
 import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
@@ -40,6 +43,8 @@ class MissionGroupProgressServiceTest {
     @Mock private MissionGroupRepository groupRepository;
     @Mock private MissionRepository missionRepository;
     @Mock private CadetRepository cadetRepository;
+    @Mock private FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    @Mock private MissionResultRepository missionResultRepository;
     @Mock private com.legymernok.backend.service.streak.StreakService streakService;
     @InjectMocks private MissionGroupProgressService missionGroupProgressService;
 
@@ -216,12 +221,111 @@ class MissionGroupProgressServiceTest {
     }
 
     // =========================================================================
+    // completeStep — szerveroldali teljesítés-ellenőrzés
+    // =========================================================================
+
+    @Test
+    void completeStep_whenFillInBlankNotPassed_shouldThrow409AndNotSaveStep() {
+        Mission m1 = buildMission(UUID.randomUUID(), MissionType.FILL_IN_BLANK);
+        MissionGroupProgress progress = buildProgress(m1);
+
+        when(progressRepository.findByCadetIdAndGroupId(testUser.getId(), groupId))
+                .thenReturn(Optional.of(progress));
+        when(missionRepository.findAllByGroupIdOrderByGroupOrderAsc(groupId)).thenReturn(List.of(m1));
+        when(missionRepository.findById(m1.getId())).thenReturn(Optional.of(m1));
+        when(fillInBlankAttemptRepository.existsByCadetIdAndMissionIdAndPassedTrue(testUser.getId(), m1.getId()))
+                .thenReturn(false);
+
+        assertThrows(ResourceConflictException.class, () -> missionGroupProgressService.completeStep(groupId));
+
+        verify(stepCompletionRepository, never()).saveAndFlush(any());
+        verify(progressRepository, never()).save(any());
+        verify(streakService, never()).recordActivity(any());
+    }
+
+    @Test
+    void completeStep_whenFillInBlankPassed_shouldAdvance() {
+        Mission m1 = buildMission(UUID.randomUUID(), MissionType.FILL_IN_BLANK);
+        Mission m2 = buildMission(UUID.randomUUID());
+        MissionGroupProgress progress = buildProgress(m1);
+        MissionGroupStepCompletion step = MissionGroupStepCompletion.builder()
+                .id(UUID.randomUUID()).progress(progress).mission(m1).build();
+
+        when(progressRepository.findByCadetIdAndGroupId(testUser.getId(), groupId))
+                .thenReturn(Optional.of(progress));
+        when(missionRepository.findAllByGroupIdOrderByGroupOrderAsc(groupId)).thenReturn(List.of(m1, m2));
+        when(missionRepository.findById(m1.getId())).thenReturn(Optional.of(m1));
+        when(fillInBlankAttemptRepository.existsByCadetIdAndMissionIdAndPassedTrue(testUser.getId(), m1.getId()))
+                .thenReturn(true);
+        when(stepCompletionRepository.saveAndFlush(any())).thenReturn(step);
+        when(stepCompletionRepository.findAllByProgressId(progress.getId())).thenReturn(List.of(step));
+        when(progressRepository.save(any(MissionGroupProgress.class))).thenAnswer(i -> i.getArgument(0));
+
+        GroupProgressResponse response = missionGroupProgressService.completeStep(groupId);
+
+        assertEquals(m2.getId(), response.getNextMissionId());
+    }
+
+    @Test
+    void completeStep_whenQuizNotSubmitted_shouldThrow409AndNotSaveStep() {
+        Mission m1 = buildMission(UUID.randomUUID(), MissionType.QUIZ);
+        MissionGroupProgress progress = buildProgress(m1);
+
+        when(progressRepository.findByCadetIdAndGroupId(testUser.getId(), groupId))
+                .thenReturn(Optional.of(progress));
+        when(missionRepository.findAllByGroupIdOrderByGroupOrderAsc(groupId)).thenReturn(List.of(m1));
+        when(missionRepository.findById(m1.getId())).thenReturn(Optional.of(m1));
+        when(missionResultRepository.existsByMissionIdAndCadetId(m1.getId(), testUser.getId())).thenReturn(false);
+
+        assertThrows(ResourceConflictException.class, () -> missionGroupProgressService.completeStep(groupId));
+
+        verify(stepCompletionRepository, never()).saveAndFlush(any());
+        verify(progressRepository, never()).save(any());
+    }
+
+    @Test
+    void completeStep_whenQuizSubmitted_shouldMarkCompleted() {
+        Mission m1 = buildMission(UUID.randomUUID(), MissionType.QUIZ);
+        MissionGroupProgress progress = buildProgress(m1);
+        MissionGroupStepCompletion step = MissionGroupStepCompletion.builder()
+                .id(UUID.randomUUID()).progress(progress).mission(m1).build();
+
+        when(progressRepository.findByCadetIdAndGroupId(testUser.getId(), groupId))
+                .thenReturn(Optional.of(progress));
+        when(missionRepository.findAllByGroupIdOrderByGroupOrderAsc(groupId)).thenReturn(List.of(m1));
+        when(missionRepository.findById(m1.getId())).thenReturn(Optional.of(m1));
+        when(missionResultRepository.existsByMissionIdAndCadetId(m1.getId(), testUser.getId())).thenReturn(true);
+        when(stepCompletionRepository.saveAndFlush(any())).thenReturn(step);
+        when(stepCompletionRepository.findAllByProgressId(progress.getId())).thenReturn(List.of(step));
+        when(progressRepository.save(any(MissionGroupProgress.class))).thenAnswer(i -> i.getArgument(0));
+
+        GroupProgressResponse response = missionGroupProgressService.completeStep(groupId);
+
+        assertTrue(response.isCompleted());
+    }
+
+    // =========================================================================
     // Helper
     // =========================================================================
 
     private Mission buildMission(UUID id) {
+        return buildMission(id, MissionType.CONTENT);
+    }
+
+    private Mission buildMission(UUID id, MissionType type) {
         Mission m = new Mission();
         m.setId(id);
+        m.setMissionType(type);
         return m;
+    }
+
+    private MissionGroupProgress buildProgress(Mission next) {
+        return MissionGroupProgress.builder()
+                .id(UUID.randomUUID())
+                .cadet(testUser)
+                .group(testGroup)
+                .nextMissionId(next.getId())
+                .completed(false)
+                .build();
     }
 }

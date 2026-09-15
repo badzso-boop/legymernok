@@ -13,6 +13,8 @@ public interface MissionResultRepository extends JpaRepository<MissionResult, UU
 
     List<MissionResult> findAllByCadetId(UUID cadetId);
 
+    boolean existsByMissionIdAndCadetId(UUID missionId, UUID cadetId);
+
     Optional<MissionResult> findByMissionIdAndCadetIdAndSubmissionHash(UUID missionId, UUID cadetId, String submissionHash);
 
     List<MissionResult> findTop20ByCadet_IdInOrderByCompletedAtDesc(List<UUID> cadetIds);
