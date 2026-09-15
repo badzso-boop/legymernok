@@ -54,6 +54,55 @@ class AcademyFeatureGateFilterTest {
     }
 
     @Test
+    void academyPathWithMatrixParam_whenFlagDisabled_shouldStillReturn404() throws Exception {
+        when(featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/academy;x=1/units");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertEquals(404, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void academyPathWithDoubleSlash_whenFlagDisabled_shouldStillReturn404() throws Exception {
+        when(featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api//academy/units");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertEquals(404, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void academyPathEncoded_whenFlagDisabled_shouldStillReturn404() throws Exception {
+        when(featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/%61cademy/units");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertEquals(404, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void academyPathUnderContextPath_whenFlagDisabled_shouldReturn404() throws Exception {
+        when(featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)).thenReturn(false);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app/api/academy/units");
+        request.setContextPath("/app");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        assertEquals(404, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
     void academyPath_whenFlagEnabled_shouldContinueChain() throws Exception {
         when(featureFlagService.isEnabled(AcademyFeatureGateFilter.FLAG_KEY)).thenReturn(true);
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/academy/attempts");

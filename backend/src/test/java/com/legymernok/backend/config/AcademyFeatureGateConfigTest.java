@@ -13,12 +13,11 @@ import static org.mockito.Mockito.mock;
 class AcademyFeatureGateConfigTest {
 
     @Test
-    void registration_shouldRunBeforeSecurityChainOnAcademyPaths() {
+    void registration_shouldRunBeforeSecurityChainOnAllPaths() {
         FilterRegistrationBean<AcademyFeatureGateFilter> registration = new AcademyFeatureGateConfig()
                 .academyFeatureGateFilter(mock(FeatureFlagService.class), new ObjectMapper());
 
         assertTrue(registration.getOrder() < SecurityProperties.DEFAULT_FILTER_ORDER);
-        assertTrue(registration.getUrlPatterns().contains("/api/academy"));
-        assertTrue(registration.getUrlPatterns().contains("/api/academy/*"));
+        assertEquals(java.util.Set.of("/*"), new java.util.HashSet<>(registration.getUrlPatterns()));
     }
 }

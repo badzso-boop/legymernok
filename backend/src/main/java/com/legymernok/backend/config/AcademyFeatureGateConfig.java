@@ -24,7 +24,9 @@ public class AcademyFeatureGateConfig {
             FeatureFlagService featureFlagService, ObjectMapper objectMapper) {
         FilterRegistrationBean<AcademyFeatureGateFilter> registration =
                 new FilterRegistrationBean<>(new AcademyFeatureGateFilter(featureFlagService, objectMapper));
-        registration.addUrlPatterns("/api/academy", "/api/academy/*");
+        // Minden kérésre fut, az útvonal-döntést a filter shouldNotFilter-e hozza normalizált path alapján:
+        // a servlet konténer URL-minta illesztése eltérhet a Spring MVC routingtól (pl. `//`, `;param`).
+        registration.addUrlPatterns("/*");
         registration.setOrder(ORDER);
         return registration;
     }

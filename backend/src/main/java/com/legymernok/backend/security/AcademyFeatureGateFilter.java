@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -30,9 +31,15 @@ public class AcademyFeatureGateFilter extends OncePerRequestFilter {
     private final FeatureFlagService featureFlagService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * A Spring MVC-vel azonos normalizálást használja (`;param` levágása, dekódolás, `//` összevonás),
+     * különben pl. a `/api/academy;x=1/units` kérés elkerülné a kaput, a dispatch viszont
+     * `/api/academy/units`-ra routolna. A security lánc `StrictHttpFirewall`-ja ezt ma elutasítaná,
+     * de ez a filter azt megelőzi, ezért nem támaszkodhat rá.
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI().substring(request.getContextPath().length());
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         return !(path.startsWith(PATH_PREFIX) || path.equals("/api/academy"));
     }
 
