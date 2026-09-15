@@ -60,6 +60,12 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 ### Backend — Spring
 - **`@Transactional(readOnly=true)`:** Belső repository hívás join-olja az outer tranzakciót, de ha az outer `readOnly`, write műveletek hibát dobnak. Write-ot végző service metódus mindig sima `@Transactional` legyen
 - **Új permission:** Ha új permission-t vezetsz be, a `DataInitializer`-ben is fel kell venni a megfelelő szerepkörökhöz
+- **⚠️ Flyway `V10` ütközés (2026-09-15):** a Navigátor Akadémia (`plans/navigator_academy_implementation.md`)
+  a `V10`-től számoz, azzal a feltételezéssel, hogy a `main`-re a PR #67 (`feat/rag-chunking`) ELŐTT kerül.
+  A PR #67 szintén `V10__create_content_chunks.sql`-t hoz — a PR #67 merge-e előtt a migrációját a
+  következő szabad verzióra kell átszámozni (és a `plans/pr1_rag_chunking_architecture_2026.md` /
+  `ai_chatbot_upgrade_2026.md` `V10`-hivatkozásait frissíteni), különben a Flyway induláskor elszáll.
+  Ha a sorrend megfordul, az akadémia számozása tolódik. Ezt a bejegyzést töröld, ha a helyzet rendeződött.
 
 ---
 
