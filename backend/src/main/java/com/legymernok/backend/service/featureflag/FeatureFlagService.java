@@ -34,6 +34,14 @@ public class FeatureFlagService {
         return mapToResponse(flag);
     }
 
+    /** Nem létező flag esetén false — egy hiányzó seed ne nyisson meg funkciót. */
+    @Transactional(readOnly = true)
+    public boolean isEnabled(String key) {
+        return featureFlagRepository.findByKey(key)
+                .map(FeatureFlag::isEnabled)
+                .orElse(false);
+    }
+
     @Transactional
     public FeatureFlagResponse updateFlag(String key, UpdateFeatureFlagRequest request) {
         FeatureFlag flag = featureFlagRepository.findByKey(key)
