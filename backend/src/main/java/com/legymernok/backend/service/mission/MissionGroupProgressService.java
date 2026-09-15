@@ -9,10 +9,12 @@ import com.legymernok.backend.model.mission.MissionGroup;
 import com.legymernok.backend.model.mission.MissionGroupProgress;
 import com.legymernok.backend.model.mission.MissionGroupStepCompletion;
 import com.legymernok.backend.repository.cadet.CadetRepository;
+import com.legymernok.backend.repository.fillinblank.FillInBlankAttemptRepository;
 import com.legymernok.backend.repository.mission.MissionGroupProgressRepository;
 import com.legymernok.backend.repository.mission.MissionGroupRepository;
 import com.legymernok.backend.repository.mission.MissionGroupStepCompletionRepository;
 import com.legymernok.backend.repository.mission.MissionRepository;
+import com.legymernok.backend.repository.mission.MissionResultRepository;
 import com.legymernok.backend.service.streak.StreakService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,8 @@ public class MissionGroupProgressService {
     private final MissionGroupRepository groupRepository;
     private final MissionRepository missionRepository;
     private final CadetRepository cadetRepository;
+    private final FillInBlankAttemptRepository fillInBlankAttemptRepository;
+    private final MissionResultRepository missionResultRepository;
 
     @Transactional(readOnly = true)
     public GroupProgressResponse getProgress(UUID groupId) {
@@ -92,6 +96,7 @@ public class MissionGroupProgressService {
         if (currentMissionId != null) {
             Mission currentMission = missionRepository.findById(currentMissionId)
                     .orElseThrow(() -> new ResourceNotFoundException("Mission", "id", currentMissionId));
+            requireStepFulfilled(cadet, currentMission);
             try {
                 MissionGroupStepCompletion step = MissionGroupStepCompletion.builder()
                         .progress(progress)
@@ -127,6 +132,24 @@ public class MissionGroupProgressService {
         progress = progressRepository.save(progress);
 
         return mapToResponse(progress, completedIds.size(), groupMissions.size());
+    }
+
+    /**
+     * A lépés csak akkor teljesíthető, ha a kadét ténylegesen elvégezte: FILL_IN_BLANK-nél
+     * legalább egy sikeres (passed) beküldés, QUIZ-nél legalább egy beküldött eredmény kell.
+     * A többi típusnak (pl. CONTENT) nincs szerveroldali eredménye, ezeket nem kapuzzuk.
+     */
+    private void requireStepFulfilled(Cadet cadet, Mission mission) {
+        boolean fulfilled = switch (mission.getMissionType()) {
+            case FILL_IN_BLANK -> fillInBlankAttemptRepository
+                    .existsByCadetIdAndMissionIdAndPassedTrue(cadet.getId(), mission.getId());
+            case QUIZ -> missionResultRepository.existsByMissionIdAndCadetId(mission.getId(), cadet.getId());
+            default -> true;
+        };
+        if (!fulfilled) {
+            throw new ResourceConflictException("MissionGroupProgress", "missionId", mission.getId(),
+                    "A lépés még nincs teljesítve.");
+        }
     }
 
     private GroupProgressResponse mapToResponse(MissionGroupProgress progress, int completedCount, int totalCount) {

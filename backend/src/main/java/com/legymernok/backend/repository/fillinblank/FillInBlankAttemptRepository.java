@@ -13,6 +13,8 @@ public interface FillInBlankAttemptRepository extends JpaRepository<FillInBlankA
 
     Optional<FillInBlankAttempt> findTopByCadetIdAndMissionIdOrderBySubmittedAtDesc(UUID cadetId, UUID missionId);
 
+    boolean existsByCadetIdAndMissionIdAndPassedTrue(UUID cadetId, UUID missionId);
+
     void deleteAllByMissionId(UUID missionId);
 
     List<FillInBlankAttempt> findTop20ByCadet_IdInAndPassedTrueOrderBySubmittedAtDesc(List<UUID> cadetIds);
