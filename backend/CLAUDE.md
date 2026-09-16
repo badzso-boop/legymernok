@@ -37,6 +37,7 @@ com.legymernok.backend/
 │   ├── GlobalExceptionHandler.java # @RestControllerAdvice, minden kivétel kezelés
 │   ├── ResourceNotFoundException   # 404
 │   ├── ResourceConflictException   # 409, .setData() extra payload-hoz
+│   ├── InvalidRequestException     # 400, üzleti szabály miatt elutasított kérés
 │   ├── UnauthorizedAccessException # 403
 │   └── ExternalServiceException    # Gitea / külső API hiba
 ├── integration/
@@ -45,9 +46,14 @@ com.legymernok.backend/
 │   ├── auth/
 │   │   ├── Permission.java         # id, name (pl. "mission:read"), description
 │   │   └── Role.java               # id, name (pl. "ROLE_ADMIN"), Set<Permission>
+│   ├── audience/
+│   │   └── Audience.java           # ENGINEER | ACADEMY — termékélmény, NEM jogosultság
 │   ├── cadet/
 │   │   ├── Cadet.java              # id, username, email, passwordHash, fullName,
-│   │   │                           #   avatarUrl, giteaUserId, Set<Role>
+│   │   │                           #   avatarUrl, giteaUserId, Set<Role>, themePreference,
+│   │   │                           #   streak mezők, audience, birthYear, guardianConsentStatus
+│   │   ├── GuardianConsentStatus   # NOT_REQUIRED | PENDING | GRANTED | REVOKED
+│   │   ├── GuardianConsentPolicy   # 16 éves korhatár, Europe/Budapest, óvatos döntés
 │   │   └── CadetRole.java          # Junction segéd entitás
 │   ├── mission/
 │   │   ├── Mission.java            # Ld. mezők lent
@@ -55,7 +61,7 @@ com.legymernok.backend/
 │   │   │                           #   detailedAnswers(JSON), submissionHash, isLate
 │   │   ├── QuizSession.java        # quizSnapshot(JSON), currentAnswers(JSON),
 │   │   │                           #   startTime, endTimeLimit, completed
-│   │   ├── MissionType.java        # CODING, CIRCUIT_SIMULATION, QUIZ
+│   │   ├── MissionType.java        # CODING, CIRCUIT_SIMULATION, QUIZ, CONTENT, FILL_IN_BLANK
 │   │   ├── MissionStatus.java      # LOCKED, NOT_STARTED, IN_PROGRESS, COMPLETED
 │   │   ├── VerificationStatus.java # DRAFT, PENDING, SUCCESS, FAILED,
 │   │   │                           #   APPROVED, REJECTED, REVIEW_NEEDED
@@ -73,7 +79,9 @@ com.legymernok.backend/
 │   ├── starsystem/                 # StarSystemRepository
 │   └── ConnectTables/              # CadetMissionRepository
 ├── security/
-│   └── JwtAuthenticationFilter.java # Bearer token kinyerés, SecurityContext set
+│   ├── JwtAuthenticationFilter.java # Bearer token kinyerés, SecurityContext set
+│   └── AcademyFeatureGateFilter.java # /api/academy/** 404 kikapcsolt navigator_academy flagnél,
+│                                     #   a security lánc ELŐTT (AcademyFeatureGateConfig regisztrálja)
 ├── service/
 │   ├── admin/                      # LogService, WebSocketLogService
 │   ├── cadet/CadetService.java     # CRUD + Gitea user provision
@@ -103,9 +111,17 @@ com.legymernok.backend/
 ### Auth — `/api/auth`
 | Metódus | Path | Permission | Leírás |
 |---|---|---|---|
-| POST | `/api/auth/register` | Nyilvános | Regisztráció |
+| POST | `/api/auth/register` | Nyilvános | Regisztráció (`@Valid`; opcionális `audience` + `birthYear`) |
 | POST | `/api/auth/login` | Nyilvános | Bejelentkezés → JWT |
-| GET | `/api/auth/me` | Auth | Saját profil |
+| GET | `/api/auth/me` | Auth | Saját profil (`audience`, `birthYear`, `guardianConsentStatus` is) |
+
+**Regisztráció — Navigátor Akadémia (ld. `plans/navigator_academy_implementation.md`):**
+- `audience`: `ENGINEER` (default, ha hiányzik) vagy `ACADEMY`
+- `ACADEMY`-hez kötelező a `birthYear`; jövőbeli év → 400 (`@AssertTrue` a DTO-n)
+- `ACADEMY` csak bekapcsolt `navigator_academy` flaggel → különben 400 (`InvalidRequestException`),
+  még a Gitea-user létrehozása előtt
+- `GuardianConsentPolicy`: 16 év alatt (óvatos, `Europe/Budapest` zóna) `guardianConsentStatus = PENDING`
+  — következménye még nincs, a hozzájárulási folyamat külön lépés
 
 ### Missions — `/api/missions`
 | Metódus | Path | Permission | Leírás |
@@ -144,6 +160,8 @@ com.legymernok.backend/
 |---|---|---|---|
 | POST | `/api/mission-verification/{id}/callback` | Nyilvános | Gitea Actions webhook |
 | GET | `/api/admin-logs` | `logs:read` | Rendszerlogok |
+| — | `/api/academy/**` | — | Navigátor Akadémia (még nincs végpont); `navigator_academy` flag KI → 404 |
+| GET | `/api/sectors`, `/api/sectors/{id}`, `/api/sectors/{id}/star-systems` | `sector:read` | **Audience-szűrt**: idegen audience → 404. Mindent lát: `sector:write`, `starsystem:create`, `starsystem:edit` |
 | GET | `/api/users` | `user:read` | Felhasználók listája |
 | PUT | `/api/users/{id}` | `user:edit` | Felhasználó szerkesztés |
 | DELETE | `/api/users/{id}` | `user:delete` | Törlés |
@@ -281,6 +299,9 @@ mvn test -Dtest=MissionServiceTest     # Egy osztály
 - **Lombok**: `@Data`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor` — mindig
 - **Response wrap**: `ResponseEntity<T>` minden controllerből
 - **Tranzakció**: `@Transactional` a service rétegen, ahol szükséges
+- **Feature flag**: `FeatureFlagService.isEnabled(key)` — hiányzó flag esetén `false` (fail-closed)
+- **Service-teszt + SecurityContext**: `SecurityContextHolder.setContext(new SecurityContextImpl(auth))`,
+  NE `getContext().setAuthentication(...)` — más tesztosztályok mockolt contextet hagynak a szálon
 - **Verziókezelés**: kis, gyakori commitok (egy logikai változás = egy commit) + branch/PR minden változtatáshoz (`gh pr create`), a projekt gyökér `CLAUDE.md`-ben leírt irányelv szerint — ne push-olj közvetlenül `main`-re
 
 ## Biztonsági minták — kötelező, konkrét hibaosztályok alapján
