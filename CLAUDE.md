@@ -60,6 +60,27 @@ Minden változtatás után, mielőtt "kész"-t mondasz:
 ### Backend — Spring
 - **`@Transactional(readOnly=true)`:** Belső repository hívás join-olja az outer tranzakciót, de ha az outer `readOnly`, write műveletek hibát dobnak. Write-ot végző service metódus mindig sima `@Transactional` legyen
 - **Új permission:** Ha új permission-t vezetsz be, a `DataInitializer`-ben is fel kell venni a megfelelő szerepkörökhöz
+- **Navigátor Akadémia (`plans/navigator_academy_implementation.md`) — amit tudni kell, ha ehhez érsz:**
+  - **`navigator_academy` feature flag** (V10 seed, alapból KI): az `AcademyFeatureGateFilter` a `/api/academy/**`-ot
+    kikapcsolt flagnél 404-gyel zárja, a Spring Security lánc ELŐTT (`FilterRegistrationBean`, order =
+    `DEFAULT_FILTER_ORDER - 1`, url-pattern `/*`). **A security lánc elé tett filter elveszti a
+    `StrictHttpFirewall` védelmét** — az útvonal-döntés ezért `UrlPathHelper.defaultInstance
+    .getPathWithinApplication()`-nel történik, nem a nyers `getRequestURI()`-val (`;param`, `//`, `%XX`).
+    Új akadémiás végpont automatikusan a kapu mögé kerül, ha az útvonala `/api/academy/`-val kezdődik.
+  - **A flag nem fed publikus végpontot:** a `POST /api/auth/register` maga ellenőrzi
+    (`AuthService.register`) — `audience=ACADEMY` kikapcsolt flagnél 400. Ha új, akadémiás adatot fogadó
+    publikus végpont készül, ott is explicit flag-ellenőrzés kell.
+  - **`audience` (ENGINEER/ACADEMY) ≠ szerepkör:** a jogosultság a szerepkörben él, az `audience` csak azt
+    mondja meg, melyik felületet használja a kadét / melyik felületen látszik a szektor. Nincs külön
+    akadémiás kadét-szerepkör. Szűrni MINDEN olvasó végponton kell (lista ÉS részlet — `SectorService`
+    `currentUserAudienceRestriction()`), idegen audience-nél 404. Minden szektort lát: `sector:write`,
+    `starsystem:create`, `starsystem:edit`.
+  - **Kiskorúak:** `cadets.birth_year` + `guardian_consent_status` (`GuardianConsentPolicy`, 16 év,
+    `Europe/Budapest` zóna, óvatos kerekítés). A `PENDING` állapotnak még NINCS következménye — a
+    hozzájárulási folyamat a na-20. A 16 éves korhatár jogi megerősítésre vár.
+- **Tesztekben `SecurityContextHolder`:** több tesztosztály mockolt `SecurityContext`-et hagy a szálon, amin a
+  `getContext().setAuthentication(...)` hatástalan (sorrendfüggő, néma bukás). Service-tesztben mindig
+  `SecurityContextHolder.setContext(new SecurityContextImpl(auth))`, és `@AfterEach` clear
 - **⚠️ Flyway `V10` ütközés (2026-09-15):** a Navigátor Akadémia (`plans/navigator_academy_implementation.md`)
   a `V10`-től számoz, azzal a feltételezéssel, hogy a `main`-re a PR #67 (`feat/rag-chunking`) ELŐTT kerül.
   A PR #67 szintén `V10__create_content_chunks.sql`-t hoz — a PR #67 merge-e előtt a migrációját a
@@ -294,6 +315,8 @@ funkció/endpoint írásakor ezeket MINDIG ellenőrizd, ne csak a "boldog utat":
   a lista (fent) minden nyitott pontot tartalmaz.
 
 > A következő hibák **már javítva vannak** (ne reportáld újra):
+> - A Mission Group lépés-teljesítése csak a frontenden volt kapuzva (`completeStep` bármilyen
+>   eredménnyel továbbengedett) — PR #69 óta a szerver ellenőrzi
 > - submissionHash NPE a MissionResult mentésekor
 > - Dupla `/api/api/quiz/` prefix a client.ts-ben
 > - Quiz timer nem auto-submitelt lejáratkor

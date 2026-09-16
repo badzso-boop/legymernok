@@ -5,6 +5,32 @@
 
 ---
 
+## 0. Állapot (2026-09-16)
+
+| PR | Lépés | Állapot | Megjegyzés |
+|---|---|---|---|
+| #68 | ez a dokumentum + `CLAUDE.md` figyelmeztetés | nyitott | |
+| #69 | **na-01** — a group-lépés teljesítésének szerveroldali ellenőrzése | nyitott, CI zöld | FILL_IN_BLANK: sikeres beküldés kell; QUIZ: beküldött eredmény kell (a kvíznek nincs pass-küszöbe); CONTENT és a többi típus nem kapuzott; nem teljesített lépésnél 409 |
+| #70 | **na-02** — `navigator_academy` feature flag + `/api/academy/**` kapu | nyitott, CI zöld | **`V10`**; `AcademyFeatureGateFilter` a Spring Security lánc ELŐTT, önálló `FilterRegistrationBean`-nel (a `SecurityConfig`-ot importáló controller-tesztek miatt); a döntés normalizált path alapján (`UrlPathHelper`), mert a nyers `getRequestURI()` `;param`-mal megkerülhető volt |
+| #71 | **na-03** — `audience` + kiskorú-mezők | nyitott | **`V11`**; részletek lent |
+| — | **na-04** — tartalom-séma (`AssessmentUnit`…) | következő | `V12`-től |
+
+### Eltérések a lenti tervtől (a megvalósítás során)
+1. **A `V10` az akadémia feature flagje lett** (na-02), az `audience`-mezők a **`V11`**-be kerültek (na-03) — a lenti táblázat eredetileg a `V10`-et a na-03-hoz rendelte.
+2. **A na-02 kapuja nem elég önmagában:** a `POST /api/auth/register` publikus, ezért az `AuthService.register()` is ellenőrzi a flaget — `ACADEMY` regisztráció kikapcsolt flagnél `400` (`InvalidRequestException`), még a Gitea-user létrehozása előtt.
+3. **Az audience-szűrés a részlet-végpontokra is kiterjed:** `GET /api/sectors/{id}` és `/api/sectors/{id}/star-systems` idegen audience-ű szektorra `404` (nem csak a lista szűr).
+4. **„Minden szektort lát” jogosultság-készlet:** `sector:write`, `starsystem:create`, `starsystem:edit` — különben a `ROLE_CONTENT_CREATOR` nem tudna akadémiás szektorba csillagrendszert tenni.
+5. **Új, általános hibakezelés** (mellékhatásként): `InvalidRequestException` → 400, és `HttpMessageNotReadableException` → 400 fix üzenettel (eddig egy ismeretlen enum-érték 500-at adott).
+6. **Az évszámítás `Europe/Budapest` zónában** történik (`GuardianConsentPolicy.currentYear()`), nem a JVM (UTC) zónájában.
+7. **Teszt-gotcha:** más tesztosztályok mockolt `SecurityContext`-et hagynak a szálon, ezért a service-tesztekben `SecurityContextHolder.setContext(new SecurityContextImpl(...))` kell, nem `getContext().setAuthentication(...)`.
+
+### Nyitott teendők, amiket a megvalósítás hozott
+- **Jogi:** a 16 éves korhatár (`GuardianConsentPolicy.DIGITAL_CONSENT_AGE`) megerősítése.
+- **na-20:** a `PENDING` hozzájárulásnak ma nincs következménye; és kiskorúnál is létrejön a Gitea-user (adattakarékosság).
+- **PR #67 (RAG):** `V10` ütközés — merge előtt átszámozás, lásd `CLAUDE.md`.
+
+---
+
 ## 1. Rögzített döntések
 
 | # | Döntés | Megjegyzés |
@@ -64,14 +90,14 @@ A `Cadet.roles` már `Set<Role>` (`model/cadet/Cadet.java:48`), tehát egy felha
 ### 0. szakasz — előfeltételek
 | PR | Tartalom | Függ |
 |---|---|---|
-| na-01 | A group-lépés teljesítését a szerver ellenőrizze (`MissionGroupProgressService.completeStep`): FILL_IN_BLANK csak `passed` eredménnyel, QUIZ a küszöb felett | – |
-| na-02 | `navigator_academy` feature flag (seed), backend szűrő a `/api/academy/**` útvonalra | – |
-| na-03 | `audience`, `birth_year`, `guardian_consent_status` a kadéton; `audience` a szektoron; regisztráció fogadja az `audience`-t; szektorlista szűrése **(V10)** | na-02 |
+| na-01 ✅ | A group-lépés teljesítését a szerver ellenőrizze (`MissionGroupProgressService.completeStep`): FILL_IN_BLANK csak `passed` eredménnyel, QUIZ beküldött eredménnyel | – |
+| na-02 ✅ | `navigator_academy` feature flag (seed), backend szűrő a `/api/academy/**` útvonalra **(V10)** | – |
+| na-03 ✅ | `audience`, `birth_year`, `guardian_consent_status` a kadéton; `audience` a szektoron; regisztráció fogadja az `audience`-t (flag-ellenőrzéssel); szektor-végpontok szűrése **(V11)** | na-02 |
 
 ### 1. szakasz — adatmodell
 | PR | Tartalom | Függ |
 |---|---|---|
-| na-04 | Tartalom-séma: `AssessmentUnit`, `UnitStimulus`, `UnitItem`, `CodingGuide`, `ItemHintLadder`; `MissionType.ASSESSMENT_UNIT` + CHECK-bővítés; séma-tesztek | na-03 |
+| na-04 | Tartalom-séma **(V12-től)**: `AssessmentUnit`, `UnitStimulus`, `UnitItem`, `CodingGuide`, `ItemHintLadder`; `MissionType.ASSESSMENT_UNIT` + CHECK-bővítés; séma-tesztek | na-03 |
 | na-05 | Válasz-séma: `UnitAttempt`, `ItemResponse` (kód 2/1/0/9, `code_source`, `review_status`), `ValidatedResponsePool` | na-04 |
 | na-06 | Folyamatadat-séma: `ProcessEvent` (append-only, index: attempt + ts), megőrzési job váza | na-05 |
 | na-07 | Önszabályozás-séma: magabiztosság, reflexió, `WeeklyPlan`, `ScoreAppeal` | na-05 |
